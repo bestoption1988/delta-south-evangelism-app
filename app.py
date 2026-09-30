@@ -687,29 +687,21 @@ def api_me():
     return jsonify(dict(u))
 
 
-def get_local_ip():
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(("8.8.8.8", 80))
-        return s.getsockname()[0]
-    except Exception:
-        return request.host.split(":")[0]
-    finally:
-        s.close()
-
-
 def get_connection_url():
-    port = int(os.environ.get("PORT", "8080"))
-    return f"http://{get_local_ip()}:{port}"
+    host = request.host
+    proto = request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip()
+
+    if host.endswith(".rumptycloud.app"):
+        proto = "https"
+
+    return f"{proto}://{host}".rstrip("/")
 
 
 @app.get("/api/connection")
 @login_required
 def api_connection():
     return jsonify({
-        "url": get_connection_url(),
-        "ip": get_local_ip(),
-        "port": int(os.environ.get("PORT", "8080"))
+        "url": get_connection_url()
     })
 
 
