@@ -1,0 +1,12 @@
+data/
+__pycache__/
+*.pyc
+*.db
+*.sqlite
+*.sqlite3
+*.session_secret
+app.py.before_*
+patch.py
+production_audit.py
+stage19fix/
+README_STAGE*.txt
