@@ -1,6 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <application android:theme="@style/AppTheme" android:label="Delta South Evangelism" android:icon="@android:drawable/sym_def_app_icon" android:usesCleartextTraffic="false" android:allowBackup="false" android:supportsRtl="true">
+    <application
+        android:theme="@style/AppTheme"
+        android:label="Delta South Evangelism™"
+        android:icon="@drawable/app_logo"
+        android:usesCleartextTraffic="false"
+        android:allowBackup="false"
+        android:supportsRtl="true">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
