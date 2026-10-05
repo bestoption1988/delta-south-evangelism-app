@@ -4940,6 +4940,7 @@ def build_table_map():
 
 with app.app_context():
     init_db()
+    ensure_runtime_schema()
     TABLES = build_table_map()
 @app.post("/api/payment/settings")
 @login_required
