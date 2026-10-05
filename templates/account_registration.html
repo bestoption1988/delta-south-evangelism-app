@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MCN Delta South — Account Registration</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body class="auth-page">
+
+<main class="auth-shell">
+  <section class="auth-card">
+
+    <div class="brand auth-brand">✦</div>
+
+    <div class="eyebrow">METHODIST CHURCH NIGERIA</div>
+
+    <h1>Delta South Diocese</h1>
+    <h2>Department of Evangelism</h2>
+
+    <p class="auth-subtitle">System Account Registration</p>
+
+    {% if error %}
+      <div class="auth-error">{{ error }}</div>
+    {% endif %}
+
+    {% if success %}
+      <div class="auth-success">{{ success }}</div>
+    {% endif %}
+
+    <form method="post" autocomplete="on">
+
+      <label>
+        Full Name
+        <input
+          name="full_name"
+          type="text"
+          value="{{ request.form.get('full_name','') }}"
+          autocomplete="name"
+          required
+        >
+      </label>
+
+      <label>
+        Username
+        <input
+          name="username"
+          type="text"
+          value="{{ request.form.get('username','') }}"
+          autocomplete="username"
+          minlength="3"
+          required
+        >
+      </label>
+
+      <label>
+        Phone Number
+        <input
+          name="phone"
+          type="tel"
+          value="{{ request.form.get('phone','') }}"
+          autocomplete="tel"
+          required
+        >
+      </label>
+
+      <label>
+        Email Address
+        <input
+          name="email"
+          type="email"
+          value="{{ request.form.get('email','') }}"
+          autocomplete="email"
+        >
+      </label>
+
+      <label>
+        Circuit
+        <select name="circuit" required>
+          <option value="">Select Circuit</option>
+          <option value="Effurun Circuit">Effurun Circuit</option>
+          <option value="Warri Circuit">Warri Circuit</option>
+          <option value="Sapele Circuit">Sapele Circuit</option>
+          <option value="Steel Town Circuit">Steel Town Circuit</option>
+        </select>
+      </label>
+
+      <label>
+        Church
+        <input
+          name="church_name"
+          type="text"
+          value="{{ request.form.get('church_name','') }}"
+          placeholder="Enter your Local Church"
+          required
+        >
+      </label>
+
+      <label>
+        Password
+        <input
+          name="password"
+          type="password"
+          autocomplete="new-password"
+          minlength="8"
+          required
+        >
+      </label>
+
+      <label>
+        Confirm Password
+        <input
+          name="confirm_password"
+          type="password"
+          autocomplete="new-password"
+          minlength="8"
+          required
+        >
+      </label>
+
+      <button class="primary auth-button" type="submit">
+        Submit Registration
+      </button>
+
+    </form>
+
+    <p class="auth-note">
+      Your account request will be reviewed by an administrator before access is granted.
+    </p>
+
+    <p class="auth-note">
+      <a href="{{ url_for('login') }}">Already have an account? Sign in</a>
+    </p>
+
+  </section>
+</main>
+
+</body>
+</html>

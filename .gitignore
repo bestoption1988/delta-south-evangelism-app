@@ -10,3 +10,16 @@ patch.py
 production_audit.py
 stage19fix/
 README_STAGE*.txt
+
+# Local backups and deployment secrets
+certs/
+*.backup*
+*.before-*
+*.working
+*.stable_*
+final_checkpoint_*/
+stable_checkpoint_*/
+run_https.py
+
+*.before_*
+*.broken_*

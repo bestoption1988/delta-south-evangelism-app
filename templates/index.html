@@ -4,18 +4,18 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="theme-color" content="#14532d"><link rel="manifest" href="/manifest.json">
 <title>Methodist Church Nigeria, Delta South Diocese: Department of Evangelism Mission System</title>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v=mc1">
 </head>
-<body>
+<body><button id="memberCareFloat" type="button" title="Member Care">💬 <span>Member Care</span></button>
 <header><div class="brand">✦</div><div class="brand-text"><h1>Methodist Church Nigeria, Delta South Diocese: Department of Evangelism Mission System</h1><p id="userLine">Secure mission management</p></div><button id="installBtn" hidden>Install</button></header>
 <div class="userbar"><span id="whoami">Loading user…</span><a href="/change-password">Change password</a><a href="/logout">Sign out</a></div>
 <nav id="nav">
   <div class="nav-dropdown">
     <button id="menuToggle" class="menu-toggle" type="button" aria-expanded="false">☰ <span id="menuCurrent">Dashboard</span> <span class="menu-chevron">▾</span></button>
     <div id="menuPanel" class="menu-panel" role="menu">
-      <button class="active" data-page="dashboard">Dashboard</button><button data-page="communications">Communications</button><button data-page="command_centre">Command Centre</button>
+      <button class="active" data-page="dashboard">Dashboard</button><button data-page="communications">Communications</button><button data-page="conference">Conference</button><button data-page="command_centre">Command Centre</button>
       <button data-page="churches">Churches</button><button data-page="members" data-role="membership">Membership</button><button data-page="mission_teams" data-role="mission">Mission Teams</button><button data-page="mission_contacts" data-role="mission">People Reached / Follow-up</button><button data-page="testimonies" data-role="membership">Testimonies</button><button data-page="appreciations" data-role="membership">Special Appreciation</button><button data-page="commitments" data-role="finance">Pledges</button>
-      <button data-page="income" data-role="finance">Income</button><button data-page="expenses" data-role="finance">Expenses</button><button data-page="equipment" data-role="finance">Equipment</button><button data-page="trust_fund" data-role="finance">Evangelism Trust Fund</button><button data-page="mission_budgets" data-role="finance">Mission Budgets</button><button data-page="procurement_requests" data-role="finance">Procurement</button>
+      <button data-page="income" data-role="finance">Income</button><button data-page="church_accounts" data-role="finance">Church Accounts</button><button data-page="online_giving">Online Giving</button><button data-page="payment_management" data-role="finance">Payment Management</button><button data-page="payment_reconciliation" data-role="finance">Payment Reconciliation</button><button data-page="finance_summary" data-role="finance">Financial Dashboard</button><button data-page="financial_accountability" data-role="finance">Financial Accountability Report</button><button data-page="expenses" data-role="finance">Expenses</button><button data-page="equipment" data-role="finance">Equipment</button><button data-page="trust_fund" data-role="finance">Evangelism Trust Fund</button><button data-page="mission_budgets" data-role="finance">Mission Budgets</button><button data-page="procurement_requests" data-role="finance">Procurement</button>
       <button data-page="planting_prospects" data-role="mission">Planting Prospects</button><button data-page="church_plants" data-role="mission">Church Plants</button><button data-page="outreach" data-role="mission">Outreach</button><button data-page="mission_calendar" data-role="mission">Mission Calendar</button><button data-page="sponsors" data-role="finance">Sponsors</button>
       <button data-page="report_periods" data-role="reporting">Reporting Periods</button><button data-page="circuit_reports" data-role="reporting">Circuit Reports</button><button data-page="action_points" data-role="reporting">Action Points</button><button data-page="meetings" data-role="reporting">Meetings & Minutes</button><button data-page="diocesan_reviews" data-role="reporting">Executive Reviews</button><button data-page="reports">Reports & Analytics</button><button data-page="users" data-role="admin">Users</button><button data-page="audit" data-role="audit">Audit Log</button><button data-page="security" data-role="admin">Security & Backup</button><button data-page="system_health" data-role="admin">System Health</button>
     </div>
@@ -41,6 +41,102 @@
 <div class="panel" id="expensePanel"><h3>Recent expenses</h3><div id="recentExpenses"></div></div><div class="panel trust-finance-panel"><div class="feature-top"><div class="feature-icon">🏦</div><div class="feature-title"><span class="eyebrow">SEPARATE EVANGELISM TRUST FUND</span><h3>Trust Fund Control</h3><span class="feature-subtitle">Keep dedicated evangelism funds separate from ordinary operating finance</span></div><span class="feature-badge">ACCOUNT</span></div><div id="trustFinance"></div><div class="feature-action"><button class="primary" onclick="nav('trust_fund')">+ Record Trust Fund Transaction</button><button class="secondary" onclick="nav('mission_budgets')">Manage Mission Budgets</button></div></div><div class="panel procurement-panel"><div class="feature-top"><div class="feature-icon">🎛️</div><div class="feature-title"><span class="eyebrow">EQUIPMENT & PROCUREMENT</span><h3>Mission Equipment Planning</h3><span class="feature-subtitle">Plan speakers, amplifiers, microphones, band sets, power and other field equipment</span></div><span class="feature-badge">PLAN</span></div><div id="procurementSummary"></div><div class="feature-action"><button class="primary" onclick="nav('procurement_requests')">+ New Procurement Request</button><button class="secondary" onclick="nav('equipment')">Equipment Register</button></div></div>
 <div class="panel note"><b>Planning baseline</b><p>17 churches across 4 circuits · 5 church plants each year · 25 planned over 5 years. Replace the numbered church placeholders with the official local-church names.</p></div>
 </section>
+
+<section id="conference" class="page">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow">DIOCESAN MEETINGS & COMMUNICATION</div>
+      <h2>Conference</h2>
+      <p>Schedule meetings, manage participants, share agendas, join calls and communicate during conferences.</p>
+    </div>
+    <div class="section-actions">
+      <button id="conferenceNewBtn" class="primary">+ New Conference</button>
+      <button id="conferenceRefreshBtn" class="secondary">Refresh</button>
+    </div>
+  </div>
+
+  <div id="conferenceSummary" class="report-grid"></div>
+
+  <div class="split-grid">
+    <div class="panel">
+      <div class="panel-head">
+        <strong>Conference Meetings</strong>
+      </div>
+      <div id="conferenceRooms" class="stack-list">
+        <div class="empty">Loading conferences…</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <strong>Conference Room</strong>
+      </div>
+      <div id="conferenceRoom" class="conversation-box">
+        <div class="empty">Select a conference to view its room.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="conferenceFormWrap" class="panel" hidden>
+    <div class="panel-head">
+      <strong>New Conference</strong>
+    </div>
+
+    <form id="conferenceForm" class="form-grid">
+      <label>Conference Title
+        <input name="title" required>
+      </label>
+
+      <label>Meeting Type
+        <select name="meeting_type">
+          <option>General Conference</option>
+          <option>Diocesan Executive Meeting</option>
+          <option>Evangelism Meeting</option>
+          <option>Church Planting Meeting</option>
+          <option>Circuit Meeting</option>
+          <option>Training</option>
+          <option>Emergency Meeting</option>
+          <option>Other</option>
+        </select>
+      </label>
+
+      <label>Date
+        <input name="meeting_date" type="date">
+      </label>
+
+      <label>Start Time
+        <input name="start_time" type="time">
+      </label>
+
+      <label>End Time
+        <input name="end_time" type="time">
+      </label>
+
+      <label>Circuit / Area
+        <input name="circuit" value="Diocesan">
+      </label>
+
+      <label>Organizer
+        <input name="organizer">
+      </label>
+
+      <div class="conference-auto-link full">
+        <strong>Meeting / Join Link</strong>
+        <small>The app will generate this automatically when the conference is created.</small>
+      </div>
+
+      <label class="full">Agenda
+        <textarea name="agenda" rows="5"></textarea>
+      </label>
+
+      <div class="form-actions full">
+        <button type="submit" class="primary">Create Conference</button>
+        <button type="button" id="conferenceCancelBtn" class="secondary">Cancel</button>
+      </div>
+    </form>
+  </div>
+</section>
+
 <section id="command_centre" class="page">
 <div class="section-head"><div><span class="eyebrow">DIOCESAN EVANGELISM CONTROL ROOM</span><h2>Command Centre</h2><p id="commandScope">Live operational view</p></div><div class="head-actions"><button class="secondary" id="commandRefreshBtn">Refresh</button><button class="primary" onclick="nav('reports')">Reports & Analytics</button></div></div>
 <div id="commandSummary" class="report-cards"></div>
@@ -53,11 +149,105 @@
 <div class="section-head"><div><span class="eyebrow">DIOCESAN EVANGELISM REPORTING CENTRE</span><h2>Reports & Analytics</h2></div><div class="head-actions"><button class="secondary" id="reportPrintBtn">Print Report</button><a class="primary" id="reportExportBtn" href="/api/reports/export">Export Report</a></div></div>
 <div class="panel report-filters"><div class="form-grid"><div class="field"><label>Report Year</label><select id="reportYear"></select></div><div class="field"><label>Circuit</label><select id="reportCircuit"><option>All</option><option>Effurun Circuit</option><option>Warri Circuit</option><option>Sapele Circuit</option><option>Steel Town Circuit</option></select></div><div class="field"><label>&nbsp;</label><button class="primary" id="runReportBtn">Generate Report</button></div></div></div>
 <div id="reportSummary" class="report-cards"></div>
+<div class="panel">
+<div class="report-panel-head">
+<h3>Membership Statistics</h3>
+<span>Live from Church Membership</span>
+</div>
+<div id="membershipStatistics" class="report-cards"></div>
+<div class="report-grid">
+<div class="panel">
+<div class="report-panel-head">
+<h3>Membership by Circuit</h3>
+<span>Live distribution</span>
+</div>
+<div id="membershipCircuitReport"></div>
+</div>
+<div class="panel">
+<div class="report-panel-head">
+<h3>Membership by Local Church</h3>
+<span>Live distribution</span>
+</div>
+<div id="membershipChurchReport"></div>
+</div>
+</div>
+</div>
 <div class="report-grid"><div class="panel"><div class="report-panel-head"><h3>Circuit Performance</h3><span id="reportScope"></span></div><div id="circuitReport"></div></div><div class="panel"><div class="report-panel-head"><h3>Fellowship Membership</h3></div><div id="fellowshipReport"></div></div></div>
 <div class="panel"><div class="report-panel-head"><h3>5-Year Church Planting Progress</h3><span>Target: 5 churches/year</span></div><div id="fiveYearReport"></div></div>
 <div class="report-grid"><div class="panel"><div class="report-panel-head"><h3>Evangelism Funnel</h3></div><div id="funnelReport"></div></div><div class="panel" id="reportFinancePanel"><div class="report-panel-head"><h3>Finance & Trust Fund</h3></div><div id="financeReport"></div></div></div>
 <div class="panel report-note"><strong>Report purpose</strong><p>Use this centre for diocesan reviews, circuit supervision, church-planting progress, outreach results, follow-up accountability and evangelism financial oversight. Exported reports are suitable for filing and review meetings.</p></div>
 </section>
+
+<section id="customer_care" class="page">
+  <div class="section-head">
+    <div>
+      <div class="eyebrow">COMMUNICATION & SUPPORT</div>
+      <h2>Member Care</h2>
+      <p>Manage member enquiries, support conversations, calls and WhatsApp contacts.</p>
+    </div>
+    <div class="section-actions">
+      <button id="customerCareNewBtn" class="primary">+ New Conversation</button>
+      <button id="customerCareRefreshBtn" class="secondary">Refresh</button>
+    </div>
+  </div>
+
+  <div id="customerCareSummary" class="report-grid"></div>
+
+  <div class="split-grid">
+    <div class="panel">
+      <div class="panel-head">
+        <strong>Member Conversations</strong>
+      </div>
+      <div id="customerCareThreads" class="stack-list">
+        <div class="empty">Loading customer conversations…</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <strong>Conversation</strong>
+      </div>
+
+      <div id="customerCareConversation" class="conversation-box">
+        <div class="empty">Select a member conversation to view messages.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="customerCareFormWrap" class="panel" hidden>
+    <div class="panel-head">
+      <strong>New Member Conversation</strong>
+    </div>
+
+    <form id="customerCareForm" class="form-grid">
+      <label>Customer Name
+        <input name="customer_name" required>
+      </label>
+
+      <label>Phone Number
+        <input name="phone" type="tel">
+      </label>
+
+      <label>Email
+        <input name="email" type="email">
+      </label>
+
+      <label>Subject
+        <input name="subject">
+      </label>
+
+      <label class="full">Message
+        <textarea name="message" rows="5" required></textarea>
+      </label>
+
+      <div class="form-actions full">
+        <button type="submit" class="primary">Start Conversation</button>
+        <button type="button" id="customerCareCancelBtn" class="secondary">Cancel</button>
+      </div>
+    </form>
+  </div>
+</section>
+
 <section id="communications" class="page">
 <div class="section-head"><div><span class="eyebrow">DIOCESAN COMMUNICATION CENTRE</span><h2>Communication & Notifications</h2><p id="commScope">Reminders, contact lists and ready-to-share messages</p></div><div class="head-actions"><button class="secondary" id="commNotifyBtn">Enable browser notifications</button><button class="primary" id="commRefreshBtn">Refresh</button></div></div>
 <div id="commSummary" class="report-cards"></div>
@@ -80,12 +270,462 @@
 <div class="panel"><div class="report-panel-head"><h3>Deployment Baseline</h3></div><div class="security-note"><p><b>17 existing local churches</b> across <b>4 circuits</b>.</p><p>Rolling church-planting target: <b>5 new churches per year</b>.</p><p>Before moving the application to another phone, preserve the <b>data/evangelism.db</b> file and create a verified backup from Security & Backup.</p></div></div>
 <div class="health-grid"><div class="panel"><div class="report-panel-head"><h3>Data Quality</h3><div><button class="secondary" id="qualityCheckBtn">Run Data Check</button> <button class="secondary" id="qualityDetailsBtn">View Details</button> <button class="primary" id="qualityCleanupBtn">Safe Cleanup</button></div></div><div id="qualityResults"><div class="empty">Check member, mission, church-plant and accountability records for incomplete data.</div></div><div id="qualityDetails" class="quality-details"></div></div><div class="panel"><div class="report-panel-head"><h3>Workflow Validation</h3><button class="secondary" id="workflowCheckBtn">Validate Workflows</button></div><div id="workflowResults"><div class="empty">Verify the main operational modules are present and responding.</div></div></div></div>
 </section>
+<section id="online_giving" class="page">
+<div class="section-head">
+  <div>
+    <span class="eyebrow">SECURE ONLINE GIVING</span>
+    <h2>Online Giving</h2>
+    <p>Make a secure payment through Paystack and support the work of the Diocese.</p>
+  </div>
+</div>
+
+<div class="comm-grid">
+  <div class="panel">
+    <div class="report-panel-head">
+      <h3>Payment Details</h3>
+      <span>Powered by Paystack</span>
+    </div>
+
+    <form id="onlineGivingForm">
+      <div class="form-grid">
+        <div class="field">
+          <label>Church Account</label>
+          <select id="givingAccount" required>
+            <option value="">Loading accounts...</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Giving Purpose</label>
+          <select id="givingPurpose" required>
+            <option value="">Select purpose</option>
+            <option>Tithe</option>
+            <option>Offering</option>
+            <option>Seed of Faith</option>
+            <option>Pledge</option>
+            <option>Evangelism Fund</option>
+            <option>Church Planting Fund</option>
+            <option>General Donation</option>
+            <option>Other</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Amount (₦)</label>
+          <input id="givingAmount" type="number" min="100" step="0.01" required>
+        </div>
+
+        <div class="field">
+          <label>Full Name</label>
+          <input id="givingName" type="text" required>
+        </div>
+
+        <div class="field">
+          <label>Email</label>
+          <input id="givingEmail" type="email" required>
+        </div>
+
+        <div class="field">
+          <label>Phone Number</label>
+          <input id="givingPhone" type="tel">
+        </div>
+      </div>
+
+      <div id="givingStatus" class="security-note">
+        Your payment will be processed securely by Paystack.
+      </div>
+
+      <div class="form-actions">
+        <button class="primary" type="submit" id="paystackPayBtn">
+          Continue to Paystack
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <div class="panel">
+    <div class="report-panel-head">
+      <h3>Payment Information</h3>
+    </div>
+    <div class="security-note">
+      <p><b>Secure payment:</b> Your card or bank-payment details are entered on Paystack's secure checkout.</p>
+      <p><b>Receipt:</b> A successful verified transaction is recorded in the church financial system.</p>
+      <p><b>Account:</b> Your payment is associated with the selected church account and giving purpose.</p>
+    </div>
+
+    <div id="paymentResult" class="security-note" hidden>
+      <h3 id="paymentResultTitle">Payment Status</h3>
+      <p id="paymentResultMessage">Checking your payment...</p>
+      <p><b>Reference:</b> <span id="paymentResultReference"></span></p>
+      <p><b>Amount:</b> <span id="paymentResultAmount"></span></p>
+    </div>
+  </div>
+</div>
+</section>
+
+
+<section id="finance_summary" class="page">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">FINANCE & ACCOUNTABILITY</div>
+      <h2>Financial Dashboard</h2>
+      <p>Diocesan financial overview of income, expenses and online payments.</p>
+    </div>
+    <div class="actions-row">
+      <select id="financeSummaryYear" style="min-width:120px">
+        <option value="">All Years</option>
+      </select>
+      <select id="financeSummaryCircuit" style="min-width:180px">
+        <option value="">All Circuits</option>
+      </select>
+      <button type="button" class="secondary" onclick="loadFinanceSummary()">Refresh</button>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span>Circuits</span>
+      <strong id="financeCircuitCount">0</strong>
+    </div>
+    <div class="stat-card">
+      <span>Local Churches</span>
+      <strong id="financeChurchCount">0</strong>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span>Total Income</span>
+      <strong id="financeIncomeTotal">₦0.00</strong>
+    </div>
+
+    <div class="stat-card">
+      <span>Total Expenses</span>
+      <strong id="financeExpenseTotal">₦0.00</strong>
+    </div>
+
+    <div class="stat-card">
+      <span>Net Balance</span>
+      <strong id="financeNetBalance">₦0.00</strong>
+    </div>
+
+    <div class="stat-card">
+      <span>Online Payments</span>
+      <strong id="financePaidOnline">₦0.00</strong>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span>Matched Online</span>
+      <strong id="financeMatchedOnline">₦0.00</strong>
+    </div>
+
+    <div class="stat-card">
+      <span>Unmatched Online</span>
+      <strong id="financeUnmatchedOnline">₦0.00</strong>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+
+    <div class="card">
+      <div class="page-head">
+        <div>
+          <h3>Income by Fund</h3>
+          <p>Giving and income categories.</p>
+        </div>
+      </div>
+      <div id="financeFundBreakdown">
+        Loading...
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="page-head">
+        <div>
+          <h3>Expenses by Category</h3>
+          <p>Expense distribution.</p>
+        </div>
+      </div>
+      <div id="financeExpenseBreakdown">
+        Loading...
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="page-head">
+        <div>
+          <h3>Income by Circuit</h3>
+          <p>Financial contribution by circuit.</p>
+        </div>
+      </div>
+      <div id="financeCircuitBreakdown">
+        Loading...
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="page-head">
+        <div>
+          <h3>Monthly Income</h3>
+          <p>Income trend by month.</p>
+        </div>
+      </div>
+      <div id="financeMonthlyBreakdown">
+        Loading...
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="payment_reconciliation" class="page">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">FINANCE & ACCOUNTABILITY</div>
+      <h2>Payment Reconciliation</h2>
+      <p>Compare successful online payments with the income records posted by the system.</p>
+    </div>
+    <div class="actions-row">
+      <button type="button" class="secondary" onclick="loadPaymentReconciliation()">Refresh</button>
+    </div>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span>Paid Online</span>
+      <strong id="reconPaidTotal">₦0.00</strong>
+    </div>
+    <div class="stat-card">
+      <span>Matched</span>
+      <strong id="reconMatchedCount">0</strong>
+    </div>
+    <div class="stat-card">
+      <span>Unmatched</span>
+      <strong id="reconUnmatchedCount">0</strong>
+    </div>
+    <div class="stat-card">
+      <span>Matched Income</span>
+      <strong id="reconMatchedTotal">₦0.00</strong>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="form-grid">
+      <input id="reconSearch" placeholder="Reference, donor or email">
+
+      <select id="reconStatus">
+        <option value="">All Statuses</option>
+        <option value="Paid">Paid</option>
+        <option value="Pending">Pending</option>
+        <option value="Abandoned">Abandoned</option>
+      </select>
+
+      <select id="reconCircuit">
+        <option value="">All Circuits</option>
+        <option value="Diocesan">Diocesan</option>
+        <option value="Effurun Circuit">Effurun Circuit</option>
+        <option value="Warri Circuit">Warri Circuit</option>
+        <option value="Sapele Circuit">Sapele Circuit</option>
+        <option value="Steel Town Circuit">Steel Town Circuit</option>
+      </select>
+    </div>
+
+    <div class="actions-row">
+      <button type="button" class="primary" onclick="loadPaymentReconciliation()">Search</button>
+      <button type="button" class="secondary" onclick="clearPaymentReconciliationFilters()">Clear</button>
+    </div>
+  </div>
+
+  <div class="card" style="overflow-x:auto">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Reference</th>
+          <th>Donor</th>
+          <th>Purpose</th>
+          <th>Payment</th>
+          <th>Income</th>
+          <th>Account</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="paymentReconciliationBody">
+        <tr>
+          <td colspan="8">Loading reconciliation...</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="payment_management" class="page">
+<div class="page-head">
+<div><div class="eyebrow">FINANCE & ACCOUNTABILITY</div>
+<h2>Payment Management</h2>
+<p>View and monitor online payment transactions.</p></div>
+<div class="actions-row"><button type="button" class="secondary" onclick="loadPaymentManagement()">Refresh</button><button type="button" class="primary" onclick="exportPaymentHistory()">Export Excel</button></div>
+</div>
+
+<div class="stats-grid">
+<div class="stat-card"><span>Total Paid</span><strong id="paymentTotalPaid">₦0.00</strong></div>
+<div class="stat-card"><span>Successful</span><strong id="paymentPaidCount">0</strong></div>
+<div class="stat-card"><span>Pending</span><strong id="paymentPendingCount">0</strong></div>
+<div class="stat-card"><span>Abandoned</span><strong id="paymentAbandonedCount">0</strong></div>
+</div>
+
+<div class="card">
+<div class="form-grid">
+<input id="paymentSearch" placeholder="Reference, donor, email or transaction ID">
+<select id="paymentStatus"><option value="">All Statuses</option><option>Paid</option><option>Pending</option><option>Abandoned</option></select>
+<select id="paymentPurpose"><option value="">All Purposes</option><option>Tithe</option><option>Offering</option><option>Pledge</option><option>Seed of Faith</option><option>General Evangelism</option><option>Other</option></select>
+<select id="paymentCircuit"><option value="">All Circuits</option><option>Diocesan</option><option>Effurun Circuit</option><option>Warri Circuit</option><option>Sapele Circuit</option><option>Steel Town Circuit</option></select>
+<input id="paymentDateFrom" type="date">
+<input id="paymentDateTo" type="date">
+</div>
+
+<div class="actions-row">
+<button type="button" class="primary" onclick="loadPaymentManagement()">Search</button>
+<button type="button" class="secondary" onclick="clearPaymentFilters()">Clear</button>
+</div>
+</div>
+
+<div class="card" style="overflow-x:auto">
+<table class="data-table">
+<thead><tr>
+<th>Date</th><th>Reference</th><th>Donor</th><th>Purpose</th>
+<th>Account</th><th>Amount</th><th>Status</th><th>Gateway</th>
+</tr></thead>
+<tbody id="paymentHistoryBody">
+<tr><td colspan="8">Loading payment history...</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
 <section id="dataPage" class="page">
 <div class="section-head"><div><span class="eyebrow" id="sectionEyebrow">RECORDS</span><h2 id="sectionTitle">Records</h2></div><button class="primary" id="addBtn">+ Add record</button></div>
 <div id="formWrap" class="panel" hidden><h3 id="formTitle">New record</h3><form id="recordForm"><div id="fields" class="form-grid"></div><div class="form-actions"><button type="button" id="cancelBtn" class="secondary">Cancel</button><button class="primary" type="submit">Save record</button></div></form></div>
+
+<div id="memberRegistrationsPanel" class="panel" hidden>
+<div class="panel-head">
+<div>
+<span class="eyebrow">MEMBERSHIP REGISTRATION</span>
+<h3>Pending Member Registrations</h3>
+<p>Review registration details before creating the official member record and login account.</p>
+</div>
+<button id="memberRegistrationsRefreshBtn" class="secondary" type="button">Refresh</button>
+</div>
+<div id="memberRegistrationsWrap" class="table-wrap">
+<div class="empty">Loading member registrations…</div>
+</div>
+</div>
+
+<div id="accountRequestsPanel" class="panel" hidden>
+<div class="panel-head">
+<div>
+<span class="eyebrow">LEGACY ACCOUNT ACCESS</span>
+<h3>Legacy Account Registrations</h3>
+<p>Existing account requests retained for transition purposes.</p>
+</div>
+<button id="accountRequestsRefreshBtn" class="secondary" type="button">Refresh</button>
+</div>
+<div id="accountRequestsWrap" class="table-wrap">
+<div class="empty">Loading registration requests…</div>
+</div>
+</div>
+
 <div class="panel"><div class="table-tools"><input id="search" placeholder="Search records…"><span id="rowCount"></span></div><div id="tableWrap" class="table-wrap"></div></div>
 </section>
 </main>
 <footer>Methodist Church Nigeria · Delta South Diocese · Department of Evangelism <span id="status">Ready</span></footer>
-<script src="/static/app.js?v=19.2"></script>
+<script src="/static/app.js?v=20261004-restored"></script>
+
+<section id="financial_accountability" class="page">
+  <div class="page-header">
+    <div>
+      <h2>Financial Accountability Report</h2>
+      <p>Official income, expenditure and balance report for accountability.</p>
+    </div>
+  </div>
+
+  <div class="actions-row">
+    <select id="financialReportYear" style="min-width:120px">
+      <option value="">All Years</option>
+    </select>
+
+    <select id="financialReportCircuit" style="min-width:180px">
+      <option value="">All Circuits</option>
+    </select>
+
+    <button type="button" class="secondary" onclick="loadFinancialAccountabilityReport()">
+      Refresh
+    </button>
+    <button type="button" class="secondary" id="printFinancialReport" onclick="printFinancialAccountabilityReport()">
+      Print Report
+    </button>
+    <button type="button" class="secondary" id="exportFinancialReport" onclick="exportFinancialAccountabilityReport()">
+      Export Report
+    </button>
+  </div>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <span>Total Income</span>
+      <strong id="financialReportIncome">₦0.00</strong>
+    </div>
+
+    <div class="stat-card">
+      <span>Total Expenses</span>
+      <strong id="financialReportExpenses">₦0.00</strong>
+    </div>
+
+    <div class="stat-card">
+      <span>Net Balance</span>
+      <strong id="financialReportNet">₦0.00</strong>
+    </div>
+
+    <div class="stat-card">
+      <span>Income Records</span>
+      <strong id="financialReportIncomeCount">0</strong>
+    </div>
+
+    <div class="stat-card">
+      <span>Expense Records</span>
+      <strong id="financialReportExpenseCount">0</strong>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="card">
+      <h3>Income by Fund</h3>
+      <div id="financialReportFunds">
+        <p class="muted">No income records.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Expenses by Category</h3>
+      <div id="financialReportCategories">
+        <p class="muted">No expense records.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Circuit & Local Church Accountability</h3>
+    <p class="muted">Financial activity by circuit and local church.</p>
+    <div id="financialReportCircuitBreakdown">
+      <p class="muted">No circuit financial records.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Report Information</h3>
+    <div id="financialReportInfo" class="muted">Report not loaded.</div>
+  </div>
+</section>
+
 </body></html>

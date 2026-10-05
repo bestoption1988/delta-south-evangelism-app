@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Member Dashboard - MCN Delta South Diocese</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,sans-serif;background:#f3f6f9;color:#172033}
+header{background:#123b2a;color:white;padding:20px}
+header h1{margin:0;font-size:22px}
+header p{margin:6px 0 0}
+main{max-width:1100px;margin:auto;padding:18px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:15px}
+.card{background:white;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.card h2,.card h3{margin-top:0;color:#123b2a}
+.big{font-size:21px;font-weight:bold;margin-top:8px}
+.info{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+.item{background:#f7f9fb;padding:12px;border-radius:9px}
+.label{font-size:12px;color:#667085}
+.value{font-weight:600;margin-top:5px;word-break:break-word}
+.actions{display:flex;gap:10px;flex-wrap:wrap}
+.btn{background:#123b2a;color:white;text-decoration:none;padding:11px 16px;border-radius:8px}
+.logout{background:#667085}
+#loading{text-align:center;padding:30px}
+#error{display:none;background:#ffe4e4;color:#9b0000;padding:15px;border-radius:9px}
+
+.member-event-card{
+  border:1px solid rgba(128,128,128,.25);
+  border-radius:12px;
+  padding:14px;
+  margin:10px 0;
+}
+.member-event-card h3{
+  margin:6px 0;
+}
+.member-event-card .event-date{
+  font-weight:700;
+}
+.member-event-card .event-meta{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:6px 0;
+}
+.member-event-card .event-meta span{
+  padding:4px 8px;
+  border-radius:8px;
+  background:rgba(128,128,128,.12);
+  font-size:.85rem;
+}
+
+
+.member-announcement-card{
+  border:1px solid rgba(128,128,128,.25);
+  border-radius:12px;
+  padding:14px;
+  margin:10px 0;
+}
+.member-announcement-card .announcement-top{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-bottom:8px;
+}
+.member-announcement-card p{
+  margin:8px 0;
+  line-height:1.55;
+}
+.member-announcement-card small{
+  display:block;
+  margin-top:5px;
+  opacity:.75;
+}
+
+</style>
+</head>
+<body>
+
+<header>
+<h1>Member Self-Service Dashboard</h1>
+<p>Methodist Church Nigeria — Delta South Diocese</p>
+</header>
+
+<main>
+<div id="loading">Loading your membership information...</div>
+<div id="error"></div>
+
+<section id="content" style="display:none">
+
+<div class="grid">
+<div class="card"><h3>Member ID</h3><div class="big" id="member_id">—</div></div>
+<div class="card"><h3>Local Church</h3><div class="big" id="church_name">—</div></div>
+<div class="card"><h3>Circuit</h3><div class="big" id="circuit">—</div></div>
+<div class="card"><h3>Fellowship</h3><div class="big" id="fellowship">—</div></div>
+</div>
+
+<div class="card">
+<h2>My Membership Profile</h2>
+<div class="info">
+<div class="item"><div class="label">Full Name</div><div class="value" id="full_name">—</div></div>
+<div class="item"><div class="label">Gender</div><div class="value" id="gender">—</div></div>
+<div class="item"><div class="label">Phone</div><div class="value" id="phone">—</div></div>
+<div class="item"><div class="label">Birthday</div><div class="value" id="birthday">—</div></div>
+<div class="item"><div class="label">Address</div><div class="value" id="address">—</div></div>
+<div class="item"><div class="label">Profession / Business / Trade</div><div class="value" id="profession_business_trade">—</div></div>
+<div class="item"><div class="label">Work / Business Address</div><div class="value" id="work_address">—</div></div>
+<div class="item"><div class="label">Relocated</div><div class="value" id="relocated">—</div></div>
+<div class="item"><div class="label">Relocation Destination</div><div class="value" id="relocation_destination">—</div></div>
+<div class="item"><div class="label">Transfer</div><div class="value" id="transfer">—</div></div>
+<div class="item"><div class="label">Transfer From</div><div class="value" id="transfer_from">—</div></div>
+<div class="item"><div class="label">Transfer To</div><div class="value" id="transfer_to">—</div></div>
+
+<div class="item"><div class="label">Baptised</div><div class="value" id="baptised">—</div></div>
+<div class="item"><div class="label">Baptism Date</div><div class="value" id="baptism_date">—</div></div>
+<div class="item"><div class="label">Confirmed</div><div class="value" id="confirmed">—</div></div>
+<div class="item"><div class="label">Confirmation Date</div><div class="value" id="confirmation_date">—</div></div>
+<div class="item"><div class="label">Marriage</div><div class="value" id="marriage">—</div></div>
+<div class="item"><div class="label">Marriage Date</div><div class="value" id="marriage_date">—</div></div>
+</div>
+</div>
+
+<div class="card">
+<h2>Giving Information</h2>
+<div class="info">
+<div class="item"><div class="label">Seed of Faith</div><div class="value" id="seed_of_faith_payment">—</div></div>
+<div class="item"><div class="label">Tithe</div><div class="value" id="tithe_payment">—</div></div>
+</div>
+</div>
+
+<div class="card">
+<div class="actions">
+<a class="btn" href="/change-password">Change Password</a>
+<a class="btn logout" href="/logout">Logout</a>
+</div>
+</div>
+
+</section>
+</main>
+
+<script>
+async function loadMember(){
+try{
+const response=await fetch("/api/member/me");
+const data=await response.json();
+
+if(!response.ok) throw new Error(data.error||"Unable to load membership information.");
+
+const m=data.member||{};
+
+const fields=[
+"member_id","church_name","circuit","fellowship","full_name",
+"gender","phone","birthday","address","profession_business_trade",
+"baptised","baptism_date","confirmed","confirmation_date",
+"marriage","marriage_date","seed_of_faith_payment","tithe_payment"
+];
+
+fields.forEach(function(field){
+const el=document.getElementById(field);
+if(el){
+const value=m[field];
+el.textContent=(value===null||value===undefined||value==="")?"—":value;
+}
+});
+
+document.getElementById("loading").style.display="none";
+document.getElementById("content").style.display="block";
+
+}catch(error){
+document.getElementById("loading").style.display="none";
+const box=document.getElementById("error");
+box.textContent=error.message;
+box.style.display="block";
+}
+}
+loadMember();
+</script>
+
+<section class="member-section" style="margin-top:24px;">
+  <div class="dashboard-card">
+    <h2>🙏 My Testimonies</h2>
+    <div id="member-testimonies">Loading testimonies...</div>
+  </div>
+
+  <div class="dashboard-card" style="margin-top:18px;">
+    <h2>🌟 My Appreciations</h2>
+    <div id="member-appreciations">Loading appreciations...</div>
+  </div>
+</section>
+
+<script>
+async function loadMemberTestimonies() {
+  const box=document.getElementById("member-testimonies");
+  try {
+    const r=await fetch("/api/member/testimonies");
+    const data=await r.json();
+    if (!r.ok) throw new Error(data.error || "Unable to load testimonies");
+    box.innerHTML = data.length
+      ? data.map(x => `
+        <div style="padding:14px;margin:10px 0;border-radius:10px;background:#f5f7fa;">
+          <strong>${x.title || "Testimony"}</strong>
+          <div>${x.testimony || ""}</div>
+          <small>${x.date || ""}</small>
+        </div>`).join("")
+      : "<p>No testimony recorded yet.</p>";
+  } catch(e) {
+    box.innerHTML="<p>Unable to load testimonies.</p>";
+  }
+}
+
+async function loadMemberAppreciations() {
+  const box=document.getElementById("member-appreciations");
+  try {
+    const r=await fetch("/api/member/appreciations");
+    const data=await r.json();
+    if (!r.ok) throw new Error(data.error || "Unable to load appreciations");
+    box.innerHTML = data.length
+      ? data.map(x => `
+        <div style="padding:14px;margin:10px 0;border-radius:10px;background:#f5f7fa;">
+          <strong>${x.role_position || "Appreciation"}</strong>
+          <div>${x.message || x.reason || ""}</div>
+          <small>${x.date || ""}</small>
+        </div>`).join("")
+      : "<p>No appreciation recorded yet.</p>";
+  } catch(e) {
+    box.innerHTML="<p>Unable to load appreciations.</p>";
+  }
+}
+
+loadMemberTestimonies();
+loadMemberAppreciations();
+</script>
+
+<section id="member-id-card" style="margin-top:24px;">
+  <div class="dashboard-card">
+    <h2>🪪 My Member ID Card</h2>
+
+    <div id="id-card-preview"
+         style="max-width:430px;margin:18px auto;padding:22px;border-radius:16px;
+                border:2px solid #1b5e20;background:#fff;text-align:center;
+                box-shadow:0 5px 18px rgba(0,0,0,.12);">
+
+      <div style="font-weight:800;font-size:18px;">
+        METHODIST CHURCH NIGERIA
+      </div>
+
+      <div style="font-size:14px;font-weight:700;margin-top:3px;">
+        DELTA SOUTH DIOCESE
+      </div>
+
+      <div style="margin:15px auto;width:100px;height:100px;border-radius:50%;
+                  overflow:hidden;border:3px solid #1b5e20;background:#eee;
+                  display:flex;align-items:center;justify-content:center;">
+        <img id="id-photo" src="" alt="Member Photo"
+             style="width:100%;height:100%;object-fit:cover;display:none;">
+        <span id="id-photo-placeholder">PHOTO</span>
+      </div>
+
+      <div id="id-full-name"
+           style="font-size:20px;font-weight:800;margin-top:8px;">—</div>
+
+      <div style="margin-top:8px;">
+        <strong>Member ID:</strong>
+        <span id="id-member-id">—</span>
+      </div>
+
+      <div style="margin-top:5px;">
+        <strong>Position:</strong>
+        <span id="id-position">—</span>
+      </div>
+
+      <div style="margin-top:5px;">
+        <strong>Local Church:</strong>
+        <span id="id-church">—</span>
+      </div>
+
+      <div style="margin-top:5px;">
+        <strong>Circuit:</strong>
+        <span id="id-circuit">—</span>
+      </div>
+
+      <div style="margin-top:5px;">
+        <strong>Fellowship:</strong>
+        <span id="id-fellowship">—</span>
+      </div>
+
+      <div style="margin-top:18px;font-size:11px;">
+        Official Member Identification
+      </div>
+    </div>
+
+    <div style="text-align:center;">
+      <button type="button" onclick="window.print()">
+        🖨️ Print Member ID Card
+      </button>
+    </div>
+  </div>
+</section>
+
+<script>
+async function loadMemberIDCard() {
+  try {
+    const r=await fetch("/api/member/id-card");
+    const data=await r.json();
+    if (!r.ok) throw new Error(data.error || "Unable to load ID card");
+
+    document.getElementById("id-full-name").textContent=data.full_name || "—";
+    document.getElementById("id-member-id").textContent=data.member_id || "—";
+    document.getElementById("id-position").textContent=data.role_position || "Member";
+    document.getElementById("id-church").textContent=data.church_name || "—";
+    document.getElementById("id-circuit").textContent=data.circuit || "—";
+    document.getElementById("id-fellowship").textContent=data.fellowship || "—";
+
+    if (data.passport_photo) {
+      const img=document.getElementById("id-photo");
+      img.src=data.passport_photo;
+      img.style.display="block";
+      document.getElementById("id-photo-placeholder").style.display="none";
+    }
+  } catch(e) {
+    console.error("ID card:",e);
+  }
+}
+
+loadMemberIDCard();
+</script>
+
+<style>
+@media print {
+  body * {
+    visibility:hidden !important;
+  }
+
+  #member-id-card,
+  #member-id-card * {
+    visibility:visible !important;
+  }
+
+  #member-id-card {
+    position:absolute;
+    left:0;
+    top:0;
+    width:100%;
+  }
+
+  #member-id-card button {
+    display:none !important;
+  }
+
+  #id-card-preview {
+    box-shadow:none !important;
+  }
+}
+</style>
+
+
+
+<section id="member-records" class="member-panel"><div class="panel-header"><h2>My Church Records</h2><span class="panel-badge">Official Record</span></div><div class="member-record-grid"><div class="member-record-card"><h3>Baptism</h3><div>Status: <strong id="record-baptism-status">—</strong></div><div>Date: <span id="record-baptism-date">—</span></div></div><div class="member-record-card"><h3>Confirmation</h3><div>Status: <strong id="record-confirmation-status">—</strong></div><div>Date: <span id="record-confirmation-date">—</span></div></div><div class="member-record-card"><h3>Marriage</h3><div>Status: <strong id="record-marriage-status">—</strong></div><div>Date: <span id="record-marriage-date">—</span></div></div><div class="member-record-card"><h3>Transfer</h3><div>Status: <strong id="record-transfer-status">—</strong></div><div>From: <span id="record-transfer-from">—</span></div><div>To: <span id="record-transfer-to">—</span></div></div><div class="member-record-card"><h3>Relocation</h3><div>Status: <strong id="record-relocation-status">—</strong></div><div>Destination: <span id="record-relocation-destination">—</span></div></div></div>
+<div style="text-align:center;margin:20px 0"><a href="/member/certificate" target="_blank" class="btn btn-primary">📄 Download Member Certificate</a></div>
+</section><section id="member-announcements" class="member-panel">
+  <div class="panel-header">
+    <h2>Diocesan Announcements</h2>
+    <span id="member-announcement-count" class="panel-badge">0</span>
+  </div>
+  <div id="member-announcement-list">
+    <div class="empty-state">Loading announcements...</div>
+  </div>
+</section>
+
+<section id="member-events" class="member-panel">
+  <div class="panel-header">
+    <h2>Mission & Church Events</h2>
+    <span class="panel-badge">Communication Centre</span>
+  </div>
+  <div id="member-event-list">
+    <div class="empty-state">Loading events...</div>
+  </div>
+</section>
+
+<section id="member-notifications" style="margin-top:24px;">
+  <div class="dashboard-card">
+    <h2>🔔 My Notifications</h2>
+    <div id="member-notification-list">
+      Loading notifications...
+    </div>
+  </div>
+</section>
+
+<script>
+async 
+
+async function loadMemberRecords(){try{const r=await fetch("/api/member/records");const d=await r.json();if(!r.ok)return;const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v||"—"};set("record-baptism-status",d.baptised);set("record-baptism-date",d.baptism_date);set("record-confirmation-status",d.confirmed);set("record-confirmation-date",d.confirmation_date);set("record-marriage-status",d.marriage);set("record-marriage-date",d.marriage_date);set("record-transfer-status",d.transfer);set("record-transfer-from",d.transfer_from);set("record-transfer-to",d.transfer_to);set("record-relocation-status",d.relocated);set("record-relocation-destination",d.relocation_destination)}catch(e){console.error("Member records:",e)}}
+
+async function loadMemberAnnouncements(){
+  const box=document.getElementById("member-announcement-list");
+  const count=document.getElementById("member-announcement-count");
+  if(!box) return;
+
+  try{
+    const res=await fetch("/api/member/announcements");
+    const data=await res.json();
+
+    if(!res.ok){
+      box.innerHTML='<div class="empty-state">'+
+        (data.error||"Unable to load announcements.")+
+        '</div>';
+      return;
+    }
+
+    const unread=data.filter(x=>
+      String(x.status||"").toLowerCase()!=="read"
+    ).length;
+
+    if(count) count.textContent=unread+" unread";
+
+    if(!data.length){
+      box.innerHTML='<div class="empty-state">No announcements at this time.</div>';
+      return;
+    }
+
+    box.innerHTML=data.map(a=>`
+      <article class="member-announcement-card">
+        <div class="announcement-top">
+          <strong>${a.title||"Announcement"}</strong>
+          <span>${a.status||"Unread"}</span>
+        </div>
+        <p>${a.message||""}</p>
+        ${a.due_date ? `<small>Important date: ${a.due_date}</small>` : ""}
+        <small>Published: ${a.created_at||""}</small>
+      </article>
+    `).join("");
+
+  }catch(err){
+    console.error("Member announcements error:",err);
+    box.innerHTML='<div class="empty-state">Unable to load announcements.</div>';
+  }
+}
+
+async function loadMemberEvents(){
+  const box=document.getElementById("member-event-list");
+  if(!box) return;
+
+  try{
+    const res=await fetch("/api/member/events");
+    const data=await res.json();
+
+    if(!res.ok){
+      box.innerHTML='<div class="empty-state">'+(data.error||"Unable to load events.")+'</div>';
+      return;
+    }
+
+    if(!data.length){
+      box.innerHTML='<div class="empty-state">No mission or church events available.</div>';
+      return;
+    }
+
+    box.innerHTML=data.map(e=>`
+      <div class="member-event-card">
+        <div class="event-date">
+          ${e.event_date||""}${e.event_time ? " • "+e.event_time : ""}
+        </div>
+        <h3>${e.activity||e.event_type||"Mission Event"}</h3>
+        <div class="event-meta">
+          <span>${e.event_type||""}</span>
+          <span>${e.circuit||""}</span>
+          <span>${e.location||""}</span>
+        </div>
+        <p><strong>Phase:</strong> ${e.mission_phase||e.status||""}</p>
+        ${e.responsible_person ? `<p><strong>Responsible:</strong> ${e.responsible_person}</p>` : ""}
+        ${e.expected_outcome ? `<p><strong>Expected Outcome:</strong> ${e.expected_outcome}</p>` : ""}
+        ${e.followup_date ? `<p><strong>Follow-up:</strong> ${e.followup_date}</p>` : ""}
+        ${e.notes ? `<p>${e.notes}</p>` : ""}
+      </div>
+    `).join("");
+  }catch(err){
+    console.error("Member events error:",err);
+    box.innerHTML='<div class="empty-state">Unable to load events.</div>';
+  }
+}
+
+function loadMemberNotifications() {
+  const box=document.getElementById("member-notification-list");
+
+  try {
+    const r=await fetch("/api/member/notifications");
+    const data=await r.json();
+
+    if (!r.ok) {
+      throw new Error(data.error || "Unable to load notifications");
+    }
+
+    if (!data.length) {
+      box.innerHTML="<p>No notifications at this time.</p>";
+      return;
+    }
+
+    box.innerHTML=data.map(n => `
+      <div style="padding:15px;margin:10px 0;border-radius:12px;
+                  border:1px solid #ddd;background:#fff;">
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <strong>${n.title || "Notification"}</strong>
+          <small>${n.status || "Unread"}</small>
+        </div>
+        <p style="margin:8px 0;">${n.message || ""}</p>
+        ${n.due_date ? `<small>Due: ${n.due_date}</small>` : ""}
+        ${n.read_at ? "" :
+          `<button type="button"
+             onclick="markMemberNotificationRead(${n.id})">
+             Mark as read
+           </button>`}
+      </div>
+    `).join("");
+  } catch(e) {
+    box.innerHTML="<p>Unable to load notifications.</p>";
+  }
+}
+
+async function markMemberNotificationRead(id) {
+  try {
+    const r=await fetch(
+      "/api/member/notifications/"+id+"/read",
+      {method:"POST"}
+    );
+
+    if (r.ok) {
+      loadMemberNotifications();
+  loadMemberEvents();
+  loadMemberAnnouncements();
+  loadMemberRecords();
+    }
+  } catch(e) {
+    console.error("Notification:",e);
+  }
+}
+
+loadMemberNotifications();
+</script>
+
+<section id="member-giving-history" style="margin-top:24px;">
+  <div class="dashboard-card">
+    <h2>💰 My Giving History</h2>
+    <div id="member-giving-list">Loading giving history...</div>
+  </div>
+</section>
+
+<script>
+async function loadMemberGivingHistory() {
+  const box=document.getElementById("member-giving-list");
+
+  try {
+    const r=await fetch("/api/member/giving-history");
+    const data=await r.json();
+
+    if (!r.ok) throw new Error(data.error || "Unable to load giving history");
+
+    if (!data.length) {
+      box.innerHTML="<p>No giving records available yet.</p>";
+      return;
+    }
+
+    let total=0;
+
+    box.innerHTML=data.map(x => {
+      const amount=Number(x.amount || 0);
+      total+=amount;
+
+      return `
+        <div style="padding:14px;margin:10px 0;border-radius:12px;
+                    border:1px solid #ddd;background:#fff;">
+          <div style="display:flex;justify-content:space-between;gap:10px;">
+            <strong>${x.fund || x.source || "Giving"}</strong>
+            <strong>₦${amount.toLocaleString()}</strong>
+          </div>
+          <div style="margin-top:6px;">
+            ${x.date || ""}
+          </div>
+          <small>${x.method || ""} ${x.reference ? "• "+x.reference : ""}</small>
+        </div>
+      `;
+    }).join("");
+
+    box.innerHTML += `
+      <div style="margin-top:15px;padding:15px;border-radius:12px;
+                  font-weight:800;background:#f5f7fa;">
+        Total recorded giving: ₦${total.toLocaleString()}
+      </div>
+    `;
+  } catch(e) {
+    box.innerHTML="<p>Unable to load giving history.</p>";
+  }
+}
+
+loadMemberGivingHistory();
+</script>
+
+<section id="member-attendance-summary" style="margin-top:24px;">
+  <div class="dashboard-card">
+    <h2>📊 My Attendance</h2>
+
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);
+                gap:10px;margin:15px 0;">
+
+      <div style="padding:14px;text-align:center;border-radius:12px;background:#f5f7fa;">
+        <strong id="attendance-total">0</strong>
+        <div>Total</div>
+      </div>
+
+      <div style="padding:14px;text-align:center;border-radius:12px;background:#f5f7fa;">
+        <strong id="attendance-present">0</strong>
+        <div>Present</div>
+      </div>
+
+      <div style="padding:14px;text-align:center;border-radius:12px;background:#f5f7fa;">
+        <strong id="attendance-absent">0</strong>
+        <div>Absent</div>
+      </div>
+
+      <div style="padding:14px;text-align:center;border-radius:12px;background:#f5f7fa;">
+        <strong id="attendance-percentage">0%</strong>
+        <div>Attendance</div>
+      </div>
+    </div>
+
+    <h3>Recent Attendance</h3>
+    <div id="member-attendance-list">Loading attendance...</div>
+  </div>
+</section>
+
+<script>
+async function loadMemberAttendance() {
+  try {
+    const summary=await fetch("/api/member/attendance-summary");
+    const data=await summary.json();
+
+    if (!summary.ok) throw new Error(data.error || "Unable to load summary");
+
+    document.getElementById("attendance-total").textContent=data.total || 0;
+    document.getElementById("attendance-present").textContent=data.present || 0;
+    document.getElementById("attendance-absent").textContent=data.absent || 0;
+    document.getElementById("attendance-percentage").textContent=
+      (data.attendance_percentage || 0)+"%";
+
+    const r=await fetch("/api/member/attendance");
+    const rows=await r.json();
+
+    const box=document.getElementById("member-attendance-list");
+
+    if (!r.ok) throw new Error("Unable to load attendance");
+
+    if (!rows.length) {
+      box.innerHTML="<p>No attendance records available yet.</p>";
+      return;
+    }
+
+    box.innerHTML=rows.slice(0,10).map(x=>`
+      <div style="padding:12px;margin:8px 0;border-radius:10px;
+                  border:1px solid #ddd;background:#fff;
+                  display:flex;justify-content:space-between;gap:10px;">
+        <div>
+          <strong>${x.meeting_type || "Meeting"}</strong>
+          <div>${x.attendance_date || ""}</div>
+        </div>
+        <strong>${x.status || ""}</strong>
+      </div>
+    `).join("");
+
+  } catch(e) {
+    console.error("Attendance:",e);
+    document.getElementById("member-attendance-list").innerHTML=
+      "<p>Unable to load attendance.</p>";
+  }
+}
+
+loadMemberAttendance();
+</script>
+</body>
+</html>
