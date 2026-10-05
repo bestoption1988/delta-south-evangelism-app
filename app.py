@@ -1455,7 +1455,7 @@ def setup():
         now = datetime.now().isoformat(timespec="seconds")
         conn = db()
         cur = conn.execute("INSERT INTO users(username,password,role,circuit,church_name,active,must_change_password,created_at,member_id) VALUES(?,?,?,?,?,?,?,?,?)",
-                           (username, generate_password_hash(password), "Admin", "", "", 1, 0, now))
+                           (username, generate_password_hash(password), "Admin", "", "", 1, 0, now, None))
         conn.commit()
         session.clear(); session["user_id"] = cur.lastrowid
         audit("LOGIN_SETUP", "users", cur.lastrowid, "Initial diocesan administrator created")
