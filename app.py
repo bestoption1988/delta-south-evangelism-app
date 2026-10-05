@@ -643,6 +643,12 @@ def ensure_runtime_schema():
       'income': {
         'church_account_id': 'INTEGER DEFAULT NULL'
       },
+      'member_registrations': {
+        'username': "TEXT DEFAULT ''",
+        'password': "TEXT DEFAULT ''",
+        'account_status': "TEXT DEFAULT 'Pending'",
+        'approved_user_id': "INTEGER DEFAULT NULL"
+      },
       'report_periods': {
         'period_name': "TEXT DEFAULT ''", 'period_type': "TEXT DEFAULT 'Monthly'", 'start_date': "TEXT DEFAULT ''", 'end_date': "TEXT DEFAULT ''",
         'submission_due': "TEXT DEFAULT ''", 'status': "TEXT DEFAULT 'Open'", 'instructions': "TEXT DEFAULT ''", 'created_at': "TEXT DEFAULT ''"},
