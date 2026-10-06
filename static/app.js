@@ -1590,8 +1590,8 @@ async function loadMemberRegistrations(){
           ];
 
           role = prompt(
-            "Select the system role for this applicant:\\n\\n" +
-            roles.join("\\n"),
+            "Select the system role for this applicant:\n\n" +
+            roles.join("\n"),
             "Local Church Evangelism Officer"
           );
 

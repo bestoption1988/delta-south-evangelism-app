@@ -2435,3 +2435,45 @@ html,body{
   max-width:100%;
   overflow-x:hidden;
 }
+
+
+/* ===== RELIABLE MOBILE DASHBOARD MENU ===== */
+.nav-dropdown{
+  position:relative !important;
+  z-index:5000 !important;
+}
+
+.menu-toggle{
+  position:relative !important;
+  z-index:5001 !important;
+  touch-action:manipulation;
+  -webkit-tap-highlight-color:transparent;
+}
+
+.menu-panel{
+  z-index:5002 !important;
+  pointer-events:auto !important;
+}
+
+.menu-panel.open{
+  display:flex !important;
+  visibility:visible !important;
+  opacity:1 !important;
+}
+
+@media(max-width:700px){
+  nav{
+    position:sticky !important;
+    top:0 !important;
+    z-index:5000 !important;
+  }
+
+  .nav-dropdown{
+    z-index:5001 !important;
+  }
+
+  #menuPanel{
+    position:absolute !important;
+    z-index:5002 !important;
+  }
+}

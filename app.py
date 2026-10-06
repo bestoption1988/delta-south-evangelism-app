@@ -600,6 +600,28 @@ def init_db():
 
 
 
+
+def ensure_member_passport_photo_schema():
+    """Ensure members has the passport_photo field using a standalone DB connection."""
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        cols = {
+            r[1]
+            for r in conn.execute(
+                "PRAGMA table_info(members)"
+            ).fetchall()
+        }
+
+        if "passport_photo" not in cols:
+            conn.execute(
+                "ALTER TABLE members ADD COLUMN passport_photo TEXT DEFAULT ''"
+            )
+            conn.commit()
+            print("Added members.passport_photo")
+    finally:
+        conn.close()
+
+
 def ensure_runtime_schema():
     """Repair/upgrade the retained SQLite database before dashboard APIs run.
     This is intentionally safe for existing evangelism.db files.
@@ -1873,12 +1895,21 @@ def scoped_rows(table, u):
 MEMBER_CARE_TYPING = {}
 
 
+def _member_care_schema_conn():
+    """Return a standalone SQLite connection for startup schema migrations."""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def ensure_member_care_case_assignment_schema():
-    conn = db()
+    conn = _member_care_schema_conn()
     try:
         cols = {
             r["name"]
-            for r in conn.execute("PRAGMA table_info(customer_care_threads)").fetchall()
+            for r in conn.execute(
+                "PRAGMA table_info(customer_care_threads)"
+            ).fetchall()
         }
 
         additions = {
@@ -1892,7 +1923,8 @@ def ensure_member_care_case_assignment_schema():
         for name, definition in additions.items():
             if name not in cols:
                 conn.execute(
-                    f"ALTER TABLE customer_care_threads ADD COLUMN {name} {definition}"
+                    f"ALTER TABLE customer_care_threads "
+                    f"ADD COLUMN {name} {definition}"
                 )
 
         conn.commit()
@@ -1900,9 +1932,8 @@ def ensure_member_care_case_assignment_schema():
         conn.close()
 
 
-
 def ensure_member_care_timeline_schema():
-    conn = db()
+    conn = _member_care_schema_conn()
     try:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS customer_care_timeline (
@@ -1919,14 +1950,14 @@ def ensure_member_care_timeline_schema():
         """)
 
         conn.execute("""
-            CREATE INDEX IF NOT EXISTS idx_customer_care_timeline_thread
+            CREATE INDEX IF NOT EXISTS
+            idx_customer_care_timeline_thread
             ON customer_care_timeline(thread_id)
         """)
 
         conn.commit()
     finally:
         conn.close()
-
 
 
 def add_customer_care_timeline(thread_id, action, details="", user=None,
@@ -2011,8 +2042,8 @@ def customer_care_scope(u):
 
 def ensure_member_care_attachment_schema():
     """Add attachment fields to the existing Member Care messages table."""
+    conn = _member_care_schema_conn()
     try:
-        conn = db()
         cols = {
             r["name"]
             for r in conn.execute(
@@ -2035,8 +2066,8 @@ def ensure_member_care_attachment_schema():
                 )
 
         conn.commit()
-    except Exception as e:
-        print("Member Care attachment schema:", e)
+    finally:
+        conn.close()
 
 
 @app.get("/api/customer-care")
@@ -5900,24 +5931,40 @@ def manifest():
 
 
 def build_table_map():
-    """Build the table/column map after the database schema has been initialized."""
+    """Build and refresh the table/column map after the database schema is initialized."""
+    global TABLES
+
     conn = db()
     names = set(ALL_TABLES)
     names.update({"circuits", "users", "audit_log", "backup_history"})
+
     table_map = {}
+
     for name in sorted(names):
         try:
-            cols = [row[1] for row in conn.execute(f"PRAGMA table_info({name})").fetchall()]
+            cols = [
+                row[1]
+                for row in conn.execute(
+                    f"PRAGMA table_info({name})"
+                ).fetchall()
+            ]
+
             if cols:
                 table_map[name] = cols
+
         except sqlite3.Error:
             continue
-    return table_map
+
+    TABLES = table_map
+    return TABLES
 
 with app.app_context():
     init_db()
     ensure_runtime_schema()
+    ensure_member_passport_photo_schema()
+    ensure_member_care_attachment_schema()
     ensure_member_care_case_assignment_schema()
+    ensure_member_care_timeline_schema()
     TABLES = build_table_map()
 @app.post("/api/payment/settings")
 @login_required

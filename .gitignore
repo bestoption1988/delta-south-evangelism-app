@@ -23,3 +23,13 @@ run_https.py
 
 *.before_*
 *.broken_*
+
+# Local launch backups and temporary checkpoints
+app.py.final-launch-backup
+app.py.member-care-backup-*
+static/member-care-popup.js.final-launch-backup
+checkpoint_MEMBER_CARE_WORKING/
+financial_report_route.txt
+
+# User-uploaded files
+static/uploads/
