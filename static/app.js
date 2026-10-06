@@ -1396,7 +1396,7 @@ if(current==="members"){
   keys=memberOrder.filter(k=>list.some(r=>Object.prototype.hasOwnProperty.call(r,k)));
 }else{
   keys=[...new Set(list.flatMap(r=>Object.keys(r)))].filter(k=>!( ["id","password"].includes(k) ));
-}let showAction=current!=="audit"&&me.role!=="Auditor";let canUpgrade=current==="churches"&&me.role==="Admin";$("#tableWrap").innerHTML=`<table><thead><tr>${keys.map(k=>`<th>${esc(k.replaceAll("_"," "))}</th>`).join("")}${showAction?"<th>Action</th>":""}</tr></thead><tbody>${list.map(r=>`<tr>${keys.map(k=>`<td class="${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?"amount":""}">${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?money(r[k]):esc(r[k]??"—")}</td>`).join("")}${showAction?`<td class="actions-cell">${canUpgrade&&r.church_status!=="Circuit Headquarters"?`<button class="upgrade" data-upgrade="${r.id}">Upgrade to Circuit</button>`:""}${canUpgrade&&r.church_status==="Circuit Headquarters"?`<span class="status-badge">Circuit HQ</span>`:""}${current==="circuit_reports"&&me.role==="Admin"?`<button class="upgrade" data-review="${r.id}" data-status="Approved">Approve</button><button class="delete" data-review="${r.id}" data-status="Returned">Return</button>`:""}${current==="users"&&me.role==="Admin"?`<button class="secondary" data-edit-user="${r.id}">Edit access</button><button class="secondary" data-toggle-user="${r.id}">${r.active?"Deactivate":"Activate"}</button>`:""}${current==="planting_prospects"&&me.role!=="Local Church Evangelism Officer"&&r.status!=="Converted to Church Plant"&&r.status!=="Closed"?`<button class="upgrade" data-convert-prospect="${r.id}">Convert to Church Plant</button>`:""}${current==="members"?`<button class="secondary" data-edit-member="${r.id}">Edit Member</button>`:""}<button class="delete" data-del="${r.id}">Delete</button></td>`:""}</tr>`).join("")}</tbody></table>`;document.querySelectorAll("[data-convert-prospect]").forEach(b=>b.onclick=async()=>{
+}let showAction=current!=="audit"&&me.role!=="Auditor";let canUpgrade=current==="churches"&&me.role==="Admin";$("#tableWrap").innerHTML=`<table><thead><tr>${keys.map(k=>`<th>${esc(k.replaceAll("_"," "))}</th>`).join("")}${showAction?"<th>Action</th>":""}</tr></thead><tbody>${list.map(r=>`<tr>${keys.map(k=>`<td class="${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?"amount":""}">${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?money(r[k]):esc(r[k]??"—")}</td>`).join("")}${showAction?`<td class="actions-cell">${canUpgrade&&r.church_status!=="Circuit Headquarters"?`<button class="upgrade" data-upgrade="${r.id}">Upgrade to Circuit</button>`:""}${canUpgrade&&r.church_status==="Circuit Headquarters"?`<span class="status-badge">Circuit HQ</span>`:""}${current==="circuit_reports"&&me.role==="Admin"?`<button class="upgrade" data-review="${r.id}" data-status="Approved">Approve</button><button class="delete" data-review="${r.id}" data-status="Returned">Return</button>`:""}${current==="users"&&me.role==="Admin"?`<button class="secondary" data-edit-user="${r.id}">Edit access</button><button class="secondary" data-toggle-user="${r.id}">${r.active?"Deactivate":"Activate"}</button>`:""}${current==="planting_prospects"&&me.role!=="Local Church Evangelism Officer"&&r.status!=="Converted to Church Plant"&&r.status!=="Closed"?`<button class="upgrade" data-convert-prospect="${r.id}">Convert to Church Plant</button>`:""}${current==="members"?`<button class="secondary" data-edit-member="${r.id}">Edit Member</button><button class="upgrade" data-manage-offices="${r.id}">Manage Offices</button>`:""}<button class="delete" data-del="${r.id}">Delete</button></td>`:""}</tr>`).join("")}</tbody></table>`;document.querySelectorAll("[data-convert-prospect]").forEach(b=>b.onclick=async()=>{
 const row=list.find(x=>String(x.id)===String(b.dataset.convertProspect));
 if(!row)return;
 
@@ -2047,6 +2047,411 @@ $("#recordForm").onsubmit=async e=>{e.preventDefault();const data={};new FormDat
   }
 }catch(err){alert(err.message)}};
 $("#commRefreshBtn")?.addEventListener("click",loadCommunications);$("#commGenerateBtn")?.addEventListener("click",async()=>{try{const d=await api('/api/notifications/generate',{method:'POST'});await loadCommunications();setStatus(`${d.created} reminder(s) generated.`)}catch(e){alert(e.message)}});$("#commNotifyBtn")?.addEventListener("click",async()=>{if(!('Notification' in window))return alert('Browser notifications are not supported on this device/browser.');const p=await Notification.requestPermission();alert(p==='granted'?'Browser notifications enabled.':'Notification permission was not granted.')});$("#waBtn")?.addEventListener("click",()=>openWhatsApp($("#msgPhone").value,$("#msgText").value));$("#smsBtn")?.addEventListener("click",()=>openSms($("#msgPhone").value,$("#msgText").value));$("#copyMsgBtn")?.addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#msgText").value);setStatus('Message copied.')}catch(e){alert('Copy failed.')}});
+
+function closeMemberOfficeManager(){
+  const el = document.getElementById("memberOfficeModal");
+  if(el) el.remove();
+}
+
+function memberOfficeModalHtml(member, appointments, offices, levels, statuses){
+  const active = appointments.filter(x => x.status === "Active");
+  const history = appointments.filter(x => x.status !== "Active");
+
+  const officeOptions = offices.map(x =>
+    `<option value="${esc(x)}">${esc(x)}</option>`
+  ).join("");
+
+  const levelOptions = levels.map(x =>
+    `<option value="${esc(x)}">${esc(x)}</option>`
+  ).join("");
+
+  const statusOptions = statuses.map(x =>
+    `<option value="${esc(x)}">${esc(x)}</option>`
+  ).join("");
+
+  const appointmentRows = appointments.length
+    ? appointments.map(a => `
+      <div class="simple-row" style="display:block;margin-bottom:10px;padding:14px;border:1px solid #dce8df;border-radius:12px;background:#fff">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start">
+          <div>
+            <strong>${esc(a.office)}</strong>
+            <small style="display:block;margin-top:4px">
+              ${esc(a.level)}
+              ${a.circuit ? " · " + esc(a.circuit) : ""}
+              ${a.church_name ? " · " + esc(a.church_name) : ""}
+            </small>
+          </div>
+          <span class="status-badge">${esc(a.status)}</span>
+        </div>
+
+        <div style="margin-top:8px;font-size:.9rem">
+          <strong>Start:</strong> ${esc(a.start_date || "—")}
+          &nbsp; · &nbsp;
+          <strong>End:</strong> ${esc(a.end_date || "—")}
+        </div>
+
+        ${a.notes ? `<div style="margin-top:7px"><strong>Notes:</strong> ${esc(a.notes)}</div>` : ""}
+
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button class="secondary" data-office-edit="${a.id}">Edit</button>
+          ${a.status === "Active"
+            ? `<button class="delete" data-office-terminate="${a.id}">Terminate</button>`
+            : ""}
+        </div>
+      </div>
+    `).join("")
+    : `<div class="empty">No church office appointments recorded for this member yet.</div>`;
+
+  return `
+    <div id="memberOfficeModal"
+         style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.55);padding:18px;overflow:auto">
+
+      <div style="max-width:850px;margin:25px auto;background:#fff;border-radius:20px;box-shadow:0 20px 60px rgba(0,0,0,.25);overflow:hidden">
+
+        <div style="background:#075d35;color:#fff;padding:20px">
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start">
+            <div>
+              <div style="font-size:.8rem;opacity:.85;text-transform:uppercase;letter-spacing:.08em">
+                Church Office Management
+              </div>
+              <h2 style="margin:5px 0">${esc(member.full_name)}</h2>
+              <div>${esc(member.member_id || "")} · ${esc(member.circuit || "")} · ${esc(member.church_name || "")}</div>
+            </div>
+            <button id="closeMemberOfficeModal"
+                    style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.35);border-radius:10px;padding:8px 12px;font-size:20px">
+              ×
+            </button>
+          </div>
+        </div>
+
+        <div style="padding:20px">
+
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:20px">
+            <div style="padding:16px;border-radius:14px;background:#f0faf4">
+              <small>Active Offices</small>
+              <strong style="display:block;font-size:1.5rem">${active.length}</strong>
+            </div>
+            <div style="padding:16px;border-radius:14px;background:#f7f7f7">
+              <small>Appointment History</small>
+              <strong style="display:block;font-size:1.5rem">${appointments.length}</strong>
+            </div>
+          </div>
+
+          <div style="border:1px solid #dce8df;border-radius:16px;padding:18px;margin-bottom:20px">
+            <h3 style="margin-top:0">Add Church Office / Appointment</h3>
+
+            <form id="memberOfficeForm">
+
+              <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+
+                <div class="field">
+                  <label>Church Office</label>
+                  <select name="office" required>
+                    <option value="">Select office</option>
+                    ${officeOptions}
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label>Appointment Level</label>
+                  <select name="level" required>
+                    ${levelOptions}
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label>Circuit</label>
+                  <select name="circuit">
+                    <option value="">Select circuit</option>
+                    <option>Effurun Circuit</option>
+                    <option>Warri Circuit</option>
+                    <option>Sapele Circuit</option>
+                    <option>Steel Town Circuit</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label>Local Church</label>
+                  <select name="church_name">
+                    <option value="">Select local church</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label>Start Date</label>
+                  <input name="start_date" type="date" required>
+                </div>
+
+                <div class="field">
+                  <label>Status</label>
+                  <select name="status">
+                    ${statusOptions}
+                  </select>
+                </div>
+
+                <div class="field field-wide" style="grid-column:1/-1">
+                  <label>End Date</label>
+                  <input name="end_date" type="date">
+                </div>
+
+                <div class="field field-wide" style="grid-column:1/-1">
+                  <label>Notes / Appointment Information</label>
+                  <textarea name="notes" rows="3" placeholder="Appointment details, reason, reference, etc."></textarea>
+                </div>
+
+              </div>
+
+              <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:12px">
+                <button type="submit" class="upgrade">Add Appointment</button>
+              </div>
+
+            </form>
+          </div>
+
+          <div>
+            <h3>Appointment History</h3>
+            ${appointmentRows}
+          </div>
+
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function openMemberOfficeManager(memberId){
+  if(me?.role !== "Admin"){
+    alert("Only an Administrator can manage church offices.");
+    return;
+  }
+
+  try{
+    const d = await api(`/api/members/${memberId}/appointments`);
+
+    closeMemberOfficeManager();
+
+    document.body.insertAdjacentHTML(
+      "beforeend",
+      memberOfficeModalHtml(
+        d.member,
+        d.appointments || [],
+        d.offices || [],
+        d.levels || [],
+        d.statuses || []
+      )
+    );
+
+    const modal = document.getElementById("memberOfficeModal");
+    const form = document.getElementById("memberOfficeForm");
+    const circuit = form?.elements["circuit"];
+    const church = form?.elements["church_name"];
+    const level = form?.elements["level"];
+
+    async function loadOfficeChurches(){
+      if(!circuit || !church) return;
+
+      if(level?.value === "Diocesan"){
+        circuit.value = "";
+        church.innerHTML = '<option value="">Diocesan Office</option>';
+        circuit.disabled = true;
+        church.disabled = true;
+        return;
+      }
+
+      circuit.disabled = false;
+
+      if(level?.value === "Circuit"){
+        church.innerHTML = '<option value="">Circuit appointment</option>';
+        church.disabled = true;
+        return;
+      }
+
+      church.disabled = false;
+
+      try{
+        const list = await api("/api/membership/churches");
+        const selected = circuit.value;
+
+        const filtered = (list || []).filter(
+          x => x.circuit === selected
+        );
+
+        church.innerHTML =
+          '<option value="">Select local church</option>' +
+          filtered.map(x =>
+            `<option value="${esc(x.church_name)}">${esc(x.church_name)}</option>`
+          ).join("");
+      }catch(e){
+        church.innerHTML = '<option value="">Unable to load churches</option>';
+      }
+    }
+
+    level?.addEventListener("change", loadOfficeChurches);
+    circuit?.addEventListener("change", loadOfficeChurches);
+
+    await loadOfficeChurches();
+
+    document.getElementById("closeMemberOfficeModal")?.addEventListener(
+      "click",
+      closeMemberOfficeManager
+    );
+
+    modal?.addEventListener("click", e => {
+      if(e.target === modal) closeMemberOfficeManager();
+    });
+
+    form?.addEventListener("submit", async e => {
+      e.preventDefault();
+
+      const data = {};
+      new FormData(form).forEach((v,k) => {
+        data[k] = v;
+      });
+
+      try{
+        await api(`/api/members/${memberId}/appointments`, {
+          method:"POST",
+          body:JSON.stringify(data)
+        });
+
+        alert("Church office appointment added successfully.");
+
+        await openMemberOfficeManager(memberId);
+
+      }catch(err){
+        alert(err.message);
+      }
+    });
+
+    document.querySelectorAll("[data-office-edit]").forEach(btn => {
+      btn.onclick = async () => {
+        const appointment = (d.appointments || []).find(
+          x => String(x.id) === String(btn.dataset.officeEdit)
+        );
+
+        if(!appointment) return;
+
+        const office = prompt(
+          "Church office:",
+          appointment.office
+        );
+        if(office === null) return;
+
+        const levelValue = prompt(
+          "Appointment level (Diocesan, Circuit, Local Church):",
+          appointment.level
+        );
+        if(levelValue === null) return;
+
+        const start = prompt(
+          "Start date (YYYY-MM-DD):",
+          appointment.start_date || ""
+        );
+        if(start === null) return;
+
+        const end = prompt(
+          "End date (leave blank if active):",
+          appointment.end_date || ""
+        );
+        if(end === null) return;
+
+        const status = prompt(
+          "Status (Active or Terminated):",
+          appointment.status
+        );
+        if(status === null) return;
+
+        const notes = prompt(
+          "Notes:",
+          appointment.notes || ""
+        );
+        if(notes === null) return;
+
+        try{
+          await api(`/api/member-appointments/${appointment.id}`, {
+            method:"PUT",
+            body:JSON.stringify({
+              office:office,
+              level:levelValue,
+              circuit:appointment.circuit || "",
+              church_name:appointment.church_name || "",
+              start_date:start,
+              end_date:end,
+              status:status,
+              notes:notes
+            })
+          });
+
+          alert("Appointment updated successfully.");
+          await openMemberOfficeManager(memberId);
+
+        }catch(err){
+          alert(err.message);
+        }
+      };
+    });
+
+    document.querySelectorAll("[data-office-terminate]").forEach(btn => {
+      btn.onclick = async () => {
+        const appointment = (d.appointments || []).find(
+          x => String(x.id) === String(btn.dataset.officeTerminate)
+        );
+
+        if(!appointment) return;
+
+        if(!confirm(
+          `Terminate "${appointment.office}" for ${d.member.full_name}?\n\n` +
+          "The person's church membership will remain active."
+        )) return;
+
+        const endDate = prompt(
+          "Termination date (YYYY-MM-DD):",
+          new Date().toISOString().slice(0,10)
+        );
+
+        if(endDate === null) return;
+
+        const notes = prompt(
+          "Reason / termination note:",
+          "Appointment terminated."
+        );
+
+        if(notes === null) return;
+
+        try{
+          await api(`/api/member-appointments/${appointment.id}/terminate`, {
+            method:"POST",
+            body:JSON.stringify({
+              end_date:endDate,
+              notes:notes
+            })
+          });
+
+          alert(
+            "Appointment terminated successfully.\n\n" +
+            "Membership remains active."
+          );
+
+          await openMemberOfficeManager(memberId);
+
+        }catch(err){
+          alert(err.message);
+        }
+      };
+    });
+
+  }catch(err){
+    alert(err.message);
+  }
+}
+
+document.addEventListener("click", e => {
+  const button = e.target.closest("[data-manage-offices]");
+  if(!button) return;
+
+  openMemberOfficeManager(button.dataset.manageOffices);
+});
+
 async function start(){
   try{
     await loadMe();

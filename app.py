@@ -471,6 +471,32 @@ def init_db():
     # The app may be upgraded while retaining an existing evangelism.db, so
     # every column introduced by the membership/testimony modules must be
     # present before the API attempts an INSERT.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS member_appointments(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            member_id INTEGER NOT NULL,
+            office TEXT NOT NULL,
+            level TEXT DEFAULT 'Local Church',
+            circuit TEXT DEFAULT '',
+            church_name TEXT DEFAULT '',
+            start_date TEXT DEFAULT '',
+            end_date TEXT DEFAULT '',
+            status TEXT DEFAULT 'Active',
+            notes TEXT DEFAULT '',
+            appointed_by TEXT DEFAULT '',
+            created_at TEXT DEFAULT '',
+            updated_at TEXT DEFAULT ''
+        )
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_member_appointments_member
+        ON member_appointments(member_id)
+    """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_member_appointments_status
+        ON member_appointments(status)
+    """)
+
     member_migrations = {
         "member_id": "TEXT DEFAULT ''",
         "role_position": "TEXT DEFAULT 'Other'",
@@ -7377,6 +7403,461 @@ def api_church_accounts_create():
     if not d.get("bank_name") or not d.get("account_name") or not d.get("account_number"): return jsonify({"error":"Bank, account name and account number are required"}),400
     c=db(); r=c.execute("INSERT INTO church_accounts(account_level,circuit,church_name,bank_name,account_name,account_number,account_type,branch,notes,created_by) VALUES(?,?,?,?,?,?,?,?,?,?)",(level,circuit,church,d["bank_name"],d["account_name"],d["account_number"],d.get("account_type","Current"),d.get("branch"),d.get("notes"),u["username"])); c.commit()
     return jsonify(dict(c.execute("SELECT * FROM church_accounts WHERE id=?",(r.lastrowid,)).fetchone())),201
+
+
+# =========================================================
+# MEMBER CHURCH OFFICE / APPOINTMENT MANAGEMENT
+# =========================================================
+
+MEMBER_CHURCH_OFFICES = [
+    "Bishop / Diocesan Executive",
+    "Lay President",
+    "Evangelism Minister",
+    "Presbyters",
+    "Ministers",
+    "Lay Preachers",
+    "Planting Officer",
+    "Diocesan Secretary",
+    "Circuit Coordinator",
+    "Local Church Evangelism Officer",
+    "Sunday School Teachers",
+    "Finance Officer",
+    "Conference Awardees",
+    "Diocesan Awardees",
+    "Friends of the Diocese",
+    "Auditor",
+    "Men Fellowship President",
+    "Women Fellowship President",
+    "Youth Fellowship President",
+    "Others",
+]
+
+MEMBER_APPOINTMENT_LEVELS = [
+    "Diocesan",
+    "Circuit",
+    "Local Church",
+]
+
+MEMBER_APPOINTMENT_STATUSES = [
+    "Active",
+    "Terminated",
+]
+
+
+def member_appointment_admin_required():
+    u = current_user()
+    if u["role"] != "Admin":
+        return jsonify({"error": "Administrator access required."}), 403
+    return None
+
+
+@app.get("/api/members/<int:member_id>/appointments")
+@login_required
+def get_member_appointments(member_id):
+    denied = member_appointment_admin_required()
+    if denied:
+        return denied
+
+    member = db().execute(
+        "SELECT id, member_id, full_name, circuit, church_name "
+        "FROM members WHERE id=?",
+        (member_id,)
+    ).fetchone()
+
+    if not member:
+        return jsonify({"error": "Member not found."}), 404
+
+    records = rows("""
+        SELECT
+            id,
+            member_id,
+            office,
+            level,
+            circuit,
+            church_name,
+            start_date,
+            end_date,
+            status,
+            notes,
+            appointed_by,
+            created_at,
+            updated_at
+        FROM member_appointments
+        WHERE member_id=?
+        ORDER BY
+            CASE WHEN status='Active' THEN 0 ELSE 1 END,
+            start_date DESC,
+            id DESC
+    """, (member_id,))
+
+    return jsonify({
+        "member": dict(member),
+        "appointments": records,
+        "offices": MEMBER_CHURCH_OFFICES,
+        "levels": MEMBER_APPOINTMENT_LEVELS,
+        "statuses": MEMBER_APPOINTMENT_STATUSES
+    })
+
+
+@app.post("/api/members/<int:member_id>/appointments")
+@login_required
+def create_member_appointment(member_id):
+    denied = member_appointment_admin_required()
+    if denied:
+        return denied
+
+    member = db().execute(
+        "SELECT id, full_name, circuit, church_name "
+        "FROM members WHERE id=?",
+        (member_id,)
+    ).fetchone()
+
+    if not member:
+        return jsonify({"error": "Member not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    office = (data.get("office") or "").strip()
+    level = (data.get("level") or "Local Church").strip()
+    circuit = (data.get("circuit") or "").strip()
+    church_name = (data.get("church_name") or "").strip()
+    start_date = (data.get("start_date") or "").strip()
+    end_date = (data.get("end_date") or "").strip()
+    status = (data.get("status") or "Active").strip()
+    notes = (data.get("notes") or "").strip()
+
+    if office not in MEMBER_CHURCH_OFFICES:
+        return jsonify({"error": "Select a valid church office."}), 400
+
+    if level not in MEMBER_APPOINTMENT_LEVELS:
+        return jsonify({"error": "Select a valid appointment level."}), 400
+
+    if status not in MEMBER_APPOINTMENT_STATUSES:
+        return jsonify({"error": "Select a valid appointment status."}), 400
+
+    if not start_date:
+        return jsonify({"error": "Appointment start date is required."}), 400
+
+    if level == "Diocesan":
+        circuit = ""
+        church_name = ""
+
+    elif level == "Circuit":
+        if not circuit or circuit == "Diocesan":
+            return jsonify({
+                "error": "A circuit appointment must have a circuit."
+            }), 400
+        church_name = ""
+
+    elif level == "Local Church":
+        if not circuit or circuit == "Diocesan":
+            return jsonify({
+                "error": "A local church appointment must have a circuit."
+            }), 400
+
+        if not church_name:
+            return jsonify({
+                "error": "A local church appointment must have a local church."
+            }), 400
+
+        church = db().execute(
+            "SELECT 1 FROM churches WHERE circuit=? AND church_name=?",
+            (circuit, church_name)
+        ).fetchone()
+
+        if not church:
+            return jsonify({
+                "error": "The selected local church does not belong to the selected circuit."
+            }), 400
+
+    now = datetime.now().isoformat(timespec="seconds")
+    u = current_user()
+    appointed_by = u["username"] or "Administrator"
+
+    conn = db()
+
+    try:
+        cur = conn.execute("""
+            INSERT INTO member_appointments(
+                member_id,
+                office,
+                level,
+                circuit,
+                church_name,
+                start_date,
+                end_date,
+                status,
+                notes,
+                appointed_by,
+                created_at,
+                updated_at
+            )
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+        """, (
+            member_id,
+            office,
+            level,
+            circuit,
+            church_name,
+            start_date,
+            end_date,
+            status,
+            notes,
+            appointed_by,
+            now,
+            now
+        ))
+
+        conn.commit()
+
+        try:
+            audit(
+                "CREATE_MEMBER_APPOINTMENT",
+                "member_appointments",
+                cur.lastrowid,
+                json.dumps({
+                    "member_id": member_id,
+                    "member_name": member["full_name"],
+                    "office": office,
+                    "level": level,
+                    "circuit": circuit,
+                    "church_name": church_name,
+                    "status": status
+                }, ensure_ascii=False)
+            )
+        except Exception:
+            pass
+
+        return jsonify({
+            "ok": True,
+            "id": cur.lastrowid,
+            "message": "Church office appointment added successfully."
+        }), 201
+
+    except sqlite3.Error as e:
+        conn.rollback()
+        return jsonify({
+            "error": "Could not create appointment: " + str(e)
+        }), 500
+
+
+@app.put("/api/member-appointments/<int:appointment_id>")
+@login_required
+def update_member_appointment(appointment_id):
+    denied = member_appointment_admin_required()
+    if denied:
+        return denied
+
+    appointment = db().execute(
+        "SELECT * FROM member_appointments WHERE id=?",
+        (appointment_id,)
+    ).fetchone()
+
+    if not appointment:
+        return jsonify({"error": "Appointment not found."}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    office = (data.get("office") or appointment["office"] or "").strip()
+    level = (data.get("level") or appointment["level"] or "Local Church").strip()
+    circuit = (data.get("circuit") or "").strip()
+    church_name = (data.get("church_name") or "").strip()
+    start_date = (data.get("start_date") or "").strip()
+    end_date = (data.get("end_date") or "").strip()
+    status = (data.get("status") or "Active").strip()
+    notes = (data.get("notes") or "").strip()
+
+    if office not in MEMBER_CHURCH_OFFICES:
+        return jsonify({"error": "Select a valid church office."}), 400
+
+    if level not in MEMBER_APPOINTMENT_LEVELS:
+        return jsonify({"error": "Select a valid appointment level."}), 400
+
+    if status not in MEMBER_APPOINTMENT_STATUSES:
+        return jsonify({"error": "Select a valid appointment status."}), 400
+
+    if not start_date:
+        return jsonify({"error": "Appointment start date is required."}), 400
+
+    if level == "Diocesan":
+        circuit = ""
+        church_name = ""
+
+    elif level == "Circuit":
+        if not circuit or circuit == "Diocesan":
+            return jsonify({
+                "error": "A circuit appointment must have a circuit."
+            }), 400
+        church_name = ""
+
+    else:
+        if not circuit or circuit == "Diocesan":
+            return jsonify({
+                "error": "A local church appointment must have a circuit."
+            }), 400
+
+        if not church_name:
+            return jsonify({
+                "error": "A local church appointment must have a local church."
+            }), 400
+
+        church = db().execute(
+            "SELECT 1 FROM churches WHERE circuit=? AND church_name=?",
+            (circuit, church_name)
+        ).fetchone()
+
+        if not church:
+            return jsonify({
+                "error": "The selected local church does not belong to the selected circuit."
+            }), 400
+
+    now = datetime.now().isoformat(timespec="seconds")
+
+    conn = db()
+
+    try:
+        conn.execute("""
+            UPDATE member_appointments
+            SET office=?,
+                level=?,
+                circuit=?,
+                church_name=?,
+                start_date=?,
+                end_date=?,
+                status=?,
+                notes=?,
+                updated_at=?
+            WHERE id=?
+        """, (
+            office,
+            level,
+            circuit,
+            church_name,
+            start_date,
+            end_date,
+            status,
+            notes,
+            now,
+            appointment_id
+        ))
+
+        conn.commit()
+
+        try:
+            audit(
+                "UPDATE_MEMBER_APPOINTMENT",
+                "member_appointments",
+                appointment_id,
+                json.dumps({
+                    "office": office,
+                    "level": level,
+                    "status": status,
+                    "end_date": end_date
+                }, ensure_ascii=False)
+            )
+        except Exception:
+            pass
+
+        return jsonify({
+            "ok": True,
+            "message": "Church office appointment updated successfully."
+        })
+
+    except sqlite3.Error as e:
+        conn.rollback()
+        return jsonify({
+            "error": "Could not update appointment: " + str(e)
+        }), 500
+
+
+@app.post("/api/member-appointments/<int:appointment_id>/terminate")
+@login_required
+def terminate_member_appointment(appointment_id):
+    denied = member_appointment_admin_required()
+    if denied:
+        return denied
+
+    appointment = db().execute(
+        "SELECT * FROM member_appointments WHERE id=?",
+        (appointment_id,)
+    ).fetchone()
+
+    if not appointment:
+        return jsonify({"error": "Appointment not found."}), 404
+
+    if appointment["status"] == "Terminated":
+        return jsonify({"error": "This appointment is already terminated."}), 400
+
+    data = request.get_json(silent=True) or {}
+    end_date = (data.get("end_date") or "").strip()
+    notes = (data.get("notes") or "").strip()
+
+    if not end_date:
+        end_date = datetime.now().strftime("%Y-%m-%d")
+
+    now = datetime.now().isoformat(timespec="seconds")
+
+    conn = db()
+
+    try:
+        old_notes = appointment["notes"] or ""
+        final_notes = notes or old_notes
+
+        conn.execute("""
+            UPDATE member_appointments
+            SET status='Terminated',
+                end_date=?,
+                notes=?,
+                updated_at=?
+            WHERE id=?
+        """, (
+            end_date,
+            final_notes,
+            now,
+            appointment_id
+        ))
+
+        conn.commit()
+
+        try:
+            audit(
+                "TERMINATE_MEMBER_APPOINTMENT",
+                "member_appointments",
+                appointment_id,
+                json.dumps({
+                    "office": appointment["office"],
+                    "member_id": appointment["member_id"],
+                    "end_date": end_date
+                }, ensure_ascii=False)
+            )
+        except Exception:
+            pass
+
+        return jsonify({
+            "ok": True,
+            "message": "Church office appointment terminated. Membership remains active."
+        })
+
+    except sqlite3.Error as e:
+        conn.rollback()
+        return jsonify({
+            "error": "Could not terminate appointment: " + str(e)
+        }), 500
+
+
+@app.get("/api/member-appointment-options")
+@login_required
+def member_appointment_options():
+    if current_user()["role"] != "Admin":
+        return jsonify({"error": "Administrator access required."}), 403
+
+    return jsonify({
+        "offices": MEMBER_CHURCH_OFFICES,
+        "levels": MEMBER_APPOINTMENT_LEVELS,
+        "statuses": MEMBER_APPOINTMENT_STATUSES
+    })
+
+
 
 if __name__ == "__main__":
     app.run(
