@@ -1,7 +1,9 @@
+import time
 import os, sqlite3, json, io, socket, secrets, shutil, hashlib
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, render_template, send_file, g, Response, session, redirect, url_for
+from werkzeug.utils import secure_filename
 from openpyxl import load_workbook, Workbook
 import qrcode
 from qrcode.image.svg import SvgPathImage
@@ -1865,6 +1867,116 @@ def scoped_rows(table, u):
 
 
 
+
+# Temporary in-memory typing status for Member Care.
+# Typing status is intentionally not stored in the database.
+MEMBER_CARE_TYPING = {}
+
+
+def ensure_member_care_case_assignment_schema():
+    conn = db()
+    try:
+        cols = {
+            r["name"]
+            for r in conn.execute("PRAGMA table_info(customer_care_threads)").fetchall()
+        }
+
+        additions = {
+            "assigned_user_id": "INTEGER DEFAULT NULL",
+            "assigned_user_name": "TEXT DEFAULT ''",
+            "assigned_at": "TEXT DEFAULT ''",
+            "assigned_by_user_id": "INTEGER DEFAULT NULL",
+            "assigned_by_name": "TEXT DEFAULT ''"
+        }
+
+        for name, definition in additions.items():
+            if name not in cols:
+                conn.execute(
+                    f"ALTER TABLE customer_care_threads ADD COLUMN {name} {definition}"
+                )
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
+
+def ensure_member_care_timeline_schema():
+    conn = db()
+    try:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS customer_care_timeline (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                thread_id TEXT NOT NULL,
+                action TEXT DEFAULT '',
+                details TEXT DEFAULT '',
+                actor_user_id INTEGER DEFAULT NULL,
+                actor_name TEXT DEFAULT '',
+                actor_role TEXT DEFAULT '',
+                visibility TEXT DEFAULT 'Internal',
+                created_at TEXT DEFAULT ''
+            )
+        """)
+
+        conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_customer_care_timeline_thread
+            ON customer_care_timeline(thread_id)
+        """)
+
+        conn.commit()
+    finally:
+        conn.close()
+
+
+
+def add_customer_care_timeline(thread_id, action, details="", user=None,
+                                visibility="Internal"):
+    try:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        actor_id = None
+        actor_name = ""
+        actor_role = ""
+
+        if user:
+            try:
+                actor_id = user["id"]
+                actor_name = user["username"]
+                actor_role = user["role"]
+            except Exception:
+                pass
+
+        db().execute("""
+            INSERT INTO customer_care_timeline
+            (
+                thread_id,
+                action,
+                details,
+                actor_user_id,
+                actor_name,
+                actor_role,
+                visibility,
+                created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            thread_id,
+            str(action or ""),
+            str(details or ""),
+            actor_id,
+            actor_name,
+            actor_role,
+            visibility,
+            now
+        ))
+
+        db().commit()
+
+    except Exception:
+        # Timeline must never break the main Member Care operation.
+        pass
+
+
 def customer_care_scope(u):
     """Return the Customer Care SQL scope allowed for the current user."""
     role = str(u["role"] or "").strip()
@@ -1894,6 +2006,37 @@ def customer_care_scope(u):
         return "1=1", []
 
     return "1=0", []
+
+
+
+def ensure_member_care_attachment_schema():
+    """Add attachment fields to the existing Member Care messages table."""
+    try:
+        conn = db()
+        cols = {
+            r["name"]
+            for r in conn.execute(
+                "PRAGMA table_info(customer_care_messages)"
+            ).fetchall()
+        }
+
+        additions = {
+            "attachment_name": "TEXT DEFAULT ''",
+            "attachment_url": "TEXT DEFAULT ''",
+            "attachment_type": "TEXT DEFAULT ''",
+            "attachment_size": "INTEGER DEFAULT 0"
+        }
+
+        for name, definition in additions.items():
+            if name not in cols:
+                conn.execute(
+                    f"ALTER TABLE customer_care_messages "
+                    f"ADD COLUMN {name} {definition}"
+                )
+
+        conn.commit()
+    except Exception as e:
+        print("Member Care attachment schema:", e)
 
 
 @app.get("/api/customer-care")
@@ -2045,6 +2188,45 @@ def api_customer_care_create():
     }), 201
 
 
+
+@app.get("/api/customer-care/unread-count")
+@login_required
+def api_customer_care_unread_count():
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    rows = db().execute(f"""
+        SELECT
+            t.id,
+            t.thread_id,
+            COUNT(m.id) AS unread_count
+        FROM customer_care_threads t
+        LEFT JOIN users cu ON t.user_id = cu.id
+        LEFT JOIN customer_care_messages m
+          ON m.thread_id = t.thread_id
+         AND COALESCE(m.read_at,'')=''
+         AND m.sender_role<>?
+        WHERE {scope}
+        GROUP BY t.id, t.thread_id
+        HAVING COUNT(m.id) > 0
+        ORDER BY t.updated_at DESC
+    """, [u["role"]] + params).fetchall()
+
+    total = sum(int(r["unread_count"] or 0) for r in rows)
+
+    return jsonify({
+        "ok": True,
+        "total": total,
+        "conversations": [
+            {
+                "id": r["id"],
+                "thread_id": r["thread_id"],
+                "unread_count": int(r["unread_count"] or 0)
+            }
+            for r in rows
+        ]
+    })
+
 @app.get("/api/customer-care/<int:rid>")
 @login_required
 def api_customer_care_detail(rid):
@@ -2080,6 +2262,123 @@ def api_customer_care_detail(rid):
         "messages": messages
     })
 
+
+
+
+
+@app.get("/api/customer-care/<int:rid>/typing")
+@login_required
+def api_customer_care_typing_status(rid):
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    thread = db().execute(f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE t.id=? AND {scope}
+    """, [rid] + params).fetchone()
+
+    if not thread:
+        return jsonify({
+            "ok": False,
+            "error": "Conversation not found"
+        }), 404
+
+    status = MEMBER_CARE_TYPING.get(thread["thread_id"])
+
+    # Typing status expires after 4 seconds.
+    if status:
+        if time.time() - float(status.get("time", 0)) > 4:
+            MEMBER_CARE_TYPING.pop(
+                thread["thread_id"],
+                None
+            )
+            status = None
+
+    # Never report the current user's own typing status.
+    if status and status.get("user_id") == u["id"]:
+        status = None
+
+    return jsonify({
+        "ok": True,
+        "typing": bool(status),
+        "username": status.get("username") if status else "",
+        "role": status.get("role") if status else ""
+    })
+
+
+@app.post("/api/customer-care/<int:rid>/typing")
+@login_required
+def api_customer_care_typing(rid):
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    thread = db().execute(f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE t.id=? AND {scope}
+    """, [rid] + params).fetchone()
+
+    if not thread:
+        return jsonify({
+            "ok": False,
+            "error": "Conversation not found"
+        }), 404
+
+    data = request.get_json(silent=True) or {}
+    typing = bool(data.get("typing", False))
+
+    key = thread["thread_id"]
+
+    if typing:
+        MEMBER_CARE_TYPING[key] = {
+            "user_id": u["id"],
+            "username": u["username"],
+            "role": u["role"],
+            "time": time.time()
+        }
+    else:
+        current = MEMBER_CARE_TYPING.get(key)
+
+        if current and current.get("user_id") == u["id"]:
+            MEMBER_CARE_TYPING.pop(key, None)
+
+    return jsonify({"ok": True})
+
+@app.post("/api/customer-care/<int:rid>/read")
+@login_required
+def api_customer_care_read(rid):
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    thread = db().execute(f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE t.id=? AND {scope}
+    """, [rid] + params).fetchone()
+
+    if not thread:
+        return jsonify({"ok": False, "error": "Conversation not found"}), 404
+
+    # Mark messages sent by the other side as read.
+    db().execute("""
+        UPDATE customer_care_messages
+        SET read_at=?
+        WHERE thread_id=?
+          AND COALESCE(read_at,'')=''
+          AND sender_role<>?
+    """, (
+        datetime.now().isoformat(timespec="seconds"),
+        thread["thread_id"],
+        u["role"]
+    ))
+
+    db().commit()
+
+    return jsonify({"ok": True})
 
 @app.post("/api/customer-care/<int:rid>/message")
 @login_required
@@ -2150,6 +2449,456 @@ def api_customer_care_message(rid):
     return jsonify({"ok": True})
 
 
+
+@app.post("/api/customer-care/<int:rid>/attachment")
+@login_required
+def api_customer_care_attachment(rid):
+    ensure_member_care_attachment_schema()
+
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    sql = f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE t.id=? AND {scope}
+    """
+
+    thread = db().execute(
+        sql,
+        [rid] + params
+    ).fetchone()
+
+    if not thread:
+        return jsonify({
+            "error": "Customer care conversation not found"
+        }), 404
+
+    uploaded = request.files.get("file")
+
+    if not uploaded or not uploaded.filename:
+        return jsonify({
+            "error": "Please select a file."
+        }), 400
+
+    original_name = secure_filename(uploaded.filename)
+
+    if not original_name:
+        return jsonify({
+            "error": "Invalid file name."
+        }), 400
+
+    allowed_extensions = {
+        "jpg", "jpeg", "png", "gif", "webp",
+        "pdf", "doc", "docx", "xls", "xlsx",
+        "txt"
+    }
+
+    ext = original_name.rsplit(".", 1)[-1].lower() if "." in original_name else ""
+
+    if ext not in allowed_extensions:
+        return jsonify({
+            "error": "File type not allowed. Use an image, PDF, Word, Excel or text file."
+        }), 400
+
+    # Maximum 8 MB
+    uploaded.stream.seek(0, 2)
+    size = uploaded.stream.tell()
+    uploaded.stream.seek(0)
+
+    if size > 8 * 1024 * 1024:
+        return jsonify({
+            "error": "File is too large. Maximum size is 8 MB."
+        }), 400
+
+    import uuid
+    import os
+
+    upload_dir = os.path.join(
+        app.root_path,
+        "static",
+        "uploads",
+        "member_care"
+    )
+
+    os.makedirs(upload_dir, exist_ok=True)
+
+    stored_name = (
+        datetime.now().strftime("%Y%m%d%H%M%S")
+        + "_"
+        + uuid.uuid4().hex[:12]
+        + "."
+        + ext
+    )
+
+    file_path = os.path.join(upload_dir, stored_name)
+    uploaded.save(file_path)
+
+    attachment_url = "/static/uploads/member_care/" + stored_name
+
+    message = str(
+        request.form.get("message") or
+        "Attachment sent"
+    ).strip()
+
+    if not message:
+        message = "Attachment sent"
+
+    now = datetime.now().isoformat(timespec="seconds")
+
+    db().execute("""
+        INSERT INTO customer_care_messages
+        (
+            thread_id,
+            sender_name,
+            sender_role,
+            message,
+            created_at,
+            attachment_name,
+            attachment_url,
+            attachment_type,
+            attachment_size
+        )
+        VALUES(?,?,?,?,?,?,?,?,?)
+    """, (
+        thread["thread_id"],
+        u["username"],
+        u["role"],
+        message,
+        now,
+        original_name,
+        attachment_url,
+        uploaded.mimetype or "",
+        size
+    ))
+
+    db().execute("""
+        UPDATE customer_care_threads
+        SET updated_at=?, status='Open'
+        WHERE id=?
+    """, (now, rid))
+
+    db().commit()
+
+    audit(
+        "ATTACHMENT",
+        "customer_care_threads",
+        rid,
+        "Member Care attachment sent"
+    )
+
+    return jsonify({
+        "ok": True,
+        "attachment": {
+            "name": original_name,
+            "url": attachment_url,
+            "type": uploaded.mimetype or "",
+            "size": size
+        }
+    })
+
+
+
+@app.get("/api/customer-care/officers")
+@login_required
+def api_customer_care_officers():
+    u = current_user()
+
+    allowed_roles = {
+        "Admin",
+        "Bishop / Diocesan Executive",
+        "Evangelism Minister",
+        "Planting Officer",
+        "Diocesan Secretary",
+        "Circuit Coordinator",
+        "Local Church Evangelism Officer",
+        "Finance Officer",
+        "Auditor"
+    }
+
+    if not u or u["role"] not in allowed_roles:
+        return jsonify({
+            "ok": False,
+            "error": "Not authorized"
+        }), 403
+
+    try:
+        rows = db().execute("""
+            SELECT id, username, role
+            FROM users
+            WHERE COALESCE(active, 1)=1
+              AND role != 'Member'
+            ORDER BY username COLLATE NOCASE
+        """).fetchall()
+
+        officers = [
+            {
+                "id": r["id"],
+                "username": r["username"],
+                "role": r["role"]
+            }
+            for r in rows
+        ]
+
+        return jsonify({
+            "ok": True,
+            "officers": officers
+        })
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "error": "Unable to load officers",
+            "detail": str(e)
+        }), 500
+
+
+@app.post("/api/customer-care/<int:rid>/assign")
+@login_required
+def api_customer_care_assign(rid):
+    u = current_user()
+
+    allowed_roles = {
+        "Admin",
+        "Bishop / Diocesan Executive",
+        "Evangelism Minister",
+        "Planting Officer",
+        "Diocesan Secretary",
+        "Circuit Coordinator",
+        "Local Church Evangelism Officer"
+    }
+
+    if u["role"] not in allowed_roles:
+        return jsonify({"error": "Not authorized to assign cases"}), 403
+
+    scope, params = customer_care_scope(u)
+
+    thread = db().execute(
+        f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id=m.id
+        WHERE t.id=? AND {scope}
+        """,
+        [rid] + params
+    ).fetchone()
+
+    if not thread:
+        return jsonify({"error": "Conversation not found"}), 404
+
+    data = request.get_json() or {}
+
+    try:
+        officer_id = int(data.get("assigned_user_id"))
+    except (TypeError, ValueError):
+        officer_id = 0
+
+    if officer_id <= 0:
+        return jsonify({"error": "Select an officer"}), 400
+
+    officer = db().execute(
+        """
+        SELECT id, username, role
+        FROM users
+        WHERE id=?
+          AND COALESCE(active,1)=1
+          AND role != 'Member'
+        """,
+        (officer_id,)
+    ).fetchone()
+
+    if not officer:
+        return jsonify({"error": "Selected officer was not found"}), 404
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    db().execute(
+        """
+        UPDATE customer_care_threads
+        SET assigned_user_id=?,
+            assigned_user_name=?,
+            assigned_at=?,
+            assigned_by_user_id=?,
+            assigned_by_name=?,
+            updated_at=?
+        WHERE id=?
+        """,
+        (
+            officer["id"],
+            officer["username"],
+            now,
+            u["id"],
+            u["username"],
+            now,
+            rid
+        )
+    )
+
+    db().commit()
+
+    try:
+        db().execute(
+            """
+            INSERT INTO audit_log
+            (action, table_name, record_id, username, details, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "Member Care Case Assigned",
+                "customer_care_threads",
+                rid,
+                u["username"],
+                f"Assigned to {officer['username']} ({officer['role']})",
+                now
+            )
+        )
+        db().commit()
+    except Exception:
+        pass
+
+    return jsonify({
+        "ok": True,
+        "assigned_user_id": officer["id"],
+        "assigned_user_name": officer["username"],
+        "assigned_role": officer["role"],
+        "assigned_at": now,
+        "assigned_by_name": u["username"]
+    })
+
+
+
+@app.get("/api/customer-care/<int:rid>/timeline")
+@login_required
+def api_customer_care_timeline(rid):
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    thread = db().execute(
+        f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id=m.id
+        WHERE t.id=? AND {scope}
+        """,
+        [rid] + params
+    ).fetchone()
+
+    if not thread:
+        return jsonify({"error": "Conversation not found"}), 404
+
+    rows = db().execute(
+        """
+        SELECT id, action, details, actor_user_id,
+               actor_name, actor_role, visibility, created_at
+        FROM customer_care_timeline
+        WHERE thread_id=?
+          AND (
+              visibility='Public'
+              OR ? != 'Member'
+          )
+        ORDER BY id ASC
+        """,
+        (thread["thread_id"], u["role"])
+    ).fetchall()
+
+    return jsonify({
+        "ok": True,
+        "timeline": [dict(r) for r in rows]
+    })
+
+
+@app.post("/api/customer-care/<int:rid>/internal-note")
+@login_required
+def api_customer_care_internal_note(rid):
+    u = current_user()
+
+    allowed_roles = {
+        "Admin",
+        "Bishop / Diocesan Executive",
+        "Evangelism Minister",
+        "Planting Officer",
+        "Diocesan Secretary",
+        "Circuit Coordinator",
+        "Local Church Evangelism Officer",
+        "Finance Officer",
+        "Auditor"
+    }
+
+    if u["role"] not in allowed_roles:
+        return jsonify({"error": "Not authorized"}), 403
+
+    scope, params = customer_care_scope(u)
+
+    thread = db().execute(
+        f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id=m.id
+        WHERE t.id=? AND {scope}
+        """,
+        [rid] + params
+    ).fetchone()
+
+    if not thread:
+        return jsonify({"error": "Conversation not found"}), 404
+
+    data = request.get_json() or {}
+    note = str(data.get("note") or "").strip()
+
+    if not note:
+        return jsonify({"error": "Enter an internal note"}), 400
+
+    if len(note) > 5000:
+        return jsonify({"error": "Internal note is too long"}), 400
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    db().execute(
+        """
+        INSERT INTO customer_care_timeline
+        (
+            thread_id,
+            action,
+            details,
+            actor_user_id,
+            actor_name,
+            actor_role,
+            visibility,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            thread["thread_id"],
+            "Internal Note",
+            note,
+            u["id"],
+            u["username"],
+            u["role"],
+            "Internal",
+            now
+        )
+    )
+
+    db().execute(
+        """
+        UPDATE customer_care_threads
+        SET updated_at=?
+        WHERE id=?
+        """,
+        (now, rid)
+    )
+
+    db().commit()
+
+    return jsonify({
+        "ok": True,
+        "message": "Internal note added",
+        "created_at": now
+    })
+
+
 @app.post("/api/customer-care/<int:rid>/status")
 @login_required
 def api_customer_care_status(rid):
@@ -2157,7 +2906,7 @@ def api_customer_care_status(rid):
     scope, params = customer_care_scope(u)
 
     sql = f"""
-        SELECT t.id
+        SELECT t.*
         FROM customer_care_threads t
         LEFT JOIN users m ON t.user_id = m.id
         WHERE t.id=? AND {scope}
@@ -2174,31 +2923,72 @@ def api_customer_care_status(rid):
         }), 404
 
     data = request.get_json(silent=True) or {}
-    status = str(data.get("status") or "").strip()
 
-    if status not in {"Open", "Closed"}:
+    status = str(
+        data.get("status") or ""
+    ).strip()
+
+    priority = str(
+        data.get("priority") or ""
+    ).strip()
+
+    resolution_note = str(
+        data.get("resolution_note") or ""
+    ).strip()
+
+    allowed_statuses = {
+        "Open",
+        "In Progress",
+        "Pending",
+        "Resolved"
+    }
+
+    allowed_priorities = {
+        "Normal",
+        "High",
+        "Urgent"
+    }
+
+    if status and status not in allowed_statuses:
         return jsonify({
-            "error": "Status must be Open or Closed"
+            "error": "Invalid Member Care status"
         }), 400
+
+    if priority and priority not in allowed_priorities:
+        return jsonify({
+            "error": "Invalid priority"
+        }), 400
+
+    current_status = thread["status"] or "Open"
+    current_priority = thread["priority"] or "Normal"
+
+    status = status or current_status
+    priority = priority or current_priority
 
     now = datetime.now().isoformat(timespec="seconds")
 
-    if status == "Closed":
-        db().execute("""
-            UPDATE customer_care_threads
-            SET status=?,
-                updated_at=?,
-                resolved_at=?
-            WHERE id=?
-        """, (status, now, now, rid))
-    else:
-        db().execute("""
-            UPDATE customer_care_threads
-            SET status=?,
-                updated_at=?,
-                resolved_at=''
-            WHERE id=?
-        """, (status, now, rid))
+    resolved_at = (
+        now
+        if status == "Resolved"
+        else ""
+    )
+
+    db().execute("""
+        UPDATE customer_care_threads
+        SET status=?,
+            priority=?,
+            resolution_note=?,
+            resolved_at=?,
+            updated_at=?
+        WHERE id=?
+    """, (
+        status,
+        priority,
+        resolution_note,
+        resolved_at,
+        now,
+        rid
+    ))
 
     db().commit()
 
@@ -2206,12 +2996,15 @@ def api_customer_care_status(rid):
         "STATUS",
         "customer_care_threads",
         rid,
-        f"Member Care status changed to {status}"
+        f"Member Care updated: status={status}, priority={priority}"
     )
 
     return jsonify({
         "ok": True,
-        "status": status
+        "status": status,
+        "priority": priority,
+        "resolution_note": resolution_note,
+        "resolved_at": resolved_at
     })
 
 
@@ -5124,6 +5917,7 @@ def build_table_map():
 with app.app_context():
     init_db()
     ensure_runtime_schema()
+    ensure_member_care_case_assignment_schema()
     TABLES = build_table_map()
 @app.post("/api/payment/settings")
 @login_required
