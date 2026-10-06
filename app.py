@@ -58,10 +58,15 @@ def validate_user_assignment(role, circuit, church_name):
         if church_name:
             return "A Circuit Coordinator should not be assigned to a local church."
 
-    elif role == "Local Church Evangelism Officer":
+    elif role in {"Member", "Local Church Evangelism Officer"}:
         if not circuit or circuit == "Diocesan":
+            if role == "Member":
+                return "A Member must be assigned to a circuit."
             return "A Local Church Evangelism Officer must be assigned to a circuit."
+
         if not church_name:
+            if role == "Member":
+                return "A Member must be assigned to a local church."
             return "A Local Church Evangelism Officer must be assigned to a local church."
 
         church = db().execute(
@@ -4315,6 +4320,7 @@ def review_member_registration(rid):
         }), 400
 
     allowed_roles = {
+        "Member",
         "Admin",
         "Bishop / Diocesan Executive",
         "Evangelism Minister",

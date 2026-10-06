@@ -1579,6 +1579,7 @@ async function loadMemberRegistrations(){
 
         if(status === "Approved"){
           const roles = [
+            "Member",
             "Bishop / Diocesan Executive",
             "Evangelism Minister",
             "Planting Officer",
@@ -1592,7 +1593,7 @@ async function loadMemberRegistrations(){
           role = prompt(
             "Select the system role for this applicant:\n\n" +
             roles.join("\n"),
-            "Local Church Evangelism Officer"
+            "Member"
           );
 
           if(role === null) return;
@@ -1623,16 +1624,23 @@ async function loadMemberRegistrations(){
             if(circuit === null) return;
 
             church = "";
-          }else if(role === "Local Church Evangelism Officer"){
+          }else if(
+            role === "Member" ||
+            role === "Local Church Evangelism Officer"
+          ){
             circuit = prompt(
-              "Assigned circuit:",
+              role === "Member"
+                ? "Member's assigned circuit:"
+                : "Assigned circuit:",
               row.circuit || ""
             );
 
             if(circuit === null) return;
 
             church = prompt(
-              "Assigned local church:",
+              role === "Member"
+                ? "Member's assigned local church:"
+                : "Assigned local church:",
               row.church_name || ""
             );
 
