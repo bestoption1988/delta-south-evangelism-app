@@ -75,6 +75,12 @@ main{max-width:1100px;margin:auto;padding:18px}
 }
 
 </style>
+
+<style>
+#member-care-conversation{
+  display:none !important;
+}
+</style>
 </head>
 <body>
 
@@ -137,6 +143,245 @@ main{max-width:1100px;margin:auto;padding:18px}
 </div>
 
 </section>
+
+<section id="member-care" style="margin-top:24px;">
+  <div class="dashboard-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;
+                gap:12px;flex-wrap:wrap;">
+      <div>
+        <h2>🤝 Member Care</h2>
+        <p style="margin:5px 0;color:#667085;">
+          Get assistance from your church, circuit or diocesan support team.
+        </p>
+      </div>
+      <button type="button" onclick="showMemberCareForm()">
+        ➕ New Request
+      </button>
+    </div>
+
+    <div id="member-care-message"
+         style="display:none;margin:14px 0;padding:12px;border-radius:10px;">
+    </div>
+
+    <div id="member-care-form"
+         style="display:none;margin-top:18px;padding:18px;
+                border-radius:14px;background:#f5f7fa;">
+
+      <h3>Submit a Member Care Request</h3>
+
+      <label>Category</label>
+      <select id="care-category"
+              style="width:100%;padding:11px;margin:6px 0 12px;">
+        <option>General Assistance</option>
+        <option>Registration</option>
+        <option>Church Records</option>
+        <option>Baptism</option>
+        <option>Confirmation</option>
+        <option>Marriage</option>
+        <option>Transfer / Relocation</option>
+        <option>Giving / Tithe</option>
+        <option>Technical Support</option>
+        <option>Other</option>
+      </select>
+
+      <label>Priority</label>
+      <select id="care-priority"
+              style="width:100%;padding:11px;margin:6px 0 12px;">
+        <option>Normal</option>
+        <option>High</option>
+        <option>Urgent</option>
+      </select>
+
+      <label>Subject</label>
+      <input id="care-subject"
+             type="text"
+             placeholder="Briefly describe your issue"
+             style="width:100%;padding:11px;margin:6px 0 12px;">
+
+      <label>Message</label>
+      <textarea id="care-message"
+                rows="5"
+                placeholder="Explain how we can assist you..."
+                style="width:100%;padding:11px;margin:6px 0 12px;"></textarea>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button type="button" onclick="submitMemberCare()">
+          📤 Submit Request
+        </button>
+
+        <button type="button"
+                onclick="hideMemberCareForm()"
+                style="background:#667085;">
+          Cancel
+        </button>
+      </div>
+    </div>
+
+    <div style="margin-top:22px;">
+      <h3>📋 My Care Requests</h3>
+      <div id="member-care-list">
+        Loading your requests...
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+function showMemberCareForm(){
+  document.getElementById("member-care-form").style.display="block";
+  document.getElementById("member-care-form").scrollIntoView({
+    behavior:"smooth",
+    block:"start"
+  });
+}
+
+function hideMemberCareForm(){
+  document.getElementById("member-care-form").style.display="none";
+}
+
+function careMessage(text, success=true){
+  const box=document.getElementById("member-care-message");
+  box.textContent=text;
+  box.style.display="block";
+  box.style.background=success ? "#e8f5e9" : "#ffe4e4";
+  box.style.color=success ? "#176b2c" : "#9b0000";
+}
+
+async function submitMemberCare(){
+  const category=document.getElementById("care-category").value;
+  const priority=document.getElementById("care-priority").value;
+  const subject=document.getElementById("care-subject").value.trim();
+  const message=document.getElementById("care-message").value.trim();
+
+  if(!message){
+    careMessage("Please enter your message.",false);
+    return;
+  }
+
+  try{
+    const r=await fetch("/api/customer-care",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        subject,
+        message,
+        category,
+        priority
+      })
+    });
+
+    const data=await r.json();
+
+    if(!r.ok){
+      throw new Error(data.error || "Unable to submit request.");
+    }
+
+    careMessage(
+      "Your Member Care request "+data.thread_id+" has been submitted successfully."
+    );
+
+    document.getElementById("care-subject").value="";
+    document.getElementById("care-message").value="";
+    hideMemberCareForm();
+    loadMemberCareRequests();
+
+  }catch(e){
+    careMessage(e.message,false);
+  }
+}
+
+async function loadMemberCareRequests(){
+  const box=document.getElementById("member-care-list");
+
+  try{
+    const r=await fetch("/api/customer-care");
+    const data=await r.json();
+
+    if(!r.ok){
+      throw new Error(data.error || "Unable to load requests.");
+    }
+
+    if(!data.length){
+      box.innerHTML=
+        "<p>No Member Care requests yet. You can submit a request above.</p>";
+      return;
+    }
+
+    box.innerHTML=data.map(x=>`
+      <div style="padding:16px;margin:10px 0;border-radius:12px;
+                  border:1px solid #ddd;background:#fff;">
+
+        <div style="display:flex;justify-content:space-between;
+                    gap:10px;flex-wrap:wrap;">
+
+          <strong>${escapeCareHtml(x.thread_id || "Request")}</strong>
+
+          <span style="padding:4px 9px;border-radius:8px;
+                       background:${x.status==="Open" ? "#fff3cd" : "#e8f5e9"};">
+            ${escapeCareHtml(x.status || "Open")}
+          </span>
+        </div>
+
+        <h4 style="margin:10px 0 5px;">
+          ${escapeCareHtml(x.subject || "Member Care Request")}
+        </h4>
+
+        <div style="font-size:.9rem;color:#667085;">
+          ${escapeCareHtml(x.category || "General Assistance")}
+          • ${escapeCareHtml(x.priority || "Normal")}
+        </div>
+
+        <small style="display:block;margin-top:7px;">
+          Updated: ${escapeCareHtml(x.updated_at || x.created_at || "")}
+        </small>
+
+        <button type="button"
+                style="margin-top:12px;"
+                onclick="openMemberCare(${Number(x.id)})">
+          💬 Open Conversation
+        </button>
+      </div>
+    `).join("");
+
+  }catch(e){
+    box.innerHTML="<p>Unable to load Member Care requests.</p>";
+    console.error("Member Care:",e);
+  }
+}
+
+async function openMemberCare(id){
+  if(typeof ensureMemberCarePopup==="function"){
+    return openMemberCarePopup(id);
+  }
+
+  alert("Member Care chat is still loading. Please refresh the page.");
+}
+
+async function sendMemberCareReply(id){
+  return openMemberCarePopup(id);
+}
+
+function closeMemberCareConversation(){
+  const box=document.getElementById("member-care-conversation");
+  if(box) box.style.display="none";
+}
+
+function escapeCareHtml(value){
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#039;");
+}
+
+function hideMemberCareForm(){
+  document.getElementById("member-care-form").style.display="none";
+}
+
+loadMemberCareRequests();
+</script>
+
 </main>
 
 <script>

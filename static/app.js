@@ -847,35 +847,59 @@ async function loadCustomerCare(){
 
     const open = list.filter(x => x.status === "Open").length;
     const closed = list.filter(x => x.status === "Closed").length;
+    const urgent = list.filter(x => x.priority === "Urgent").length;
+    const high = list.filter(x => x.priority === "High").length;
 
     $("#customerCareSummary").innerHTML = [
       ["Total Conversations", list.length],
       ["Open", open],
-      ["Closed", closed]
+      ["Closed", closed],
+      ["Urgent", urgent],
+      ["High Priority", high]
     ].map(x => reportCard(x[0], x[1])).join("");
 
     $("#customerCareThreads").innerHTML = list.length
       ? list.map(x => `
         <div class="comm-alert customer-care-thread" data-id="${x.id}">
           <div>
-            <span class="status-badge">${esc(x.status)}</span>
-            <strong>${esc(x.customer_name || "Customer")}</strong>
+            <span class="status-badge">${esc(x.status || "Open")}</span>
+
+            <strong>${esc(x.customer_name || "Member")}</strong>
+
             <small>
-              ${esc(x.subject || "Customer enquiry")}
-              · ${esc(x.phone || "No phone")}
+              ${esc(x.subject || "Member Care Request")}
+              · ${esc(x.category || "General Assistance")}
+              · Priority: ${esc(x.priority || "Normal")}
+            </small>
+
+            <small>
+              ${x.member_id ? "Member ID: " + esc(x.member_id) : ""}
+              ${x.assigned_to ? " · Assigned: " + esc(x.assigned_to) : ""}
             </small>
           </div>
+
           <div class="comm-actions">
-            ${x.phone ? `<button class="secondary cc-call" data-phone="${esc(x.phone)}">Call</button>` : ""}
-            ${x.phone ? `<button class="secondary cc-wa" data-phone="${esc(x.phone)}" data-name="${esc(x.customer_name || "Customer")}">WhatsApp</button>` : ""}
-            <button type="button" class="primary cc-open" data-id="${x.id}" onclick="openCustomerCareConversation(${x.id}); return false;">Open</button>
+            ${x.phone ? `<button class="secondary cc-call"
+              data-phone="${esc(x.phone)}">Call</button>` : ""}
+
+            ${x.phone ? `<button class="secondary cc-wa"
+              data-phone="${esc(x.phone)}"
+              data-name="${esc(x.customer_name || "Member")}">
+              WhatsApp
+            </button>` : ""}
+
+            <button type="button"
+              class="primary cc-open"
+              data-id="${x.id}">
+              Open
+            </button>
           </div>
         </div>
       `).join("")
-      : '<div class="empty">No customer care conversations yet.</div>';
+      : '<div class="empty">No Member Care conversations yet.</div>';
 
     document.querySelectorAll(".cc-open").forEach(btn => {
-      btn.onclick = async (event) => {
+      btn.onclick = async event => {
         event.preventDefault();
         event.stopPropagation();
         await openCustomerCareConversation(btn.dataset.id);
@@ -893,6 +917,7 @@ async function loadCustomerCare(){
         const msg =
           "Dear " + btn.dataset.name +
           ", thank you for contacting Methodist Church Nigeria, Delta South Diocese Evangelism Department. How may we assist you?";
+
         openWhatsApp(btn.dataset.phone, msg);
       };
     });
@@ -904,110 +929,421 @@ async function loadCustomerCare(){
 }
 
 
-async function openCustomerCareConversation(id){
+
+function ensureMemberCarePopup(){
+  if(document.getElementById("memberCareChatModal")) return;
+
+  const style=document.createElement("style");
+  style.id="memberCarePopupStyle";
+  style.textContent=`
+    #memberCareChatModal{
+      position:fixed;
+      inset:0;
+      z-index:99999;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:14px;
+      background:rgba(0,0,0,.58);
+      box-sizing:border-box;
+    }
+
+    #memberCareChatModal .mc-chat{
+      width:min(720px,100%);
+      height:min(760px,94vh);
+      background:#fff;
+      border-radius:18px;
+      box-shadow:0 20px 70px rgba(0,0,0,.35);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+
+    #memberCareChatModal .mc-head{
+      padding:15px 17px;
+      background:#075c35;
+      color:#fff;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      flex-shrink:0;
+    }
+
+    #memberCareChatModal .mc-head-title{
+      min-width:0;
+    }
+
+    #memberCareChatModal .mc-head-title strong{
+      display:block;
+      font-size:1.05rem;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+
+    #memberCareChatModal .mc-head-title small{
+      display:block;
+      margin-top:4px;
+      opacity:.9;
+      line-height:1.35;
+    }
+
+    #memberCareChatModal .mc-close{
+      border:0;
+      background:rgba(255,255,255,.16);
+      color:#fff;
+      width:38px;
+      height:38px;
+      border-radius:50%;
+      font-size:20px;
+      cursor:pointer;
+      flex-shrink:0;
+    }
+
+    #memberCareChatModal .mc-meta{
+      padding:9px 15px;
+      background:#f5f7fa;
+      border-bottom:1px solid #e3e7ed;
+      font-size:.84rem;
+      color:#667085;
+      flex-shrink:0;
+    }
+
+    #memberCareChatModal .mc-messages{
+      flex:1;
+      overflow-y:auto;
+      padding:15px;
+      background:#f7f9fc;
+      min-height:0;
+    }
+
+    #memberCareChatModal .mc-message{
+      max-width:84%;
+      margin:8px 0;
+      padding:11px 13px;
+      border-radius:13px;
+      background:#fff;
+      border:1px solid #e2e6eb;
+      box-shadow:0 1px 3px rgba(0,0,0,.04);
+    }
+
+    #memberCareChatModal .mc-message.mine{
+      margin-left:auto;
+      background:#e8f5e9;
+      border-color:#c8e6c9;
+    }
+
+    #memberCareChatModal .mc-sender{
+      font-weight:700;
+      font-size:.9rem;
+    }
+
+    #memberCareChatModal .mc-time{
+      display:block;
+      margin-top:2px;
+      color:#667085;
+      font-size:.72rem;
+    }
+
+    #memberCareChatModal .mc-body{
+      margin-top:7px;
+      white-space:pre-wrap;
+      word-break:break-word;
+      line-height:1.5;
+    }
+
+    #memberCareChatModal .mc-compose{
+      padding:10px 12px;
+      border-top:1px solid #e2e6eb;
+      background:#fff;
+      flex-shrink:0;
+    }
+
+    #memberCareChatModal .mc-compose textarea{
+      width:100%;
+      min-height:65px;
+      max-height:150px;
+      box-sizing:border-box;
+      resize:vertical;
+      border:1px solid #ccd3dd;
+      border-radius:11px;
+      padding:10px 12px;
+      font:inherit;
+      outline:none;
+    }
+
+    #memberCareChatModal .mc-actions{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:8px;
+    }
+
+    #memberCareChatModal .mc-actions button{
+      border:0;
+      border-radius:9px;
+      padding:9px 13px;
+      cursor:pointer;
+    }
+
+    #memberCareChatModal .mc-send{
+      background:#075c35;
+      color:#fff;
+    }
+
+    #memberCareChatModal .mc-secondary{
+      background:#eef1f5;
+      color:#344054;
+    }
+
+    @media(max-width:600px){
+      #memberCareChatModal{
+        padding:0;
+      }
+
+      #memberCareChatModal .mc-chat{
+        width:100%;
+        height:100%;
+        max-height:none;
+        border-radius:0;
+      }
+
+      #memberCareChatModal .mc-message{
+        max-width:91%;
+      }
+    }
+  `;
+  document.head.appendChild(style);
+
+  const modal=document.createElement("div");
+  modal.id="memberCareChatModal";
+  modal.style.display="none";
+  modal.innerHTML=`
+    <div class="mc-chat">
+      <div id="mcChatHead" class="mc-head"></div>
+      <div id="mcChatMeta" class="mc-meta"></div>
+      <div id="mcChatMessages" class="mc-messages"></div>
+      <div id="mcChatCompose" class="mc-compose"></div>
+    </div>
+  `;
+
+  modal.addEventListener("click",e=>{
+    if(e.target===modal) closeMemberCarePopup();
+  });
+
+  document.body.appendChild(modal);
+}
+
+function closeMemberCarePopup(){
+  const modal=document.getElementById("memberCareChatModal");
+  if(modal) modal.style.display="none";
+  document.body.style.overflow="";
+}
+
+async function openMemberCarePopup(id){
+  ensureMemberCarePopup();
+
+  const modal=document.getElementById("memberCareChatModal");
+  const head=document.getElementById("mcChatHead");
+  const meta=document.getElementById("mcChatMeta");
+  const messagesBox=document.getElementById("mcChatMessages");
+  const compose=document.getElementById("mcChatCompose");
+
+  modal.style.display="flex";
+  document.body.style.overflow="hidden";
+
+  messagesBox.innerHTML='<div style="text-align:center;padding:30px;color:#667085;">Loading conversation...</div>';
+
   try{
-    const d = await api("/api/customer-care/" + id);
-    const t = d.thread;
-    const messages = d.messages || [];
+    const d=await api("/api/customer-care/"+id+"?_="+Date.now());
+    const t=d.thread||{};
+    const messages=d.messages||[];
 
-    $("#customerCareConversation").innerHTML = `
-      <div class="conversation-header">
-        <div>
-          <strong>${esc(t.customer_name || "Customer")}</strong>
-          <small>${esc(t.subject || "Customer enquiry")} · ${esc(t.status)}</small>
-        </div>
-        <div class="comm-actions">
-          ${t.phone ? `<button class="secondary" id="ccConversationCall">Call</button>` : ""}
-          ${t.phone ? `<button class="secondary" id="ccConversationWA">WhatsApp</button>` : ""}
-          <button class="secondary" id="ccStatusBtn">${t.status === "Open" ? "Close" : "Reopen"}</button>
-        </div>
+    head.innerHTML=`
+      <div class="mc-head-title">
+        <strong>💬 ${esc(t.customer_name||"Member Care")}</strong>
+        <small>${esc(t.subject||"Member Care Conversation")}</small>
       </div>
-
-      <div class="conversation-messages">
-        ${messages.length
-          ? messages.map(m => `
-            <div class="conversation-message">
-              <strong>${esc(m.sender_name || "User")}</strong>
-              <small>${esc(m.sender_role || "")} · ${esc(m.created_at || "")}</small>
-              <div>${esc(m.message || "")}</div>
-            </div>
-          `).join("")
-          : '<div class="empty">No messages.</div>'
-        }
-      </div>
-
-      <form id="ccMessageForm" class="conversation-reply">
-        <textarea name="message" rows="3" placeholder="Type your reply…" required></textarea>
-        <button type="submit" class="primary">Send Message</button>
-      </form>
+      <button class="mc-close" type="button" onclick="closeMemberCarePopup()">✕</button>
     `;
 
-    $("#ccMessageForm").onsubmit = async e => {
-      e.preventDefault();
-      const message = e.target.message.value.trim();
-      if(!message) return;
+    meta.innerHTML=`
+      <b>Status:</b> ${esc(t.status||"Open")}
+      &nbsp; • &nbsp;
+      <b>Category:</b> ${esc(t.category||"General Assistance")}
+      &nbsp; • &nbsp;
+      <b>Priority:</b> ${esc(t.priority||"Normal")}
+      ${t.member_id ? `&nbsp; • &nbsp;<b>Member ID:</b> ${esc(t.member_id)}` : ""}
+    `;
 
-      await api("/api/customer-care/" + id + "/message", {
-        method: "POST",
-        body: JSON.stringify({message})
-      });
+    messagesBox.innerHTML=messages.length
+      ? messages.map(m=>`
+          <div class="mc-message">
+            <div class="mc-sender">${esc(m.sender_name||"User")}</div>
+            <span class="mc-time">
+              ${esc(m.sender_role||"")} ${m.created_at ? "• "+esc(m.created_at) : ""}
+            </span>
+            <div class="mc-body">${esc(m.message||"")}</div>
+          </div>
+        `).join("")
+      : '<div style="text-align:center;padding:30px;color:#667085;">No messages yet.</div>';
 
-      await openCustomerCareConversation(id);
-      await loadCustomerCare();
-    };
+    if(t.status==="Open"){
+      compose.innerHTML=`
+        <textarea id="mcReplyBox"
+          placeholder="Type your response..."
+          autocomplete="off"></textarea>
 
-    $("#ccStatusBtn").onclick = async () => {
-      const status = t.status === "Open" ? "Closed" : "Open";
+        <div class="mc-actions">
+          <button type="button" class="mc-send" id="mcSendBtn">
+            📤 Send Reply
+          </button>
 
-      await api("/api/customer-care/" + id + "/status", {
-        method: "POST",
-        body: JSON.stringify({status})
-      });
+          ${t.phone ? `
+            <button type="button" class="mc-secondary" id="mcCallBtn">
+              📞 Call
+            </button>
+            <button type="button" class="mc-secondary" id="mcWhatsAppBtn">
+              WhatsApp
+            </button>
+          ` : ""}
 
-      await openCustomerCareConversation(id);
-      await loadCustomerCare();
-    };
+          <button type="button" class="mc-secondary" id="mcStatusBtn">
+            Resolve Request
+          </button>
+        </div>
+      `;
 
-    if(t.phone){
-      $("#ccConversationCall").onclick = () => {
-        window.location.href = "tel:" + t.phone;
+      document.getElementById("mcSendBtn").onclick=async()=>{
+        const box=document.getElementById("mcReplyBox");
+        const message=box.value.trim();
+        if(!message)return;
+
+        const btn=document.getElementById("mcSendBtn");
+        btn.disabled=true;
+        btn.textContent="Sending...";
+
+        try{
+          await api("/api/customer-care/"+id+"/message",{
+            method:"POST",
+            body:JSON.stringify({message})
+          });
+
+          setStatus("Member Care response sent.");
+          await openMemberCarePopup(id);
+          if(typeof loadCustomerCare==="function") await loadCustomerCare();
+          if(typeof loadMemberCareRequests==="function") await loadMemberCareRequests();
+
+        }catch(e){
+          alert(e.message);
+          btn.disabled=false;
+          btn.textContent="📤 Send Reply";
+        }
       };
 
-      $("#ccConversationWA").onclick = () => {
-        openWhatsApp(
-          t.phone,
-          "Dear " + (t.customer_name || "Customer") +
-          ", thank you for contacting Methodist Church Nigeria, Delta South Diocese Evangelism Department."
-        );
+      document.getElementById("mcStatusBtn").onclick=async()=>{
+        try{
+          await api("/api/customer-care/"+id+"/status",{
+            method:"POST",
+            body:JSON.stringify({status:"Closed"})
+          });
+
+          setStatus("Member Care request resolved.");
+          await openMemberCarePopup(id);
+          if(typeof loadCustomerCare==="function") await loadCustomerCare();
+          if(typeof loadMemberCareRequests==="function") await loadMemberCareRequests();
+        }catch(e){
+          alert(e.message);
+        }
+      };
+
+      if(t.phone){
+        document.getElementById("mcCallBtn").onclick=()=>{
+          window.location.href="tel:"+t.phone;
+        };
+
+        document.getElementById("mcWhatsAppBtn").onclick=()=>{
+          openWhatsApp(
+            t.phone,
+            "Dear "+(t.customer_name||"Member")+
+            ", thank you for contacting Methodist Church Nigeria, Delta South Diocese Evangelism Department."
+          );
+        };
+      }
+
+    }else{
+      compose.innerHTML=`
+        <div style="color:#667085;margin-bottom:8px;">
+          This conversation is closed.
+        </div>
+        <button type="button" class="mc-secondary" id="mcReopenBtn">
+          Reopen Conversation
+        </button>
+      `;
+
+      document.getElementById("mcReopenBtn").onclick=async()=>{
+        try{
+          await api("/api/customer-care/"+id+"/status",{
+            method:"POST",
+            body:JSON.stringify({status:"Open"})
+          });
+
+          setStatus("Member Care conversation reopened.");
+          await openMemberCarePopup(id);
+          if(typeof loadCustomerCare==="function") await loadCustomerCare();
+          if(typeof loadMemberCareRequests==="function") await loadMemberCareRequests();
+        }catch(e){
+          alert(e.message);
+        }
       };
     }
 
+    setTimeout(()=>{
+      messagesBox.scrollTop=messagesBox.scrollHeight;
+      document.getElementById("mcReplyBox")?.focus();
+    },50);
+
   }catch(e){
-    $("#customerCareConversation").innerHTML =
-      `<div class="empty">${esc(e.message)}</div>`;
+    messagesBox.innerHTML=
+      `<div style="padding:25px;text-align:center;color:#9b0000;">${esc(e.message)}</div>`;
   }
 }
 
+async function openCustomerCareConversation(id){
+  await openMemberCarePopup(id);
+}
 
 $("#customerCareNewBtn")?.addEventListener("click",()=>{
   $("#customerCareFormWrap").hidden = false;
   $("#customerCareForm")?.reset();
-  $("#customerCareFormWrap").scrollIntoView({behavior:"smooth",block:"start"});
+
+  $("#customerCareFormWrap").scrollIntoView({
+    behavior:"smooth",
+    block:"start"
+  });
 });
+
 
 $("#customerCareCancelBtn")?.addEventListener("click",()=>{
   $("#customerCareFormWrap").hidden = true;
   $("#customerCareForm")?.reset();
 });
 
-$("#customerCareRefreshBtn")?.addEventListener("click",loadCustomerCare);
+
+$("#customerCareRefreshBtn")?.addEventListener(
+  "click",
+  loadCustomerCare
+);
 
 
 $("#customerCareForm")?.addEventListener("submit",async e=>{
   e.preventDefault();
 
   const form = e.target;
-  const data = Object.fromEntries(new FormData(form).entries());
+  const data = Object.fromEntries(
+    new FormData(form).entries()
+  );
 
   try{
     const result = await api("/api/customer-care",{
@@ -1024,12 +1360,12 @@ $("#customerCareForm")?.addEventListener("submit",async e=>{
       await openCustomerCareConversation(result.id);
     }
 
-    setStatus("Customer care conversation created.");
+    setStatus("Member Care conversation created.");
+
   }catch(err){
     alert(err.message);
   }
 });
-
 
 
 async function loadCommunications(){try{const d=await api("/api/communications");$("#commScope").textContent=`Today: ${d.today}`;const a=d.alerts||[];$("#commSummary").innerHTML=[["Alerts",a.length],["Unread reminders",d.unread||0],["Follow-ups",a.filter(x=>x.kind==='Follow-up').length],["Missions",a.filter(x=>x.kind==='Mission').length]].map(x=>reportCard(x[0],x[1])).join("");$("#commAlerts").innerHTML=a.length?a.map((x,i)=>`<div class="comm-alert"><div><span class="status-badge">${esc(x.kind)}</span><strong>${esc(x.title)}</strong><small>${esc(x.date)} · ${esc(x.circuit||'Diocesan')} · ${esc(x.detail||'')}</small></div><div class="comm-actions">${x.phone?`<button class="secondary comm-wa" data-phone="${esc(x.phone)}" data-msg="${esc('Dear '+x.title+', this is a reminder from Methodist Church Nigeria, Delta South Diocese Evangelism Department. '+x.detail)}">WhatsApp</button>`:''}</div></div>`).join(''):'<div class="empty">No current communication alerts.</div>';document.querySelectorAll('.comm-wa').forEach(b=>b.onclick=()=>openWhatsApp(b.dataset.phone,b.dataset.msg))}catch(e){$("#commAlerts").innerHTML=`<div class="empty">${esc(e.message)}</div>`}}

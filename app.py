@@ -659,7 +659,15 @@ def ensure_runtime_schema():
       'action_points': {'period_id':'INTEGER DEFAULT NULL','circuit':"TEXT DEFAULT 'Diocesan'",'action_item':"TEXT DEFAULT ''",'responsible_person':"TEXT DEFAULT ''",'due_date':"TEXT DEFAULT ''",'priority':"TEXT DEFAULT 'Medium'",'status':"TEXT DEFAULT 'Open'",'completion_note':"TEXT DEFAULT ''",'created_by':"TEXT DEFAULT ''",'created_at':"TEXT DEFAULT ''"},
       'meetings': {'meeting_date':"TEXT DEFAULT ''",'meeting_type':"TEXT DEFAULT 'Evangelism Committee'",'circuit':"TEXT DEFAULT 'Diocesan'",'location':"TEXT DEFAULT ''",'chairperson':"TEXT DEFAULT ''",'secretary':"TEXT DEFAULT ''",'attendance':"TEXT DEFAULT ''",'agenda':"TEXT DEFAULT ''",'minutes':"TEXT DEFAULT ''",'decisions':"TEXT DEFAULT ''",'next_meeting':"TEXT DEFAULT ''",'created_by':"TEXT DEFAULT ''",'created_at':"TEXT DEFAULT ''"},
       'diocesan_reviews': {'period_id':'INTEGER DEFAULT NULL','period_name':"TEXT DEFAULT ''",'review_date':"TEXT DEFAULT ''",'executive_summary':"TEXT DEFAULT ''",'key_achievements':"TEXT DEFAULT ''",'major_challenges':"TEXT DEFAULT ''",'decisions':"TEXT DEFAULT ''",'support_required':"TEXT DEFAULT ''",'prepared_by':"TEXT DEFAULT ''",'approved_by':"TEXT DEFAULT ''",'status':"TEXT DEFAULT 'Draft'",'notes':"TEXT DEFAULT ''"},
-      'notifications': {'title':"TEXT DEFAULT ''",'message':"TEXT DEFAULT ''",'notification_type':"TEXT DEFAULT 'Reminder'",'target_circuit':"TEXT DEFAULT 'Diocesan'",'target_phone':"TEXT DEFAULT ''",'source_table':"TEXT DEFAULT ''",'source_id':'INTEGER DEFAULT NULL','due_date':"TEXT DEFAULT ''",'status':"TEXT DEFAULT 'Unread'",'created_at':"TEXT DEFAULT ''",'read_at':"TEXT DEFAULT ''"}
+      'notifications': {'title':"TEXT DEFAULT ''",'message':"TEXT DEFAULT ''",'notification_type':"TEXT DEFAULT 'Reminder'",'target_circuit':"TEXT DEFAULT 'Diocesan'",'target_phone':"TEXT DEFAULT ''",'source_table':"TEXT DEFAULT ''",'source_id':'INTEGER DEFAULT NULL','due_date':"TEXT DEFAULT ''",'status':"TEXT DEFAULT 'Unread'",'created_at':"TEXT DEFAULT ''",'read_at':"TEXT DEFAULT ''"},
+      'customer_care_threads': {
+        'user_id': 'INTEGER DEFAULT NULL',
+        'member_id': "TEXT DEFAULT ''",
+        'category': "TEXT DEFAULT 'General Assistance'",
+        'priority': "TEXT DEFAULT 'Normal'",
+        'resolution_note': "TEXT DEFAULT ''",
+        'resolved_at': "TEXT DEFAULT ''"
+      }
     }
     for table, cols in migrations.items():
         for col, definition in cols.items():
@@ -1857,44 +1865,131 @@ def scoped_rows(table, u):
 
 
 
+def customer_care_scope(u):
+    """Return the Customer Care SQL scope allowed for the current user."""
+    role = str(u["role"] or "").strip()
+
+    if role == "Member":
+        return "t.user_id=?", [u["id"]]
+
+    if role == "Local Church Evangelism Officer":
+        return "m.circuit=? AND m.church_name=?", [
+            u["circuit"], u["church_name"]
+        ]
+
+    if role == "Circuit Coordinator":
+        return "m.circuit=?", [u["circuit"]]
+
+    # Full Member Care access for diocesan/admin/customer-care officers.
+    if role in {
+        "Admin",
+        "Officer",
+        "Bishop / Diocesan Executive",
+        "Evangelism Minister",
+        "Planting Officer",
+        "Diocesan Secretary",
+        "Finance Officer",
+        "Auditor"
+    }:
+        return "1=1", []
+
+    return "1=0", []
+
+
 @app.get("/api/customer-care")
 @login_required
 def api_customer_care():
-    threads = rows("""
-        SELECT *
-        FROM customer_care_threads
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    sql = f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE {scope}
         ORDER BY
-            CASE WHEN status='Open' THEN 0 ELSE 1 END,
-            updated_at DESC,
-            id DESC
-    """)
-    return jsonify(threads)
+            CASE WHEN t.status='Open' THEN 0 ELSE 1 END,
+            t.updated_at DESC,
+            t.id DESC
+    """
+
+    return jsonify(rows(sql, params))
 
 
 @app.post("/api/customer-care")
 @login_required
 def api_customer_care_create():
+    u = current_user()
     data = request.get_json(silent=True) or {}
 
-    customer_name = str(data.get("customer_name") or "").strip()
+    customer_name = str(
+        data.get("customer_name") or
+        u["username"] or ""
+    ).strip()
+
     phone = str(data.get("phone") or "").strip()
     email = str(data.get("email") or "").strip()
     subject = str(data.get("subject") or "").strip()
     message = str(data.get("message") or "").strip()
 
-    if not customer_name:
-        return jsonify({"error": "Customer name is required"}), 400
+    category = str(
+        data.get("category") or "General Assistance"
+    ).strip()
+
+    priority = str(
+        data.get("priority") or "Normal"
+    ).strip()
+
+    allowed_categories = {
+        "General Assistance",
+        "Registration",
+        "Church Records",
+        "Baptism",
+        "Confirmation",
+        "Marriage",
+        "Transfer / Relocation",
+        "Giving / Tithe",
+        "Technical Support",
+        "Other"
+    }
+
+    allowed_priorities = {"Normal", "High", "Urgent"}
+
+    if category not in allowed_categories:
+        return jsonify({"error": "Invalid Member Care category"}), 400
+
+    if priority not in allowed_priorities:
+        return jsonify({"error": "Invalid priority"}), 400
 
     if not message:
         return jsonify({"error": "Message is required"}), 400
 
+    member_id = ""
+
+    if u["role"] == "Member":
+        member_id = str(u["member_id"] or "")
+
     now = datetime.now().isoformat(timespec="seconds")
-    thread_id = "CC-" + datetime.now().strftime("%Y%m%d%H%M%S%f")
+    thread_id = "MC-" + datetime.now().strftime("%Y%m%d%H%M%S%f")
 
     cur = db().execute("""
         INSERT INTO customer_care_threads
-        (thread_id,customer_name,phone,email,subject,status,assigned_to,created_at,updated_at)
-        VALUES(?,?,?,?,?,?,?,?,?)
+        (
+            thread_id,
+            customer_name,
+            phone,
+            email,
+            subject,
+            status,
+            assigned_to,
+            created_at,
+            updated_at,
+            user_id,
+            member_id,
+            category,
+            priority
+        )
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)
     """, (
         thread_id,
         customer_name,
@@ -1902,45 +1997,76 @@ def api_customer_care_create():
         email,
         subject,
         "Open",
-        current_user()["username"],
+        "",
         now,
-        now
+        now,
+        u["id"],
+        member_id,
+        category,
+        priority
     ))
 
     thread_db_id = cur.lastrowid
 
     db().execute("""
         INSERT INTO customer_care_messages
-        (thread_id,sender_name,sender_role,message,created_at)
+        (
+            thread_id,
+            sender_name,
+            sender_role,
+            message,
+            created_at
+        )
         VALUES(?,?,?,?,?)
     """, (
         thread_id,
-        current_user()["username"],
-        current_user()["role"],
+        u["username"],
+        u["role"],
         message,
         now
     ))
 
     db().commit()
-    audit("CREATE", "customer_care_threads", thread_db_id, thread_id)
+
+    audit(
+        "CREATE",
+        "customer_care_threads",
+        thread_db_id,
+        thread_id
+    )
 
     return jsonify({
         "ok": True,
         "id": thread_db_id,
-        "thread_id": thread_id
+        "thread_id": thread_id,
+        "category": category,
+        "priority": priority,
+        "status": "Open"
     }), 201
 
 
 @app.get("/api/customer-care/<int:rid>")
 @login_required
 def api_customer_care_detail(rid):
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    sql = f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE t.id=? AND {scope}
+    """
+
     thread = db().execute(
-        "SELECT * FROM customer_care_threads WHERE id=?",
-        (rid,)
+        sql,
+        [rid] + params
     ).fetchone()
 
     if not thread:
-        return jsonify({"error": "Customer care conversation not found"}), 404
+        return jsonify({
+            "error": "Customer care conversation not found"
+        }), 404
 
     messages = rows("""
         SELECT *
@@ -1958,26 +2084,45 @@ def api_customer_care_detail(rid):
 @app.post("/api/customer-care/<int:rid>/message")
 @login_required
 def api_customer_care_message(rid):
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    sql = f"""
+        SELECT t.*
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE t.id=? AND {scope}
+    """
+
     thread = db().execute(
-        "SELECT * FROM customer_care_threads WHERE id=?",
-        (rid,)
+        sql,
+        [rid] + params
     ).fetchone()
 
     if not thread:
-        return jsonify({"error": "Customer care conversation not found"}), 404
+        return jsonify({
+            "error": "Customer care conversation not found"
+        }), 404
 
     data = request.get_json(silent=True) or {}
     message = str(data.get("message") or "").strip()
 
     if not message:
-        return jsonify({"error": "Message is required"}), 400
+        return jsonify({
+            "error": "Message is required"
+        }), 400
 
     now = datetime.now().isoformat(timespec="seconds")
-    u = current_user()
 
     db().execute("""
         INSERT INTO customer_care_messages
-        (thread_id,sender_name,sender_role,message,created_at)
+        (
+            thread_id,
+            sender_name,
+            sender_role,
+            message,
+            created_at
+        )
         VALUES(?,?,?,?,?)
     """, (
         thread["thread_id"],
@@ -1994,7 +2139,13 @@ def api_customer_care_message(rid):
     """, (now, rid))
 
     db().commit()
-    audit("MESSAGE", "customer_care_threads", rid, "Customer care message sent")
+
+    audit(
+        "MESSAGE",
+        "customer_care_threads",
+        rid,
+        "Member Care message sent"
+    )
 
     return jsonify({"ok": True})
 
@@ -2002,34 +2153,66 @@ def api_customer_care_message(rid):
 @app.post("/api/customer-care/<int:rid>/status")
 @login_required
 def api_customer_care_status(rid):
+    u = current_user()
+    scope, params = customer_care_scope(u)
+
+    sql = f"""
+        SELECT t.id
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE t.id=? AND {scope}
+    """
+
     thread = db().execute(
-        "SELECT id FROM customer_care_threads WHERE id=?",
-        (rid,)
+        sql,
+        [rid] + params
     ).fetchone()
 
     if not thread:
-        return jsonify({"error": "Customer care conversation not found"}), 404
+        return jsonify({
+            "error": "Customer care conversation not found"
+        }), 404
 
     data = request.get_json(silent=True) or {}
     status = str(data.get("status") or "").strip()
 
     if status not in {"Open", "Closed"}:
-        return jsonify({"error": "Status must be Open or Closed"}), 400
+        return jsonify({
+            "error": "Status must be Open or Closed"
+        }), 400
 
     now = datetime.now().isoformat(timespec="seconds")
 
-    db().execute("""
-        UPDATE customer_care_threads
-        SET status=?, updated_at=?
-        WHERE id=?
-    """, (status, now, rid))
+    if status == "Closed":
+        db().execute("""
+            UPDATE customer_care_threads
+            SET status=?,
+                updated_at=?,
+                resolved_at=?
+            WHERE id=?
+        """, (status, now, now, rid))
+    else:
+        db().execute("""
+            UPDATE customer_care_threads
+            SET status=?,
+                updated_at=?,
+                resolved_at=''
+            WHERE id=?
+        """, (status, now, rid))
 
     db().commit()
-    audit("STATUS", "customer_care_threads", rid, f"Status changed to {status}")
 
-    return jsonify({"ok": True, "status": status})
+    audit(
+        "STATUS",
+        "customer_care_threads",
+        rid,
+        f"Member Care status changed to {status}"
+    )
 
-
+    return jsonify({
+        "ok": True,
+        "status": status
+    })
 
 
 @app.get("/conference/<room_code>")
