@@ -1,559 +1,938 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Delta South Diocese — Member Registration</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#064e3b">
+<title>MCN Delta South Diocese — Member Registration</title>
+
 <style>
 *{box-sizing:border-box}
-body{margin:0;font-family:Arial,sans-serif;background:#f4f7f5;color:#17251c}
-.header{background:#123d27;color:#fff;padding:22px 16px;text-align:center}
-.header h1{margin:0 0 6px;font-size:24px}
 
-.header p{margin:0;font-size:14px}
-
-.registration-nav{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  gap:9px;
-  flex-wrap:wrap;
-  margin-top:16px;
+html{
+  scroll-behavior:smooth;
 }
 
-.registration-nav a{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-height:42px;
-  padding:10px 15px;
-  border-radius:9px;
-  text-decoration:none;
+body{
+  margin:0;
+  font-family:Arial,Helvetica,sans-serif;
+  background:#f3f7f5;
+  color:#17201c;
+  line-height:1.5;
+}
+
+.header{
+  background:#064e3b;
+  color:white;
+  padding:28px 18px 24px;
+  text-align:center;
+}
+
+.header h1{
+  margin:0;
+  font-size:28px;
+  line-height:1.15;
+  font-weight:800;
+}
+
+.header h2{
+  margin:10px 0 4px;
+  font-size:20px;
   font-weight:700;
-  font-size:14px;
-  transition:.2s ease;
 }
 
-.registration-nav a:hover{
-  transform:translateY(-1px);
-  opacity:.94;
+.header p{
+  margin:0;
+  font-size:17px;
 }
 
-.registration-login{
-  background:#fff;
-  color:#123d27;
+.header-actions{
+  max-width:680px;
+  margin:22px auto 0;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
 }
 
-.registration-help{
-  background:#1f6a45;
-  color:#fff;
+.header-actions a{
+  text-decoration:none;
+  padding:15px;
+  border-radius:14px;
+  font-weight:700;
+  font-size:16px;
+}
+
+.login-link{
+  background:white;
+  color:#064e3b;
+}
+
+.help-link{
+  background:#116b51;
+  color:white;
   border:1px solid rgba(255,255,255,.35);
 }
 
-.help-center{
-  margin-top:26px;
-  padding-top:22px;
-  border-top:1px solid #e1e7e3;
+.page{
+  max-width:760px;
+  margin:30px auto;
+  padding:0 14px 50px;
 }
 
-.help-center h3{
-  color:#123d27;
-  margin-top:0;
+.card{
+  background:white;
+  border-radius:24px;
+  padding:28px;
+  box-shadow:0 8px 30px rgba(0,0,0,.08);
 }
 
-.help-intro{
-  background:#eef7f0;
-  border-radius:10px;
-  padding:13px;
-  font-size:14px;
-  line-height:1.55;
+.card h2{
+  color:#064e3b;
+  font-size:32px;
+  margin:0 0 18px;
 }
 
-.help-grid{
+.intro{
+  background:#edf8f1;
+  border-left:5px solid #0b6b4f;
+  padding:16px;
+  border-radius:12px;
+  margin-bottom:25px;
+}
+
+.section{
+  margin-top:30px;
+  padding-top:25px;
+  border-top:1px solid #dfe7e3;
+}
+
+.section:first-of-type{
+  border-top:0;
+  padding-top:0;
+}
+
+.section h3{
+  color:#064e3b;
+  font-size:23px;
+  margin:0 0 18px;
+}
+
+.grid{
   display:grid;
-  grid-template-columns:repeat(2,1fr);
-  gap:12px;
-  margin-top:15px;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
 }
 
-.help-item{
-  background:#f7faf8;
-  border:1px solid #dbe7df;
-  border-radius:10px;
-  padding:14px;
-  line-height:1.5;
-  font-size:14px;
+.full{
+  grid-column:1 / -1;
 }
 
-.help-item strong{
+label{
   display:block;
-  color:#123d27;
-  margin-bottom:5px;
-}
-
-.help-actions{
-  display:flex;
-  justify-content:center;
-  gap:10px;
-  flex-wrap:wrap;
-  margin-top:18px;
-}
-
-.help-actions a{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-height:44px;
-  padding:11px 17px;
-  border-radius:9px;
-  text-decoration:none;
   font-weight:700;
+  margin-bottom:7px;
+  font-size:16px;
+}
+
+.required{
+  color:#b91c1c;
+}
+
+input,
+select,
+textarea{
+  width:100%;
+  border:1px solid #cbd5d1;
+  border-radius:12px;
+  padding:14px;
+  font-size:16px;
+  background:white;
+  color:#17201c;
+  outline:none;
+}
+
+input:focus,
+select:focus,
+textarea:focus{
+  border-color:#0b6b4f;
+  box-shadow:0 0 0 3px rgba(11,107,79,.12);
+}
+
+textarea{
+  min-height:110px;
+  resize:vertical;
+}
+
+.help-text{
+  color:#66746e;
   font-size:14px;
+  margin-top:6px;
 }
 
-.dashboard-login{
-  background:#123d27;
-  color:#fff;
+.notice{
+  background:#f4f8f6;
+  border:1px solid #dbe7e1;
+  border-radius:14px;
+  padding:15px;
+  margin-bottom:18px;
 }
-
-.return-registration{
-  background:#fff;
-  color:#123d27;
-  border:1px solid #ccd6cf;
-}
-
-@media(max-width:650px){
-  .registration-nav{
-    flex-direction:column;
-  }
-
-  .registration-nav a{
-    width:100%;
-    max-width:310px;
-  }
-
-  .help-grid{
-    grid-template-columns:1fr;
-  }
-
-  .help-actions{
-    flex-direction:column;
-  }
-
-  .help-actions a{
-    width:100%;
-  }
-}
-
-.container{max-width:850px;margin:25px auto;padding:0 15px}
-.card{background:#fff;border-radius:14px;padding:24px;box-shadow:0 4px 18px rgba(0,0,0,.08)}
-h2{margin-top:0;color:#123d27}
-.note{background:#eef7f0;padding:12px;border-radius:9px;font-size:14px;margin-bottom:20px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
-.full{grid-column:1/-1}
-label{display:block;font-weight:600;margin-bottom:6px}
-input,select,textarea{width:100%;padding:11px;border:1px solid #ccd6cf;border-radius:8px;font-size:15px}
-textarea{min-height:90px;resize:vertical}
-.section{margin-top:25px;padding-top:18px;border-top:1px solid #e1e7e3}
-button{border:0;border-radius:9px;padding:13px 22px;background:#123d27;color:#fff;font-weight:700;font-size:16px;cursor:pointer}
-button:disabled{opacity:.6}
 
 .photo-box{
-  border:2px dashed #b9c9be;
-  border-radius:14px;
-  padding:18px;
-  background:#f8fbf9;
+  border:2px dashed #b8c9c1;
+  border-radius:18px;
+  padding:20px;
   text-align:center;
+  background:#f9fcfa;
 }
 
 .photo-preview-wrap{
   width:180px;
   height:210px;
-  margin:0 auto 15px;
-  border-radius:12px;
+  margin:0 auto 18px;
+  border:1px solid #d5dfda;
+  border-radius:14px;
   overflow:hidden;
-  background:#edf3ef;
-  border:1px solid #ccd6cf;
+  background:#edf5f0;
   display:flex;
   align-items:center;
   justify-content:center;
 }
 
-.photo-preview-empty{
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  justify-content:center;
-  gap:7px;
-  padding:15px;
-  color:#53665a;
-}
-
-.photo-preview-empty span{
-  font-size:42px;
-}
-
-.photo-preview-empty strong{
-  color:#123d27;
-  font-size:14px;
-}
-
-.photo-preview-empty small{
-  font-size:12px;
-}
-
-.photo-preview{
-  display:none;
+#photoPreview{
   width:100%;
   height:100%;
   object-fit:cover;
+  display:none;
 }
 
-.photo-actions{
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  gap:10px;
-  flex-wrap:wrap;
+.photo-empty{
+  padding:15px;
+  color:#5c6d65;
 }
 
-.photo-button,
-.photo-remove{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-height:44px;
-  padding:11px 16px;
-  border-radius:9px;
-  font-weight:700;
-  font-size:14px;
-  cursor:pointer;
+.photo-empty .icon{
+  font-size:55px;
+  display:block;
+  margin-bottom:8px;
+}
+
+.photo-buttons{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
 }
 
 .photo-button{
-  background:#123d27;
-  color:#fff;
+  border:0;
+  border-radius:12px;
+  padding:15px;
+  background:#064e3b;
+  color:white;
+  font-weight:700;
+  font-size:16px;
+  cursor:pointer;
 }
 
-.photo-remove{
-  background:#fff;
-  color:#8b1e1e;
-  border:1px solid #d9baba;
-}
-
-.photo-help{
-  display:block;
+.remove-button{
   margin-top:12px;
-  color:#5c6b62;
-  font-size:12px;
+  background:white;
+  color:#991b1b;
+  border:1px solid #e0bcbc;
+  border-radius:12px;
+  padding:13px;
+  width:100%;
+  font-weight:700;
+  cursor:pointer;
+}
+
+.submit-area{
+  margin-top:30px;
+}
+
+.submit-button{
+  width:100%;
+  border:0;
+  border-radius:14px;
+  background:#064e3b;
+  color:white;
+  padding:17px;
+  font-size:18px;
+  font-weight:800;
+  cursor:pointer;
+}
+
+.submit-button:disabled{
+  opacity:.6;
+  cursor:not-allowed;
+}
+
+.message{
+  display:none;
+  margin-top:18px;
+  padding:16px;
+  border-radius:14px;
+  font-weight:600;
+}
+
+.message.success{
+  display:block;
+  background:#e9f8ef;
+  border:1px solid #a9d8bb;
+  color:#14532d;
+}
+
+.message.error{
+  display:block;
+  background:#fff0f0;
+  border:1px solid #e2b5b5;
+  color:#991b1b;
+}
+
+.loading{
+  color:#64746d;
+}
+
+.help-center{
+  margin-top:30px;
+}
+
+.help-center h2{
+  color:#064e3b;
+  font-size:27px;
+}
+
+.help-item{
+  background:white;
+  border:1px solid #dce6e1;
+  border-radius:15px;
+  padding:18px;
+  margin-bottom:14px;
+}
+
+.help-item strong{
+  color:#064e3b;
+  display:block;
+  font-size:17px;
+  margin-bottom:7px;
+}
+
+.help-actions{
+  display:grid;
+  gap:12px;
+  margin-top:20px;
+}
+
+.help-actions a{
+  text-decoration:none;
+  text-align:center;
+  padding:15px;
+  border-radius:14px;
+  font-weight:700;
+}
+
+.dashboard-login{
+  background:#064e3b;
+  color:white;
+}
+
+.return-registration{
+  background:white;
+  color:#064e3b;
+  border:1px solid #cbd8d2;
 }
 
 @media(max-width:650px){
-  .photo-preview-wrap{
-    width:160px;
-    height:190px;
+  .header h1{
+    font-size:25px;
   }
 
-  .photo-actions{
-    flex-direction:column;
+  .header-actions{
+    grid-template-columns:1fr;
   }
 
-  .photo-button,
-  .photo-remove{
-    width:100%;
-    max-width:280px;
+  .card{
+    padding:22px 18px;
+  }
+
+  .card h2{
+    font-size:28px;
+  }
+
+  .grid{
+    grid-template-columns:1fr;
+  }
+
+  .full{
+    grid-column:auto;
+  }
+
+  .photo-buttons{
+    grid-template-columns:1fr;
   }
 }
-.message{display:none;margin-top:15px;padding:13px;border-radius:8px}
-.success{background:#e8f7ec;color:#145b2d}
-.error{background:#fdeaea;color:#8b1e1e}
-@media(max-width:650px){.grid{grid-template-columns:1fr}.full{grid-column:auto}}
 </style>
 </head>
+
 <body>
 
-<div class="header">
+<header class="header">
   <h1>METHODIST CHURCH NIGERIA</h1>
-  <p>DELTA SOUTH DIOCESE</p>
+  <h2>DELTA SOUTH DIOCESE</h2>
   <p>Online Membership Registration</p>
 
-  <nav class="registration-nav" aria-label="Membership navigation">
-    <a class="registration-login" href="/login">
-      🔐 Login
-    </a>
+  <div class="header-actions">
+    <a class="login-link" href="/login">🔐 Login</a>
+    <a class="help-link" href="#help-center">❓ Help Center / Member Care</a>
+  </div>
+</header>
 
-    <a class="registration-help" href="#help-center">
-      ❓ Help Center / Member Care
-    </a>
-  </nav>
-</div>
+<main class="page">
 
-<div class="container">
 <div class="card">
-<h2>Member Registration Form</h2>
 
-<div class="note">
-Please provide accurate information. Your registration will remain <b>Pending</b>
-until reviewed and approved by an authorized church officer.
-</div>
+  <h2>Member Registration Form</h2>
 
-<form id="registrationForm">
-
-<div class="grid">
-
-<div>
-<label>Full Name *</label>
-<input name="full_name" required maxlength="150">
-</div>
-
-<div>
-<label>Gender *</label>
-<select name="gender" required>
-<option value="">Select Gender</option>
-<option>Male</option>
-<option>Female</option>
-</select>
-</div>
-
-<div>
-<label>Circuit *</label>
-<select name="circuit" id="circuit" required>
-<option value="">Select Circuit</option>
-<option>Effurun Circuit</option>
-<option>Warri Circuit</option>
-<option>Sapele Circuit</option>
-<option>Steel Town Circuit</option>
-</select>
-</div>
-
-<div>
-<label>Local Church *</label>
-<select name="church_name" id="church_name" required>
-<option value="">Select Circuit First</option>
-</select>
-</div>
-
-<div>
-<label>Phone Number</label>
-<input name="phone" type="tel" maxlength="30">
-</div>
-
-<div>
-<label>Email Address</label>
-<input name="email" type="email" maxlength="150">
-</div>
-
-<div class="full">
-<label>Residential Address</label>
-<textarea name="address" maxlength="500"></textarea>
-</div>
-
-<div>
-<label>Date of Birth</label>
-<input name="birthday" type="date">
-</div>
-
-<div>
-<label>Fellowship</label>
-<select name="fellowship">
-<option value="">Select Fellowship</option>
-<option>Men</option>
-<option>Women</option>
-<option>Youth</option>
-<option>Sunday School</option>
-<option>Ladies & Girls</option>
-<option>Lay Preacher</option>
-<option>Minister</option>
-<option>Children</option>
-</select>
-</div>
-
-</div>
-
-<div class="section">
-<h3>Church Status</h3>
-<div class="grid">
-
-<div>
-<label>Baptised</label>
-<select name="baptised" id="baptised">
-<option>No</option>
-<option>Yes</option>
-</select>
-</div>
-
-<div>
-<label>Baptism Date</label>
-<input name="baptism_date" type="date">
-</div>
-
-<div>
-<label>Confirmed</label>
-<select name="confirmed">
-<option>No</option>
-<option>Yes</option>
-</select>
-</div>
-
-<div>
-<label>Confirmation Date</label>
-<input name="confirmation_date" type="date">
-</div>
-
-<div>
-<label>Married</label>
-<select name="marriage">
-<option>No</option>
-<option>Yes</option>
-</select>
-</div>
-
-<div>
-<label>Marriage Date</label>
-<input name="marriage_date" type="date">
-</div>
-
-</div>
-</div>
-
-<div class="section">
-<h3>Work & Occupation</h3>
-<div class="grid">
-
-<div>
-<label>Profession / Business / Trade</label>
-<input name="profession_business_trade" maxlength="200">
-</div>
-
-<div>
-<label>Place of Work Address</label>
-<input name="work_address" maxlength="300">
-</div>
-
-</div>
-</div>
-
-<div class="section">
-<h3>Login Account</h3>
-<div class="note">
-Create the username and password you will use to log in after your registration is approved.
-</div>
-<div class="grid">
-  <div>
-    <label>Username *</label>
-    <input name="username" required minlength="3" maxlength="50" autocomplete="username">
+  <div class="intro">
+    Please provide accurate information. Your registration will remain
+    <strong>Pending</strong> until it has been reviewed and approved by
+    an authorized church officer.
   </div>
 
-  <div>
-    <label>Password *</label>
-    <input name="password" type="password" required minlength="8" maxlength="100" autocomplete="new-password">
-  </div>
+  <form id="registrationForm" novalidate>
 
-  <div>
-    <label>Confirm Password *</label>
-    <input name="confirm_password" type="password" required minlength="8" maxlength="100" autocomplete="new-password">
-  </div>
-</div>
-</div>
+    <!-- PERSONAL INFORMATION -->
+    <section class="section">
+      <h3>👤 Personal Information</h3>
 
-<div class="section">
-<h3>Passport / Selfie Photo</h3>
-<div class="photo-box">
-  <div class="photo-preview-wrap">
-    <div id="photoPreviewEmpty" class="photo-preview-empty">
-      <span>📷</span>
-      <strong>No photo selected</strong>
-      <small>Take a clear passport photo or selfie</small>
+      <div class="grid">
+
+        <div class="full">
+          <label for="full_name">
+            Full Name <span class="required">*</span>
+          </label>
+          <input
+            id="full_name"
+            name="full_name"
+            type="text"
+            maxlength="150"
+            autocomplete="name"
+            required>
+        </div>
+
+        <div>
+          <label for="gender">
+            Gender <span class="required">*</span>
+          </label>
+          <select id="gender" name="gender" required>
+            <option value="">Select Gender</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="birthday">Date of Birth</label>
+          <input id="birthday" name="birthday" type="date">
+        </div>
+
+        <div>
+          <label for="phone">Phone Number</label>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            maxlength="30"
+            autocomplete="tel">
+        </div>
+
+        <div>
+          <label for="email">Email Address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            maxlength="150"
+            autocomplete="email">
+        </div>
+
+        <div class="full">
+          <label for="address">Residential Address</label>
+          <textarea
+            id="address"
+            name="address"
+            maxlength="500"></textarea>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- CHURCH LOCATION -->
+    <section class="section">
+      <h3>⛪ Church Membership Location</h3>
+
+      <div class="notice">
+        Select your Circuit first. The Local Church list will automatically
+        load from the Diocese church database.
+      </div>
+
+      <div class="grid">
+
+        <div>
+          <label for="circuit">
+            Circuit <span class="required">*</span>
+          </label>
+
+          <select id="circuit" name="circuit" required>
+            <option value="">Select Circuit</option>
+            <option value="Effurun Circuit">Effurun Circuit</option>
+            <option value="Warri Circuit">Warri Circuit</option>
+            <option value="Sapele Circuit">Sapele Circuit</option>
+            <option value="Steel Town Circuit">Steel Town Circuit</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="church_name">
+            Local Church <span class="required">*</span>
+          </label>
+
+          <select id="church_name" name="church_name" required disabled>
+            <option value="">Select Circuit First</option>
+          </select>
+
+          <div id="churchStatus" class="help-text">
+            Select a Circuit to load the Local Churches.
+          </div>
+        </div>
+
+        <div>
+          <label for="fellowship">Fellowship</label>
+          <select id="fellowship" name="fellowship">
+            <option value="">Select Fellowship</option>
+            <option value="Men">Men</option>
+            <option value="Women">Women</option>
+            <option value="Youth">Youth</option>
+            <option value="Children">Children</option>
+            <option value="Sunday School">Sunday School</option>
+            <option value="Ladies & Girls">Ladies & Girls</option>
+            <option value="Lay Preacher">Lay Preacher</option>
+            <option value="Minister">Minister</option>
+          </select>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- CHURCH STATUS -->
+    <section class="section">
+      <h3>📖 Church Status</h3>
+
+      <div class="grid">
+
+        <div>
+          <label for="baptised">Baptised</label>
+          <select id="baptised" name="baptised">
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="baptism_date">Baptism Date</label>
+          <input id="baptism_date" name="baptism_date" type="date">
+        </div>
+
+        <div>
+          <label for="confirmed">Confirmed</label>
+          <select id="confirmed" name="confirmed">
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="confirmation_date">Confirmation Date</label>
+          <input id="confirmation_date" name="confirmation_date" type="date">
+        </div>
+
+        <div>
+          <label for="marriage">Married</label>
+          <select id="marriage" name="marriage">
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="marriage_date">Marriage Date</label>
+          <input id="marriage_date" name="marriage_date" type="date">
+        </div>
+
+      </div>
+    </section>
+
+    <!-- MOVEMENT / TRANSFER -->
+    <section class="section">
+      <h3>🔄 Membership Movement</h3>
+
+      <div class="grid">
+
+        <div>
+          <label for="relocated">Relocated</label>
+          <select id="relocated" name="relocated">
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="relocation_date">Relocation Date</label>
+          <input id="relocation_date" name="relocation_date" type="date">
+        </div>
+
+        <div class="full">
+          <label for="relocation_destination">
+            Relocation Destination
+          </label>
+          <input
+            id="relocation_destination"
+            name="relocation_destination"
+            type="text"
+            maxlength="250">
+        </div>
+
+        <div>
+          <label for="transfer">Transfer</label>
+          <select id="transfer" name="transfer">
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="transfer_date">Transfer Date</label>
+          <input id="transfer_date" name="transfer_date" type="date">
+        </div>
+
+        <div>
+          <label for="transfer_from">Transfer From</label>
+          <input
+            id="transfer_from"
+            name="transfer_from"
+            type="text"
+            maxlength="250">
+        </div>
+
+        <div>
+          <label for="transfer_to">Transfer To</label>
+          <input
+            id="transfer_to"
+            name="transfer_to"
+            type="text"
+            maxlength="250">
+        </div>
+
+      </div>
+    </section>
+
+    <!-- WORK -->
+    <section class="section">
+      <h3>💼 Work & Occupation</h3>
+
+      <div class="grid">
+
+        <div class="full">
+          <label for="profession_business_trade">
+            Profession / Business / Trade
+          </label>
+          <input
+            id="profession_business_trade"
+            name="profession_business_trade"
+            type="text"
+            maxlength="250">
+        </div>
+
+        <div class="full">
+          <label for="work_address">
+            Place of Work Address
+          </label>
+          <textarea
+            id="work_address"
+            name="work_address"
+            maxlength="500"></textarea>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- FINANCIAL / MEMBERSHIP RECORD -->
+    <section class="section">
+      <h3>💰 Giving Information</h3>
+
+      <div class="notice">
+        These fields are optional. Actual tithe, Seed of Faith and other
+        weekly/monthly giving records will be managed by the church
+        financial system after approval.
+      </div>
+
+      <div class="grid">
+
+        <div>
+          <label for="seed_of_faith_payment">
+            Seed of Faith Payment (₦)
+          </label>
+          <input
+            id="seed_of_faith_payment"
+            name="seed_of_faith_payment"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            value="0">
+        </div>
+
+        <div>
+          <label for="tithe_payment">
+            Tithe Payment (₦)
+          </label>
+          <input
+            id="tithe_payment"
+            name="tithe_payment"
+            type="number"
+            min="0"
+            step="0.01"
+            inputmode="decimal"
+            value="0">
+        </div>
+
+      </div>
+    </section>
+
+    <!-- PHOTO -->
+    <section class="section">
+      <h3>📷 Passport / Selfie Photo</h3>
+
+      <div class="photo-box">
+
+        <div class="photo-preview-wrap">
+          <img id="photoPreview" alt="Selected passport photo">
+
+          <div id="photoEmpty" class="photo-empty">
+            <span class="icon">📷</span>
+            <strong>No photo selected</strong>
+            <br>
+            Take a clear passport photograph or selfie.
+          </div>
+        </div>
+
+        <input
+          id="cameraInput"
+          type="file"
+          accept="image/*"
+          capture="user"
+          hidden>
+
+        <input
+          id="fileInput"
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          hidden>
+
+        <div class="photo-buttons">
+
+          <button
+            type="button"
+            class="photo-button"
+            id="takePhotoButton">
+            📷 Take Photo
+          </button>
+
+          <button
+            type="button"
+            class="photo-button"
+            id="choosePhotoButton">
+            📁 Choose From Phone
+          </button>
+
+        </div>
+
+        <button
+          type="button"
+          class="remove-button"
+          id="removePhotoButton">
+          Remove Photo
+        </button>
+
+        <div class="help-text">
+          JPG, PNG and WebP images are accepted.
+        </div>
+
+      </div>
+    </section>
+
+    <!-- LOGIN -->
+    <section class="section">
+      <h3>🔐 Login Account</h3>
+
+      <div class="notice">
+        Create the username and password you will use to log in after
+        your membership registration has been approved.
+      </div>
+
+      <div class="grid">
+
+        <div class="full">
+          <label for="username">
+            Username <span class="required">*</span>
+          </label>
+          <input
+            id="username"
+            name="username"
+            type="text"
+            minlength="3"
+            maxlength="50"
+            autocomplete="username"
+            required>
+        </div>
+
+        <div>
+          <label for="password">
+            Password <span class="required">*</span>
+          </label>
+          <input
+            id="password"
+            name="password"
+            type="password"
+            minlength="8"
+            maxlength="100"
+            autocomplete="new-password"
+            required>
+
+          <div class="help-text">
+            Minimum 8 characters.
+          </div>
+        </div>
+
+        <div>
+          <label for="confirm_password">
+            Confirm Password <span class="required">*</span>
+          </label>
+          <input
+            id="confirm_password"
+            name="confirm_password"
+            type="password"
+            minlength="8"
+            maxlength="100"
+            autocomplete="new-password"
+            required>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ADDITIONAL -->
+    <section class="section">
+      <h3>📝 Additional Information</h3>
+
+      <div class="grid">
+
+        <div>
+          <label for="death">Death Record</label>
+          <select id="death" name="death">
+            <option value="No">No</option>
+            <option value="Yes">Yes</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="death_date">Death Date</label>
+          <input id="death_date" name="death_date" type="date">
+        </div>
+
+        <div class="full">
+          <label for="notes">Additional Notes</label>
+          <textarea
+            id="notes"
+            name="notes"
+            maxlength="1000"
+            placeholder="Any additional information you want the church to know..."></textarea>
+        </div>
+
+      </div>
+    </section>
+
+    <div class="submit-area">
+
+      <button
+        id="submitButton"
+        class="submit-button"
+        type="submit">
+        Submit Registration
+      </button>
+
+      <div id="message" class="message"></div>
+
     </div>
-    <img id="photoPreview" class="photo-preview" alt="Selected passport or selfie photo">
-  </div>
 
-  <div class="photo-actions">
-    <label class="photo-button" for="passport_photo">📷 Take / Choose Photo</label>
-    <button type="button" id="removePhotoBtn" class="photo-remove">Remove Photo</button>
-  </div>
-
-  <input
-    id="passport_photo"
-    type="file"
-    accept="image/jpeg,image/png,image/webp"
-    capture="user"
-    hidden
-  >
-
-  <small class="photo-help">
-    Use a clear passport photograph or selfie. JPG, PNG or WebP images are accepted.
-  </small>
-</div>
+  </form>
 </div>
 
-<div style="margin-top:25px">
-<button id="submitBtn" type="submit">Submit Registration</button>
-</div>
+<!-- HELP CENTER -->
+<section id="help-center" class="help-center">
 
-<div id="message" class="message"></div>
+  <h2>❓ Help Center / Member Care</h2>
 
-<div id="help-center" class="help-center">
-
-  <h3>❓ Help Center / Member Care</h3>
-
-  <div class="help-intro">
+  <div class="intro">
     Need help with your membership registration?
-    The information below answers the most common questions.
-    If you need personal assistance, use the dashboard login after
-    your account has been approved.
+    The information below answers common questions.
   </div>
 
-  <div class="help-grid">
+  <div class="help-item">
+    <strong>📋 How do I register?</strong>
+    Complete the registration form, select your Circuit and Local Church,
+    create your username and password, then submit the registration.
+  </div>
 
-    <div class="help-item">
-      <strong>📋 How do I register?</strong>
-      Complete the registration form, select your Circuit and Local Church,
-      create your username and password, then submit the registration.
-    </div>
+  <div class="help-item">
+    <strong>⏳ What happens after registration?</strong>
+    Your registration is initially marked <strong>Pending</strong>.
+    An authorized church officer must review and approve it.
+  </div>
 
-    <div class="help-item">
-      <strong>⏳ What happens after registration?</strong>
-      Your registration is initially marked <b>Pending</b>.
-      An authorized church officer must review and approve it.
-    </div>
+  <div class="help-item">
+    <strong>🆔 Where is my Registration ID?</strong>
+    Your Registration ID will be displayed after successful submission.
+    Keep it safely for future reference.
+  </div>
 
-    <div class="help-item">
-      <strong>🆔 Where is my Registration ID?</strong>
-      Your Registration ID is displayed after successful submission.
-      Please keep it safely for future reference.
-    </div>
+  <div class="help-item">
+    <strong>🔐 When can I log in?</strong>
+    You can use your login account after your membership registration
+    has been approved.
+  </div>
 
-    <div class="help-item">
-      <strong>🔐 When can I log in?</strong>
-      You can use your login account after your membership registration
-      has been approved by the authorized church officer.
-    </div>
+  <div class="help-item">
+    <strong>📷 What photo should I upload?</strong>
+    Use a clear passport photograph or selfie.
+    JPG, PNG and WebP images are accepted.
+  </div>
 
-    <div class="help-item">
-      <strong>📷 What photo should I upload?</strong>
-      Use a clear passport photograph or selfie.
-      JPG, PNG and WebP images are accepted.
-    </div>
+  <div class="help-item">
+    <strong>✏️ Can I correct my registration?</strong>
+    If information needs correction, contact your Local Church office
+    or use Member Care after your account has been approved.
+  </div>
 
-    <div class="help-item">
-      <strong>✏️ Can I correct my registration?</strong>
-      If information needs correction, contact your Local Church office
-      or use Member Care after logging into your account.
-    </div>
+  <div class="help-item">
+    <strong>🏛️ Who approves my registration?</strong>
+    Registration approval is handled by an authorized church officer
+    according to the church's membership administration process.
+  </div>
 
-    <div class="help-item">
-      <strong>🏛️ Who approves my registration?</strong>
-      Registration approval is handled by an authorized church officer
-      according to the church's membership administration process.
-    </div>
-
-    <div class="help-item">
-      <strong>🆘 I need additional assistance.</strong>
-      Use the Login to Dashboard button to enter the membership system
-      and access the available member-care services.
-    </div>
-
+  <div class="help-item">
+    <strong>🆘 I need additional assistance.</strong>
+    Use the Login to Dashboard button to enter the membership system
+    and access the available member-care services.
   </div>
 
   <div class="help-actions">
@@ -568,172 +947,590 @@ Create the username and password you will use to log in after your registration 
 
   </div>
 
-</div>
+</section>
 
-</form>
-</div>
-</div>
+</main>
 
 <script>
-const churches = {
-  "Effurun Circuit": [],
-  "Warri Circuit": [],
-  "Sapele Circuit": [],
-  "Steel Town Circuit": []
-};
+(function(){
 
+"use strict";
+
+const form = document.getElementById("registrationForm");
 const circuit = document.getElementById("circuit");
 const church = document.getElementById("church_name");
-const form = document.getElementById("registrationForm");
+const churchStatus = document.getElementById("churchStatus");
+
 const message = document.getElementById("message");
-const submitBtn = document.getElementById("submitBtn");
+const submitButton = document.getElementById("submitButton");
 
-const photoInput = document.getElementById("passport_photo");
+const cameraInput = document.getElementById("cameraInput");
+const fileInput = document.getElementById("fileInput");
+
+const takePhotoButton = document.getElementById("takePhotoButton");
+const choosePhotoButton = document.getElementById("choosePhotoButton");
+const removePhotoButton = document.getElementById("removePhotoButton");
+
 const photoPreview = document.getElementById("photoPreview");
-const photoPreviewEmpty = document.getElementById("photoPreviewEmpty");
-const removePhotoBtn = document.getElementById("removePhotoBtn");
+const photoEmpty = document.getElementById("photoEmpty");
 
-if(photoInput){
-  photoInput.addEventListener("change", ()=>{
-    const file = photoInput.files && photoInput.files[0];
+let selectedPhoto = null;
 
-    if(!file){
-      photoPreview.style.display="none";
-      photoPreview.removeAttribute("src");
-      photoPreviewEmpty.style.display="flex";
-      return;
-    }
 
-    if(!file.type.startsWith("image/")){
-      alert("Please select an image file.");
-      photoInput.value="";
-      return;
-    }
+/* -------------------------------------------------------
+   MESSAGE
+------------------------------------------------------- */
 
-    const reader = new FileReader();
-
-    reader.onload = e=>{
-      photoPreview.src = e.target.result;
-      photoPreview.style.display="block";
-      photoPreviewEmpty.style.display="none";
-    };
-
-    reader.readAsDataURL(file);
+function showMessage(type, html){
+  message.className = "message " + type;
+  message.innerHTML = html;
+  message.style.display = "block";
+  message.scrollIntoView({
+    behavior:"smooth",
+    block:"center"
   });
 }
 
-if(removePhotoBtn){
-  removePhotoBtn.addEventListener("click", ()=>{
-    if(photoInput) photoInput.value="";
-    if(photoPreview){
-      photoPreview.style.display="none";
-      photoPreview.removeAttribute("src");
-    }
-    if(photoPreviewEmpty) photoPreviewEmpty.style.display="flex";
-  });
+function clearMessage(){
+  message.className = "message";
+  message.innerHTML = "";
+  message.style.display = "none";
 }
 
-async function loadChurches(selectedCircuit){
-  church.innerHTML = '<option value="">Loading churches...</option>';
+
+/* -------------------------------------------------------
+   LOCAL CHURCHES
+------------------------------------------------------- */
+
+async function loadChurches(){
+
+  const selectedCircuit = String(circuit.value || "").trim();
+
+  church.innerHTML = "";
+  church.disabled = true;
+
+  if(!selectedCircuit){
+
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "Select Circuit First";
+    church.appendChild(option);
+
+    churchStatus.textContent =
+      "Select a Circuit to load the Local Churches.";
+
+    return;
+  }
+
+  const loading = document.createElement("option");
+  loading.value = "";
+  loading.textContent = "Loading Local Churches...";
+  church.appendChild(loading);
+
+  churchStatus.textContent = "Loading churches...";
 
   try{
-    const res = await fetch("/api/public/churches");
-    if(!res.ok) throw new Error("Unable to load churches");
 
-    const rows = await res.json();
-
-    const filtered = rows.filter(x =>
-      String(x.circuit || "") === selectedCircuit
+    const response = await fetch(
+      "/api/public/churches?circuit=" +
+      encodeURIComponent(selectedCircuit),
+      {
+        method:"GET",
+        headers:{
+          "Accept":"application/json"
+        },
+        cache:"no-store"
+      }
     );
 
-    church.innerHTML = '<option value="">Select Local Church</option>';
+    const raw = await response.text();
 
-    filtered.forEach(x=>{
+    let data;
+
+    try{
+      data = JSON.parse(raw);
+    }catch(error){
+      throw new Error(
+        "The church server returned an invalid response."
+      );
+    }
+
+    if(!response.ok){
+      throw new Error(
+        data.error ||
+        "Unable to load Local Churches."
+      );
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+
+    const filtered = rows.filter(function(row){
+      return String(row.circuit || "").trim() === selectedCircuit;
+    });
+
+    church.innerHTML = "";
+
+    const first = document.createElement("option");
+    first.value = "";
+    first.textContent = "Select Local Church";
+    church.appendChild(first);
+
+    filtered.forEach(function(row){
+
+      const name = String(row.church_name || "").trim();
+
+      if(!name){
+        return;
+      }
+
       const option = document.createElement("option");
-      option.value = x.church_name;
-      option.textContent = x.church_name;
+
+      option.value = name;
+      option.textContent = name;
+
       church.appendChild(option);
     });
 
-    if(!filtered.length){
-      church.innerHTML = '<option value="">No churches found</option>';
+    if(filtered.length === 0){
+
+      church.innerHTML = "";
+
+      const empty = document.createElement("option");
+      empty.value = "";
+      empty.textContent = "No churches found for this Circuit";
+
+      church.appendChild(empty);
+
+      churchStatus.textContent =
+        "No Local Churches were found for " +
+        selectedCircuit + ".";
+
+      return;
     }
-  }catch(e){
-    church.innerHTML = '<option value="">Unable to load churches</option>';
+
+    church.disabled = false;
+
+    churchStatus.textContent =
+      filtered.length +
+      " Local Church" +
+      (filtered.length === 1 ? "" : "es") +
+      " available.";
+
+  }catch(error){
+
+    console.error("Church loading error:", error);
+
+    church.innerHTML = "";
+
+    const failed = document.createElement("option");
+    failed.value = "";
+    failed.textContent = "Unable to load churches";
+    church.appendChild(failed);
+
+    churchStatus.textContent =
+      error.message || "Unable to load churches.";
+
   }
 }
 
-circuit.addEventListener("change",()=>{
-  if(circuit.value) loadChurches(circuit.value);
-  else church.innerHTML='<option value="">Select Circuit First</option>';
+
+/* -------------------------------------------------------
+   CIRCUIT CHANGE
+------------------------------------------------------- */
+
+circuit.addEventListener("change", function(){
+
+  clearMessage();
+
+  loadChurches();
+
 });
 
-form.addEventListener("submit", async e=>{
-  e.preventDefault();
 
-  message.style.display="none";
-  submitBtn.disabled=true;
-  submitBtn.textContent="Submitting...";
+/* -------------------------------------------------------
+   PHOTO
+------------------------------------------------------- */
 
-  const data = Object.fromEntries(new FormData(form).entries());
+function selectPhoto(file){
+
+  if(!file){
+    return;
+  }
+
+  if(!file.type || !file.type.startsWith("image/")){
+
+    showMessage(
+      "error",
+      "Please select a valid image file."
+    );
+
+    return;
+  }
+
+  const allowed = [
+    "image/jpeg",
+    "image/png",
+    "image/webp"
+  ];
+
+  if(!allowed.includes(file.type)){
+
+    showMessage(
+      "error",
+      "Only JPG, PNG and WebP images are accepted."
+    );
+
+    return;
+  }
+
+  if(file.size > 8 * 1024 * 1024){
+
+    showMessage(
+      "error",
+      "The photo is too large. Maximum size is 8 MB."
+    );
+
+    return;
+  }
+
+  selectedPhoto = file;
+
+  const reader = new FileReader();
+
+  reader.onload = function(event){
+
+    photoPreview.src = event.target.result;
+    photoPreview.style.display = "block";
+    photoEmpty.style.display = "none";
+
+  };
+
+  reader.readAsDataURL(file);
+
+  clearMessage();
+}
+
+
+takePhotoButton.addEventListener("click", function(){
+
+  cameraInput.value = "";
+  cameraInput.click();
+
+});
+
+
+choosePhotoButton.addEventListener("click", function(){
+
+  fileInput.value = "";
+  fileInput.click();
+
+});
+
+
+cameraInput.addEventListener("change", function(){
+
+  if(this.files && this.files.length){
+    selectPhoto(this.files[0]);
+  }
+
+});
+
+
+fileInput.addEventListener("change", function(){
+
+  if(this.files && this.files.length){
+    selectPhoto(this.files[0]);
+  }
+
+});
+
+
+removePhotoButton.addEventListener("click", function(){
+
+  selectedPhoto = null;
+
+  cameraInput.value = "";
+  fileInput.value = "";
+
+  photoPreview.removeAttribute("src");
+  photoPreview.style.display = "none";
+  photoEmpty.style.display = "block";
+
+});
+
+
+/* -------------------------------------------------------
+   FORM SUBMISSION
+------------------------------------------------------- */
+
+form.addEventListener("submit", async function(event){
+
+  event.preventDefault();
+
+  clearMessage();
+
+  if(!form.checkValidity()){
+
+    form.reportValidity();
+
+    return;
+  }
+
+  if(!circuit.value){
+
+    showMessage(
+      "error",
+      "Please select your Circuit."
+    );
+
+    circuit.focus();
+
+    return;
+  }
+
+  if(!church.value){
+
+    showMessage(
+      "error",
+      "Please select your Local Church."
+    );
+
+    church.focus();
+
+    return;
+  }
+
+  const password =
+    document.getElementById("password").value;
+
+  const confirmPassword =
+    document.getElementById("confirm_password").value;
+
+  if(password.length < 8){
+
+    showMessage(
+      "error",
+      "Password must contain at least 8 characters."
+    );
+
+    document.getElementById("password").focus();
+
+    return;
+  }
+
+  if(password !== confirmPassword){
+
+    showMessage(
+      "error",
+      "Password and Confirm Password do not match."
+    );
+
+    document.getElementById("confirm_password").focus();
+
+    return;
+  }
+
+
+  const formData = new FormData(form);
+
+  /* The backend validates both password fields,
+     so keep confirm_password in the request. */
+  const data = {};
+
+  formData.forEach(function(value, key){
+    data[key] = value;
+  });
+
+
+  submitButton.disabled = true;
+  submitButton.textContent = "Submitting Registration...";
+
 
   try{
-    const res = await fetch("/api/public/member-registration",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify(data)
-    });
 
-    const result = await res.json();
+    const response = await fetch(
+      "/api/public/member-registration",
+      {
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json",
+          "Accept":"application/json"
+        },
+        body:JSON.stringify(data)
+      }
+    );
 
-    if(!res.ok){
-      throw new Error(result.error || "Registration failed.");
+
+    const raw = await response.text();
+
+    let result;
+
+    try{
+      result = JSON.parse(raw);
+    }catch(error){
+      throw new Error(
+        "The registration server returned an invalid response."
+      );
     }
 
-    const photoInput = document.getElementById("passport_photo");
-    const photo = photoInput && photoInput.files.length ? photoInput.files[0] : null;
 
-    if(photo && result.registration_id){
+    if(!response.ok){
+
+      throw new Error(
+        result.error ||
+        result.message ||
+        "Registration could not be submitted."
+      );
+
+    }
+
+
+    /*
+      PHOTO UPLOAD
+    */
+
+    let photoMessage = "";
+
+    if(selectedPhoto && result.id){
+
       const photoData = new FormData();
-      photoData.append("photo", photo);
 
-      const photoRes = await fetch(
-        "/api/public/member-registration/" + result.id + "/photo",
+      photoData.append(
+        "photo",
+        selectedPhoto,
+        selectedPhoto.name
+      );
+
+
+      const photoResponse = await fetch(
+        "/api/public/member-registration/" +
+        encodeURIComponent(result.id) +
+        "/photo",
         {
           method:"POST",
-          body:photoData
+          body:photoData,
+          headers:{
+            "Accept":"application/json"
+          }
         }
       );
 
-      if(!photoRes.ok){
-        const photoResult = await photoRes.json().catch(()=>({}));
-        throw new Error(
-          "Registration was submitted, but the photo could not be uploaded: " +
-          (photoResult.error || "Unknown error")
-        );
+
+      const photoRaw = await photoResponse.text();
+
+      let photoResult = {};
+
+      try{
+        photoResult = JSON.parse(photoRaw);
+      }catch(error){
+        photoResult = {};
       }
+
+
+      if(!photoResponse.ok){
+
+        photoMessage =
+          photoResult.error ||
+          photoResult.message ||
+          "The registration was saved, but the photo could not be uploaded.";
+
+      }
+
     }
 
-    message.className="message success";
-    message.style.display="block";
-    message.innerHTML =
-      "<b>Registration submitted successfully.</b><br>" +
-      "Registration ID: <b>"+result.registration_id+"</b><br>" +
-      "Status: <b>Pending</b><br><br>" +
-      "Please keep your Registration ID for reference.";
+
+    let successHtml =
+      "<strong>Registration submitted successfully.</strong><br><br>" +
+
+      "Registration ID: " +
+      "<strong>" +
+      (result.registration_id || "Generated") +
+      "</strong><br><br>" +
+
+      "Status: <strong>Pending</strong><br><br>" +
+
+      "Please keep your Registration ID safely. " +
+      "An authorized church officer must review and approve your registration.";
+
+
+    if(photoMessage){
+
+      successHtml +=
+        "<br><br><strong>Photo notice:</strong> " +
+        photoMessage;
+
+    }else if(selectedPhoto){
+
+      successHtml +=
+        "<br><br>📷 Your passport/selfie photo was uploaded successfully.";
+
+    }
+
+
+    showMessage("success", successHtml);
+
 
     form.reset();
-    church.innerHTML='<option value="">Select Circuit First</option>';
 
-  }catch(err){
-    message.className="message error";
-    message.style.display="block";
-    message.textContent=err.message;
+    selectedPhoto = null;
+
+    cameraInput.value = "";
+    fileInput.value = "";
+
+    photoPreview.removeAttribute("src");
+    photoPreview.style.display = "none";
+    photoEmpty.style.display = "block";
+
+    church.innerHTML =
+      '<option value="">Select Circuit First</option>';
+
+    church.disabled = true;
+
+    churchStatus.textContent =
+      "Select a Circuit to load the Local Churches.";
+
+
+    window.scrollTo({
+      top:0,
+      behavior:"smooth"
+    });
+
+
+  }catch(error){
+
+    console.error("Registration error:", error);
+
+    showMessage(
+      "error",
+      "<strong>Registration failed.</strong><br><br>" +
+      (error.message ||
+       "Unable to submit the registration. Please try again.")
+    );
+
   }finally{
-    submitBtn.disabled=false;
-    submitBtn.textContent="Submit Registration";
+
+    submitButton.disabled = false;
+    submitButton.textContent = "Submit Registration";
+
   }
+
 });
+
+
+/* -------------------------------------------------------
+   INITIAL STATE
+------------------------------------------------------- */
+
+church.disabled = true;
+
+
+/*
+   We deliberately DO NOT automatically select a Circuit.
+   The member must choose their own Circuit.
+*/
+
+
+})();
 </script>
 
 </body>
