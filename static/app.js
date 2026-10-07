@@ -186,13 +186,122 @@ document.addEventListener("submit",async function(e){
 
 
 async function api(url,opts={}){let r;try{r=await fetch(url,{headers:{"Content-Type":"application/json",...(opts.headers||{})},...opts})}catch(e){throw Error("Cannot connect to the app server. Make sure Flask is running in Termux.")}const raw=await r.text();let d={};try{d=raw?JSON.parse(raw):{}}catch(e){}if(r.status===401){location.href="/login";throw Error("Authentication required")};if(r.status===403&&d.code==="PASSWORD_CHANGE_REQUIRED"){location.href="/change-password";throw Error(d.error)};if(!r.ok)throw Error((d.error||`Request failed (HTTP ${r.status})`)+(d.detail?` — ${d.detail}`:""));return d}
-function canPage(page){if(!me)return false;if(page==="dashboard")return true;if(page==="security"||page==="system_health")return ["Admin","Auditor"].includes(me.role);if(page==="users")return me.role==="Admin";if(page==="audit")return ["Admin","Auditor","Bishop / Diocesan Executive"].includes(me.role);if(["commitments","income","expenses","equipment","sponsors","trust_fund","mission_budgets","procurement_requests"].includes(page))return ["Admin","Finance Officer","Auditor","Evangelism Minister"].includes(me.role);return true}
+function canPage(page){
+  if(!me)return false;
+
+  const role = me.role;
+
+  const access = {
+    Admin: [
+      "dashboard","communications","conference","command_centre","churches",
+      "members","mission_teams","mission_contacts","testimonies","appreciations",
+      "commitments","income","church_accounts","online_giving","payment_management",
+      "payment_reconciliation","finance_summary","financial_accountability","expenses",
+      "equipment","trust_fund","mission_budgets","procurement_requests","planting_prospects",
+      "church_plants","outreach","mission_calendar","sponsors","report_periods",
+      "circuit_reports","action_points","meetings","diocesan_reviews","reports",
+      "users","audit","security","system_health"
+    ],
+
+    "Member": [
+      "dashboard","communications","conference","online_giving","reports"
+    ],
+
+    "Bishop / Diocesan Executive": [
+      "dashboard","communications","conference","command_centre","churches",
+      "members","mission_teams","mission_contacts","testimonies","appreciations",
+      "planting_prospects","church_plants","outreach","mission_calendar",
+      "report_periods","circuit_reports","action_points","meetings","diocesan_reviews",
+      "reports","audit"
+    ],
+
+    "Evangelism Minister": [
+      "dashboard","communications","conference","command_centre","churches",
+      "members","mission_teams","mission_contacts","testimonies","appreciations",
+      "commitments","income","expenses","equipment","sponsors","trust_fund",
+      "mission_budgets","procurement_requests","planting_prospects","church_plants",
+      "outreach","mission_calendar","report_periods","circuit_reports",
+      "action_points","meetings","diocesan_reviews","reports"
+    ],
+
+    "Planting Officer": [
+      "dashboard","communications","conference","command_centre","churches",
+      "members","mission_teams","mission_contacts","testimonies","appreciations",
+      "planting_prospects","church_plants","outreach","mission_calendar",
+      "reports"
+    ],
+
+    "Diocesan Secretary": [
+      "dashboard","communications","conference","command_centre","churches",
+      "members","report_periods","circuit_reports","action_points","meetings",
+      "diocesan_reviews","reports"
+    ],
+
+    "Circuit Coordinator": [
+      "dashboard","communications","conference","command_centre","churches",
+      "members","mission_teams","mission_contacts","testimonies","appreciations",
+      "planting_prospects","church_plants","outreach","mission_calendar",
+      "action_points","reports"
+    ],
+
+    "Local Church Evangelism Officer": [
+      "dashboard","communications","conference","churches","members",
+      "mission_teams","mission_contacts","testimonies","appreciations",
+      "planting_prospects","outreach","mission_calendar","reports"
+    ],
+
+    "Finance Officer": [
+      "dashboard","communications","conference","churches","members",
+      "commitments","income","church_accounts","online_giving","payment_management",
+      "payment_reconciliation","finance_summary","financial_accountability",
+      "expenses","equipment","sponsors","trust_fund","mission_budgets",
+      "procurement_requests","reports"
+    ],
+
+    "Auditor": [
+      "dashboard","communications","conference","command_centre","churches",
+      "members","testimonies","appreciations","commitments","income",
+      "expenses","equipment","sponsors","trust_fund","mission_budgets",
+      "procurement_requests","report_periods","circuit_reports","action_points",
+      "meetings","diocesan_reviews","reports","audit","security","system_health"
+    ]
+  };
+
+  return (access[role] || []).includes(page);
+}
+
+function configureNav(){
+  document.querySelectorAll("nav button[data-page]").forEach(b=>{
+    b.hidden=!canPage(b.dataset.page);
+  });
+
+  $("#exportBtn").hidden=!([
+    "Admin",
+    "Finance Officer",
+    "Auditor",
+    "Evangelism Minister",
+    "Bishop / Diocesan Executive"
+  ].includes(me.role));
+
+  $("#backupBtn").hidden=!([
+    "Admin",
+    "Auditor"
+  ].includes(me.role));
+
+  $("#whoami").textContent=
+    `Signed in: ${me.username} · ${me.role}`+
+    `${me.circuit?" · "+me.circuit:""}`+
+    `${me.church_name?" · "+me.church_name:""}`;
+
+  $("#userLine").textContent=
+    `${me.role}${me.circuit?" · "+me.circuit:""}`;
+}
+
 function nav(page){if(!canPage(page))return;current=page;document.querySelectorAll("#menuPanel button[data-page]").forEach(b=>b.classList.toggle("active",b.dataset.page===page));const chosen=document.querySelector(`#menuPanel button[data-page="${page}"]`);if(chosen){const label=$("#menuCurrent");if(label)label.textContent=chosen.textContent.trim();}closeMenu();document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));if(page==="dashboard"){$("#dashboard").classList.add("active");loadDashboard();loadReportingSummary();loadConnection()}else if(page==="command_centre"){$("#command_centre").classList.add("active");loadCommandCentre()}else if(page==="communications"){$("#communications").classList.add("active");loadCommunications()}else if(page==="customer_care"){$("#customer_care").classList.add("active");loadCustomerCare()}else if(page==="conference"){$("#conference").classList.add("active");loadConference()}else if(page==="reports"){$("#reports").classList.add("active");loadReports()}else if(page==="security"){$("#security").classList.add("active");loadSecurityCentre()}else if(page==="system_health"){$("#system_health").classList.add("active");loadSystemHealth()}else if(page==="online_giving"){$("#online_giving").classList.add("active");loadOnlineGiving()}else if(page==="payment_management"){$("#payment_management").classList.add("active");loadPaymentManagement()}else if(page==="payment_reconciliation"){$("#payment_reconciliation").classList.add("active");loadPaymentReconciliation()}else if(page==="finance_summary"){$("#finance_summary").classList.add("active");loadFinanceSummary()}else if(page==="financial_accountability"){$("#financial_accountability").classList.add("active");loadFinancialAccountabilityReport()}else{$("#dataPage").classList.add("active");$("#sectionTitle").textContent=labels[page];$("#sectionEyebrow").textContent=page==="audit"?"SECURITY & ACCOUNTABILITY":page==="users"?"SECURE ACCESS":"MANAGE RECORDS";$("#formWrap").hidden=true;$("#search").value="";$("#addBtn").hidden=page==="audit"||me.role==="Auditor";loadTable();if(page==="members")loadMemberRegistrations();else if(page==="users")loadAccountRequests();else{if($("#memberRegistrationsPanel"))$("#memberRegistrationsPanel").hidden=true;if($("#accountRequestsPanel"))$("#accountRequestsPanel").hidden=true}}}
 document.querySelectorAll("#menuPanel button[data-page]").forEach(b=>b.addEventListener("click",()=>nav(b.dataset.page)));
 function closeMenu(){const panel=$("#menuPanel"),toggle=$("#menuToggle");if(panel)panel.classList.remove("open");if(toggle){toggle.setAttribute("aria-expanded","false")}}
 $("#menuToggle")?.addEventListener("click",()=>{const panel=$("#menuPanel"),toggle=$("#menuToggle");if(!panel||!toggle)return;const open=panel.classList.toggle("open");toggle.setAttribute("aria-expanded",String(open))});
 document.addEventListener("click",e=>{if(!e.target.closest(".nav-dropdown"))closeMenu()});
-function configureNav(){document.querySelectorAll("nav button[data-role]").forEach(b=>{const r=b.dataset.role;b.hidden=(r==="admin"&&me.role!=="Admin")||(r==="audit"&&!( ["Admin","Auditor","Bishop / Diocesan Executive"].includes(me.role)))||(r==="finance"&&!( ["Admin","Finance Officer","Auditor","Evangelism Minister"].includes(me.role)))||(r==="mission"&&!( ["Admin","Evangelism Minister","Planting Officer","Circuit Coordinator","Local Church Evangelism Officer"].includes(me.role)))||(r==="membership"&&!( ["Admin","Evangelism Minister","Planting Officer","Circuit Coordinator","Local Church Evangelism Officer","Finance Officer","Auditor"].includes(me.role)))||(r==="reporting"&&!( ["Admin","Evangelism Minister","Planting Officer","Diocesan Secretary","Circuit Coordinator","Bishop / Diocesan Executive","Auditor"].includes(me.role)));});$("#exportBtn").hidden=!( ["Admin","Finance Officer","Auditor","Evangelism Minister","Bishop / Diocesan Executive"].includes(me.role));$("#backupBtn").hidden=!( ["Admin","Auditor"].includes(me.role));$("#whoami").textContent=`Signed in: ${me.username} · ${me.role}${me.circuit?" · "+me.circuit:""}${me.church_name?" · "+me.church_name:""}`;$("#userLine").textContent=`${me.role}${me.circuit?" · "+me.circuit:""}`}
 async function loadMe(){me=await api("/api/me");configureNav()}
 async function loadConnection(){try{const d=await api("/api/connection");$("#connectionUrl").textContent=d.url;$("#connectionStatus").textContent="Other phones must be on the same Wi-Fi or hotspot.";const img=$("#connectionQrImg");img.src="/api/qr?ts="+Date.now();img.onload=()=>$(".qr-box").classList.add("ready");img.onerror=()=>{$("#connectionStatus").textContent="QR image could not be loaded."}}catch(e){$("#connectionUrl").textContent="Unable to detect host address";$("#connectionStatus").textContent=e.message}}
 $("#copyUrlBtn").onclick=async()=>{const url=$("#connectionUrl").textContent;if(!url.startsWith("http"))return;try{await navigator.clipboard.writeText(url);$("#copyUrlBtn").textContent="Copied";setTimeout(()=>$("#copyUrlBtn").textContent="Copy address",1500)}catch(e){alert("Copy failed. Long-press the address to copy it.")}};
