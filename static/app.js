@@ -3632,10 +3632,37 @@ window.DSConferenceCall = {
       this.pc.onicecandidate = async event => {
         if (!event.candidate) return;
 
+        console.log("DS WebRTC ICE candidate:", event.candidate.candidate);
+
         await this.sendSignal(
           "ice",
           "",
           event.candidate.toJSON()
+        );
+      };
+
+      this.pc.oniceconnectionstatechange = () => {
+        console.log(
+          "DS WebRTC ICE connection state:",
+          this.pc.iceConnectionState
+        );
+
+        this.setCallStatus(
+          "Connection: " + this.pc.iceConnectionState
+        );
+      };
+
+      this.pc.onconnectionstatechange = () => {
+        console.log(
+          "DS WebRTC peer connection state:",
+          this.pc.connectionState
+        );
+      };
+
+      this.pc.onicegatheringstatechange = () => {
+        console.log(
+          "DS WebRTC ICE gathering state:",
+          this.pc.iceGatheringState
         );
       };
 
