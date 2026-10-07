@@ -733,7 +733,39 @@ def current_user():
     uid = session.get("user_id")
     if not uid:
         return None
-    return db().execute("SELECT id,username,password,role,circuit,church_name,active,must_change_password,created_at,member_id FROM users WHERE id=?", (uid,)).fetchone()
+
+    user = db().execute(
+        "SELECT id,username,password,role,circuit,church_name,active,must_change_password,created_at,member_id "
+        "FROM users WHERE id=?",
+        (uid,)
+    ).fetchone()
+
+    if not user:
+        return None
+
+    # Normalize Member portal links. Older accounts may contain the
+    # official member code (for example DSD-OTH-0005) instead of
+    # the numeric members.id expected by the portal APIs.
+    if user["role"] == "Member" and user["member_id"]:
+        member = db().execute(
+            "SELECT id FROM members WHERE id=? OR member_id=? LIMIT 1",
+            (user["member_id"], str(user["member_id"]))
+        ).fetchone()
+
+        if member and str(user["member_id"]) != str(member["id"]):
+            db().execute(
+                "UPDATE users SET member_id=? WHERE id=?",
+                (member["id"], user["id"])
+            )
+            db().commit()
+
+            user = db().execute(
+                "SELECT id,username,password,role,circuit,church_name,active,"
+                "must_change_password,created_at,member_id FROM users WHERE id=?",
+                (uid,)
+            ).fetchone()
+
+    return user
 
 
 def audit(action, table, rid=None, details=""):
