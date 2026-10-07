@@ -74,6 +74,30 @@ main{max-width:1100px;margin:auto;padding:18px}
   opacity:.75;
 }
 
+
+/* Mobile Member Portal sidebar: keep all menu items reachable */
+@media(max-width:850px){
+  .member-sidebar{
+    max-height:calc(100dvh - 72px);
+    overflow-y:auto;
+    overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior:contain;
+  }
+
+  .member-nav{
+    padding-bottom:4px;
+  }
+
+  .member-nav .nav-danger{
+    position:sticky;
+    bottom:0;
+    z-index:5;
+    background:#fff;
+    box-shadow:0 -4px 10px rgba(0,0,0,.08);
+  }
+}
+
 </style>
 
 <style>
