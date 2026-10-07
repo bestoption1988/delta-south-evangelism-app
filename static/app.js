@@ -3622,6 +3622,9 @@ window.DSConferenceCall = {
         ]
       });
 
+      this.remoteStream = new MediaStream();
+      this.pendingIceCandidates = [];
+
       this.localStream.getTracks().forEach(track => {
         this.pc.addTrack(track, this.localStream);
       });
@@ -3637,17 +3640,64 @@ window.DSConferenceCall = {
       };
 
       this.pc.ontrack = event => {
-        const remote = document.querySelector("#conferenceRemoteVideo");
-        if (!remote) return;
+        if (!this.remoteStream) {
+          this.remoteStream = new MediaStream();
+        }
 
-        if (event.streams && event.streams[0]) {
-          remote.srcObject = event.streams[0];
+        if (
+          event.track &&
+          !this.remoteStream.getTracks().some(
+            track => track.id === event.track.id
+          )
+        ) {
+          this.remoteStream.addTrack(event.track);
+        }
+
+        const remote = document.querySelector("#conferenceRemoteVideo");
+
+        if (remote) {
+          remote.srcObject = this.remoteStream;
+          remote.autoplay = true;
+          remote.playsInline = true;
           remote.muted = false;
-          remote.volume = 0.35;
+          remote.volume = 1;
+
           remote.play().catch(error => {
-            console.warn("Remote media autoplay was blocked:", error);
+            console.warn(
+              "Remote video/audio autoplay was blocked:",
+              error
+            );
           });
         }
+
+        let audio = document.querySelector("#conferenceRemoteAudio");
+
+        if (!audio) {
+          audio = document.createElement("audio");
+          audio.id = "conferenceRemoteAudio";
+          audio.autoplay = true;
+          audio.playsInline = true;
+          audio.controls = false;
+          audio.style.position = "fixed";
+          audio.style.width = "1px";
+          audio.style.height = "1px";
+          audio.style.opacity = "0";
+          audio.style.pointerEvents = "none";
+          audio.style.left = "-10px";
+          audio.style.top = "-10px";
+          document.body.appendChild(audio);
+        }
+
+        audio.srcObject = this.remoteStream;
+        audio.muted = false;
+        audio.volume = 1;
+
+        audio.play().catch(error => {
+          console.warn(
+            "Remote audio autoplay was blocked:",
+            error
+          );
+        });
       };
 
       const local = document.querySelector("#conferenceLocalVideo");
@@ -3758,6 +3808,25 @@ window.DSConferenceCall = {
     }
   },
 
+  async flushPendingIceCandidates() {
+    if (!this.pc || !this.pc.remoteDescription) return;
+
+    const pending = this.pendingIceCandidates.splice(0);
+
+    for (const candidate of pending) {
+      try {
+        await this.pc.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
+      } catch (error) {
+        console.warn(
+          "Queued ICE candidate could not be added:",
+          error
+        );
+      }
+    }
+  },
+
   async handleSignal(signal) {
     if (!this.pc) return;
 
@@ -3797,6 +3866,8 @@ window.DSConferenceCall = {
           new RTCSessionDescription(payload)
         );
 
+        await this.flushPendingIceCandidates();
+
         const answer = await this.pc.createAnswer();
 
         await this.pc.setLocalDescription(answer);
@@ -3820,6 +3891,8 @@ window.DSConferenceCall = {
         new RTCSessionDescription(payload)
       );
 
+      await this.flushPendingIceCandidates();
+
       return;
     }
 
@@ -3827,6 +3900,11 @@ window.DSConferenceCall = {
       signal.signal_type === "ice" &&
       payload
     ) {
+      if (!this.pc.remoteDescription) {
+        this.pendingIceCandidates.push(payload);
+        return;
+      }
+
       try {
         await this.pc.addIceCandidate(
           new RTCIceCandidate(payload)
@@ -3907,6 +3985,8 @@ window.DSConferenceCall = {
 
     this.localStream = null;
     this.pc = null;
+    this.remoteStream = null;
+    this.pendingIceCandidates = [];
     this.active = false;
 
     const local =
