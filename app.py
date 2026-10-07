@@ -3196,7 +3196,7 @@ def api_church_accounts():
     q="SELECT * FROM church_accounts WHERE active=1"; args=()
     if role=="Circuit Coordinator": q+=" AND account_level=? AND circuit=?"; args=("Circuit",u["circuit"])
     elif role=="Local Church Evangelism Officer": q+=" AND account_level=? AND circuit=? AND church_name=?"; args=("Local Church",u["circuit"],u["church_name"])
-    elif role not in {"Admin","Finance Officer","Evangelism Minister","Auditor","Bishop / Diocesan Executive","Diocesan Secretary"}: return jsonify({"error":"Not authorized"}),403
+    elif role not in {"Admin","Finance Officer","Evangelism Minister","Auditor","Bishop / Diocesan Executive","Diocesan Secretary","Member"}: return jsonify({"error":"Not authorized"}),403
     q+=" ORDER BY account_level,circuit,church_name,id DESC"
     return jsonify([dict(r) for r in db().execute(q,args).fetchall()])
 @app.get("/api/conference")

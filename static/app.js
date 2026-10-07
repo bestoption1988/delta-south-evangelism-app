@@ -271,8 +271,8 @@ function canPage(page){
 }
 
 function configureNav(){
-  document.querySelectorAll("nav button[data-page]").forEach(b=>{
-    b.hidden=!canPage(b.dataset.page);
+  document.querySelectorAll("#menuPanel button[data-page]").forEach(b=>{
+    const allowed=canPage(b.dataset.page);b.hidden=!allowed;b.style.display=allowed?"":"none";
   });
 
   $("#exportBtn").hidden=!([

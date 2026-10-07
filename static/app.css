@@ -2477,3 +2477,513 @@ html,body{
     z-index:5002 !important;
   }
 }
+
+/* Member Portal - Payment History */
+.member-history-card{
+  width:100%;
+  padding:22px;
+  border-radius:18px;
+}
+
+.member-history-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:18px;
+}
+
+.member-history-head h2{
+  margin:0 0 5px;
+}
+
+.member-history-head p{
+  margin:0;
+  color:#687078;
+  font-size:14px;
+}
+
+.member-history-total{
+  min-width:150px;
+  padding:12px 16px;
+  border-radius:14px;
+  background:#f5f7fa;
+  text-align:right;
+}
+
+.member-history-total span{
+  display:block;
+  font-size:12px;
+  color:#687078;
+}
+
+.member-history-total strong{
+  display:block;
+  margin-top:3px;
+  font-size:20px;
+}
+
+.member-payment-item{
+  position:relative;
+  padding:16px;
+  margin:10px 0;
+  border:1px solid #e3e7ea;
+  border-radius:15px;
+  background:#fff;
+}
+
+.member-payment-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:15px;
+}
+
+.member-payment-purpose{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:0;
+}
+
+.member-payment-icon{
+  width:42px;
+  height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:12px;
+  background:#f0f7f2;
+  flex:none;
+}
+
+.member-payment-purpose strong{
+  display:block;
+  overflow-wrap:anywhere;
+}
+
+.member-payment-purpose small{
+  display:block;
+  margin-top:3px;
+  color:#687078;
+}
+
+.member-payment-amount{
+  white-space:nowrap;
+  font-size:17px;
+}
+
+.member-payment-details{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:13px;
+  padding-top:12px;
+  border-top:1px solid #eef0f2;
+}
+
+.member-payment-details span{
+  padding:6px 9px;
+  border-radius:8px;
+  background:#f7f8f9;
+  color:#555;
+  font-size:12px;
+  overflow-wrap:anywhere;
+}
+
+.member-payment-status{
+  margin-top:10px;
+}
+
+.member-payment-status span{
+  display:inline-block;
+  padding:5px 9px;
+  border-radius:999px;
+  background:#eaf7ee;
+  font-size:12px;
+  font-weight:700;
+}
+
+.member-history-empty,
+.member-history-error,
+.member-history-loading{
+  padding:30px 18px;
+  text-align:center;
+  border-radius:14px;
+  background:#f7f8f9;
+}
+
+.member-history-empty-icon{
+  font-size:32px;
+  margin-bottom:8px;
+}
+
+.member-history-empty p,
+.member-history-error p{
+  margin:7px 0 0;
+  color:#687078;
+  font-size:14px;
+}
+
+@media(max-width:600px){
+  .member-history-card{
+    padding:16px;
+  }
+
+  .member-history-head{
+    display:block;
+  }
+
+  .member-history-total{
+    margin-top:14px;
+    text-align:left;
+    min-width:0;
+  }
+
+  .member-payment-top{
+    align-items:flex-start;
+  }
+
+  .member-payment-amount{
+    font-size:15px;
+  }
+
+  .member-payment-details{
+    display:block;
+  }
+
+  .member-payment-details span{
+    display:block;
+    margin-top:6px;
+  }
+}
+
+@media(max-width:380px){
+  .member-payment-top{
+    display:block;
+  }
+
+  .member-payment-amount{
+    display:block;
+    margin-top:9px;
+  }
+}
+
+
+/* Member Portal - Events & Conference */
+#member-events{
+  width:100%;
+}
+
+#member-events .panel-header{
+  margin-bottom:18px;
+}
+
+.member-event-card{
+  position:relative;
+  padding:18px;
+  margin:12px 0;
+  border:1px solid #e2e7e4;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 3px 12px rgba(0,0,0,.04);
+}
+
+.member-event-card .event-date{
+  display:inline-block;
+  padding:7px 11px;
+  border-radius:9px;
+  background:#f0f7f2;
+  font-size:13px;
+  font-weight:700;
+  margin-bottom:10px;
+}
+
+.member-event-card h3{
+  margin:0 0 12px;
+  font-size:18px;
+  overflow-wrap:anywhere;
+}
+
+.member-event-card .event-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  margin-bottom:12px;
+}
+
+.member-event-card .event-meta span{
+  padding:6px 9px;
+  border-radius:8px;
+  background:#f7f8f9;
+  color:#555;
+  font-size:12px;
+  overflow-wrap:anywhere;
+}
+
+.member-event-card p{
+  margin:8px 0;
+  line-height:1.5;
+  color:#4f5853;
+}
+
+.member-event-card p strong{
+  color:#26332b;
+}
+
+.member-event-card p:last-child{
+  margin-bottom:0;
+}
+
+@media(max-width:600px){
+  .member-event-card{
+    padding:15px;
+    border-radius:14px;
+  }
+
+  .member-event-card h3{
+    font-size:16px;
+  }
+
+  .member-event-card .event-meta{
+    display:block;
+  }
+
+  .member-event-card .event-meta span{
+    display:block;
+    margin-top:6px;
+  }
+}
+
+
+/* Member Portal - Documents & Certificates */
+#member-documents{
+  width:100%;
+}
+
+.member-document-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;
+  margin-top:18px;
+}
+
+.member-document-card{
+  display:flex;
+  gap:15px;
+  padding:18px;
+  border:1px solid #e2e7e4;
+  border-radius:16px;
+  background:#fff;
+}
+
+.member-document-icon{
+  width:48px;
+  height:48px;
+  flex:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:13px;
+  background:#f0f7f2;
+  font-size:24px;
+}
+
+.member-document-body{
+  min-width:0;
+}
+
+.member-document-body h3{
+  margin:0 0 7px;
+  font-size:17px;
+}
+
+.member-document-body p{
+  margin:0 0 14px;
+  color:#687078;
+  font-size:14px;
+  line-height:1.5;
+}
+
+.member-document-button{
+  display:inline-block;
+  min-height:42px;
+}
+
+.member-document-future{
+  background:#fafbfa;
+}
+
+.member-document-coming{
+  display:inline-block;
+  padding:6px 10px;
+  border-radius:999px;
+  background:#f1f3f4;
+  color:#687078;
+  font-size:12px;
+  font-weight:700;
+}
+
+@media(max-width:650px){
+  .member-document-grid{
+    grid-template-columns:1fr;
+  }
+
+  .member-document-card{
+    padding:16px;
+  }
+}
+
+
+/* Member Portal - My Church */
+#member-church{
+  width:100%;
+}
+
+.member-panel-subtitle{
+  margin:5px 0 0;
+  color:#687078;
+  font-size:14px;
+  line-height:1.5;
+}
+
+.member-church-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;
+  margin-top:18px;
+}
+
+.member-church-card{
+  display:flex;
+  align-items:center;
+  gap:15px;
+  padding:18px;
+  background:#fff;
+  border:1px solid #e2e7e4;
+  border-radius:16px;
+}
+
+.member-church-icon{
+  width:48px;
+  height:48px;
+  flex:none;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:13px;
+  background:#f0f7f2;
+  font-size:23px;
+}
+
+.member-church-card span,
+.member-church-info span{
+  display:block;
+  margin-bottom:5px;
+  color:#687078;
+  font-size:12px;
+  font-weight:600;
+}
+
+.member-church-card strong{
+  display:block;
+  color:#1f2933;
+  font-size:16px;
+  line-height:1.35;
+}
+
+.member-church-info{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:14px;
+  margin-top:16px;
+  padding:18px;
+  border-radius:16px;
+  background:#f7faf8;
+  border:1px solid #e5ebe7;
+}
+
+.member-church-info strong{
+  display:block;
+  color:#1f2933;
+  font-size:14px;
+}
+
+.member-church-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:18px;
+}
+
+.member-church-actions button{
+  min-height:42px;
+}
+
+@media(max-width:650px){
+  .member-church-grid{
+    grid-template-columns:1fr;
+  }
+
+  .member-church-info{
+    grid-template-columns:1fr;
+  }
+
+  .member-church-card{
+    padding:16px;
+  }
+}
+
+
+/* Member Portal - Church Records */
+#member-records{
+  width:100%;
+}
+
+#member-records .panel-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:12px;
+  flex-wrap:wrap;
+  margin-bottom:18px;
+}
+
+.member-record-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:16px;
+}
+
+.member-record-card{
+  padding:20px;
+  border:1px solid #e2e7e4;
+  border-radius:16px;
+  background:#fff;
+  box-shadow:0 2px 8px rgba(0,0,0,.03);
+}
+
+.member-record-card h3{
+  margin:0 0 14px;
+  font-size:17px;
+}
+
+.member-record-card div{
+  margin:7px 0;
+  color:#687078;
+  font-size:14px;
+}
+
+.member-record-card strong{
+  color:#1f2933;
+}
+
+@media(max-width:650px){
+  .member-record-grid{
+    grid-template-columns:1fr;
+  }
+
+  .member-record-card{
+    padding:16px;
+  }
+}

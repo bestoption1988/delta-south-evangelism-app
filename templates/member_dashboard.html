@@ -81,8 +81,419 @@ main{max-width:1100px;margin:auto;padding:18px}
   display:none !important;
 }
 </style>
+
+<style>
+/* RESPONSIVE ONLINE GIVING */
+#member-online-giving{
+  width:100%;
+}
+
+#member-online-giving .dashboard-card{
+  width:100%;
+  max-width:760px;
+  margin-left:auto;
+  margin-right:auto;
+  padding:22px;
+  border-radius:16px;
+}
+
+#member-online-giving h2{
+  font-size:24px;
+  line-height:1.25;
+}
+
+#member-online-giving label{
+  display:block;
+  font-size:14px;
+  font-weight:700;
+  color:#344054;
+}
+
+#member-online-giving input,
+#member-online-giving select{
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-height:46px;
+  box-sizing:border-box;
+  border:1px solid #d0d5dd;
+  border-radius:9px;
+  background:#fff;
+  color:#172033;
+  font-size:15px;
+}
+
+#member-online-giving button{
+  box-sizing:border-box;
+}
+
+@media(max-width:600px){
+
+  #member-online-giving{
+    margin-top:16px !important;
+    padding:0;
+  }
+
+  #member-online-giving .dashboard-card{
+    padding:16px;
+    border-radius:14px;
+    box-shadow:0 2px 10px rgba(0,0,0,.07);
+  }
+
+  #member-online-giving h2{
+    font-size:21px;
+    margin-top:0;
+  }
+
+  #member-online-giving p{
+    font-size:14px;
+    line-height:1.5;
+  }
+
+  #member-online-giving input,
+  #member-online-giving select{
+    min-height:44px;
+    padding:10px !important;
+    font-size:14px;
+    margin-top:5px !important;
+    margin-bottom:12px !important;
+  }
+
+  #member-online-giving label{
+    font-size:13px;
+  }
+
+  #member-payment-message{
+    font-size:13px;
+    line-height:1.45;
+  }
+
+  #member-pay-button{
+    min-height:48px;
+    font-size:14px !important;
+  }
+}
+
+@media(max-width:380px){
+
+  #member-online-giving .dashboard-card{
+    padding:13px;
+  }
+
+  #member-online-giving h2{
+    font-size:19px;
+  }
+
+  #member-online-giving input,
+  #member-online-giving select{
+    font-size:13px;
+  }
+}
+</style>
+
 </head>
 <body>
+<style>
+/* ===== PROFESSIONAL MEMBER PORTAL SHELL ===== */
+.member-topbar{
+  position:sticky;
+  top:0;
+  z-index:1000;
+  background:linear-gradient(135deg,#123b2a,#0b2b1e);
+  color:#fff;
+  box-shadow:0 3px 14px rgba(0,0,0,.18);
+}
+
+.member-topbar-inner{
+  max-width:1200px;
+  margin:auto;
+  min-height:72px;
+  padding:10px 18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:15px;
+}
+
+.member-brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.member-logo{
+  width:46px;
+  height:46px;
+  border-radius:50%;
+  background:#fff;
+  color:#123b2a;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:23px;
+  font-weight:900;
+}
+
+.member-brand-title{
+  font-size:15px;
+  font-weight:800;
+}
+
+.member-brand-sub{
+  font-size:11px;
+  opacity:.82;
+  margin-top:3px;
+}
+
+.member-menu-btn{
+  border:1px solid rgba(255,255,255,.25);
+  background:rgba(255,255,255,.1);
+  color:#fff;
+  width:44px;
+  height:44px;
+  border-radius:10px;
+  font-size:22px;
+  cursor:pointer;
+}
+
+.member-portal-layout{
+  max-width:1200px;
+  margin:auto;
+  display:flex;
+  gap:20px;
+  padding:20px;
+}
+
+.member-sidebar{
+  width:245px;
+  flex:none;
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:16px;
+  padding:12px;
+  height:max-content;
+  position:sticky;
+  top:92px;
+  box-shadow:0 3px 14px rgba(0,0,0,.06);
+}
+
+.member-sidebar-title{
+  padding:10px 12px;
+  font-size:12px;
+  font-weight:800;
+  color:#667085;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+
+.member-nav{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.member-nav button{
+  border:0;
+  background:transparent;
+  color:#344054;
+  text-align:left;
+  padding:11px 12px;
+  border-radius:9px;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:600;
+  width:100%;
+}
+
+.member-nav button:hover,
+.member-nav button.active{
+  background:#eaf4ee;
+  color:#123b2a;
+}
+
+.member-nav .nav-danger{
+  color:#a12626;
+}
+
+.member-portal-main{
+  min-width:0;
+  flex:1;
+}
+
+.member-welcome{
+  background:linear-gradient(135deg,#123b2a,#1b5e20);
+  color:#fff;
+  border-radius:18px;
+  padding:24px;
+  margin-bottom:20px;
+  box-shadow:0 5px 18px rgba(0,0,0,.12);
+}
+
+.member-welcome h1{
+  margin:0;
+  font-size:25px;
+}
+
+.member-welcome p{
+  margin:7px 0 0;
+  opacity:.9;
+}
+
+.member-quick-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:12px;
+  margin-top:18px;
+}
+
+.member-quick-card{
+  background:rgba(255,255,255,.12);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:12px;
+  padding:13px;
+}
+
+.member-quick-card small{
+  display:block;
+  opacity:.8;
+  font-size:11px;
+}
+
+.member-quick-card strong{
+  display:block;
+  margin-top:4px;
+  font-size:14px;
+}
+
+@media(max-width:850px){
+  .member-portal-layout{
+    display:block;
+    padding:12px;
+  }
+
+  .member-sidebar{
+    position:fixed;
+    z-index:1100;
+    left:0;
+    top:72px;
+    bottom:0;
+    width:280px;
+    border-radius:0 16px 16px 0;
+    transform:translateX(-105%);
+    transition:transform .2s ease;
+    overflow-y:auto;
+  }
+
+  .member-sidebar.open{
+    transform:translateX(0);
+  }
+
+  .member-quick-grid{
+    grid-template-columns:repeat(2,1fr);
+  }
+}
+
+@media(max-width:480px){
+  .member-brand-title{
+    font-size:13px;
+  }
+
+  .member-brand-sub{
+    font-size:10px;
+  }
+
+  .member-welcome{
+    padding:18px;
+  }
+
+  .member-welcome h1{
+    font-size:21px;
+  }
+}
+</style>
+
+<header class="member-topbar">
+  <div class="member-topbar-inner">
+
+    <div class="member-brand">
+      <div class="member-logo">✝</div>
+      <div>
+        <div class="member-brand-title">METHODIST CHURCH NIGERIA</div>
+        <div class="member-brand-sub">Delta South Diocese · Member Portal</div>
+      </div>
+    </div>
+
+    <button type="button"
+            class="member-menu-btn"
+            onclick="toggleMemberMenu()"
+            aria-label="Open member menu">
+      ☰
+    </button>
+
+  </div>
+</header>
+
+<div class="member-portal-layout">
+
+  <aside id="member-sidebar" class="member-sidebar">
+
+    <div class="member-sidebar-title">Member Portal</div>
+
+    <nav class="member-nav">
+
+      <button class="active" onclick="memberGo('dashboard',this)">🏠 Dashboard</button>
+      <button onclick="memberGo('profile',this)">👤 My Profile</button>
+      <button onclick="memberGo('church',this)">⛪ My Church</button>
+      <button onclick="memberGo('records',this)">📋 Church Records</button>
+      <button onclick="memberGo('idcard',this)">🪪 My ID Card</button>
+      <button onclick="memberGo('documents',this)">📄 Documents & Certificates</button>
+      <button onclick="memberGo('giving',this)">💰 Online Giving</button>
+      <button onclick="memberGo('payments',this)">💳 Payment History</button>
+      <button onclick="memberGo('attendance',this)">📊 Attendance</button>
+      <button onclick="memberGo('testimonies',this)">🙏 Testimonies</button>
+      <button onclick="memberGo('appreciation',this)">🌟 Appreciation</button>
+      <button onclick="memberGo('announcements',this)">📢 Announcements</button>
+      <button onclick="memberGo('events',this)">📅 Events & Conference</button>
+      <button onclick="memberGo('notifications',this)">🔔 Notifications</button>
+      <button onclick="memberGo('care',this)">🤝 Member Care</button>
+      <button onclick="memberGo('account',this)">⚙️ Account</button>
+      <button class="nav-danger" onclick="window.location.href='/logout'">🚪 Logout</button>
+
+    </nav>
+  </aside>
+
+  <main class="member-portal-main">
+
+    <section class="member-welcome">
+      <h1>Welcome to Your Member Portal</h1>
+      <p>Access your Methodist Church Nigeria membership services and records.</p>
+
+      <div class="member-quick-grid">
+
+        <div class="member-quick-card">
+          <small>Member ID</small>
+          <strong id="portal-member-id">Loading...</strong>
+        </div>
+
+        <div class="member-quick-card">
+          <small>Local Church</small>
+          <strong id="portal-church">Loading...</strong>
+        </div>
+
+        <div class="member-quick-card">
+          <small>Circuit</small>
+          <strong id="portal-circuit">Loading...</strong>
+        </div>
+
+        <div class="member-quick-card">
+          <small>Fellowship</small>
+          <strong id="portal-fellowship">Loading...</strong>
+        </div>
+
+      </div>
+    </section>
+
+
 
 <header>
 <h1>Member Self-Service Dashboard</h1>
@@ -382,9 +793,36 @@ function hideMemberCareForm(){
 loadMemberCareRequests();
 </script>
 
+
 </main>
+</div>
+
 
 <script>
+
+async function loadMemberChurch(){
+  try{
+    const r=await fetch("/api/member/me");
+    const data=await r.json();
+    if(!r.ok) return;
+
+    const set=(id,v)=>{
+      const el=document.getElementById(id);
+      if(el) el.textContent=v || "—";
+    };
+
+    set("church-page-name",data.church_name);
+    set("church-page-circuit",data.circuit);
+    set("church-page-fellowship",data.fellowship);
+    set("church-page-position",data.role_position || "Member");
+    set("church-page-member-id",data.member_id);
+  }catch(e){
+    console.error("My Church:",e);
+  }
+}
+
+loadMemberChurch();
+
 async function loadMember(){
 try{
 const response=await fetch("/api/member/me");
@@ -479,7 +917,7 @@ loadMemberAppreciations();
 
 <section id="member-id-card" style="margin-top:24px;">
   <div class="dashboard-card">
-    <h2>🪪 My Member ID Card</h2>
+    <h2>&#128717; My Member ID Card</h2>
 
     <div id="id-card-preview"
          style="max-width:430px;margin:18px auto;padding:22px;border-radius:16px;
@@ -559,7 +997,7 @@ async function loadMemberIDCard() {
 
     if (data.passport_photo) {
       const img=document.getElementById("id-photo");
-      img.src=data.passport_photo;
+      img.src="/api/member-registration-photo/" + encodeURIComponent(String(data.passport_photo).split("/").pop());
       img.style.display="block";
       document.getElementById("id-photo-placeholder").style.display="none";
     }
@@ -601,6 +1039,151 @@ loadMemberIDCard();
 
 
 
+<section id="member-documents" class="member-panel">
+  <div class="panel-header">
+    <div>
+      <h2>📄 Documents & Certificates</h2>
+      <p class="panel-subtitle">
+        Access your official church documents and certificates.
+      </p>
+    </div>
+    <span class="panel-badge">Documents</span>
+  </div>
+
+  <div class="member-document-grid">
+
+    <div class="member-document-card">
+      <div class="member-document-icon">📜</div>
+      <div class="member-document-body">
+        <h3>Member Record Certificate</h3>
+        <p>
+          Official confirmation of your membership record in
+          Methodist Church Nigeria, Delta South Diocese.
+        </p>
+        <a
+          href="/member/certificate"
+          target="_blank"
+          class="btn btn-primary member-document-button">
+          📥 Download Certificate
+        </a>
+      </div>
+    </div>
+
+    <div class="member-document-card">
+      <div class="member-document-icon">🪪</div>
+      <div class="member-document-body">
+        <h3>Member ID Card</h3>
+        <p>
+          View your official member identification card and print
+          it when needed.
+        </p>
+        <button
+          type="button"
+          class="btn btn-primary member-document-button"
+          onclick="memberGo('idcard',this)">
+          🪪 View ID Card
+        </button>
+      </div>
+    </div>
+
+    <div class="member-document-card">
+      <div class="member-document-icon">📋</div>
+      <div class="member-document-body">
+        <h3>Church Records</h3>
+        <p>
+          View your baptism, confirmation, marriage, transfer and
+          relocation records.
+        </p>
+        <button
+          type="button"
+          class="btn btn-primary member-document-button"
+          onclick="memberGo('records',this)">
+          📋 View Church Records
+        </button>
+      </div>
+    </div>
+
+    <div class="member-document-card member-document-future">
+      <div class="member-document-icon">📁</div>
+      <div class="member-document-body">
+        <h3>Church-Issued Documents</h3>
+        <p>
+          Additional certificates and documents issued by the
+          Diocese or Local Church will appear here.
+        </p>
+        <span class="member-document-coming">
+          Coming as issued
+        </span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="member-church" class="member-panel">
+  <div class="panel-header">
+    <div>
+      <h2>⛪ My Church</h2>
+      <p class="member-panel-subtitle">Your current Methodist Church Nigeria membership location and fellowship.</p>
+    </div>
+    <span class="panel-badge">Current Membership</span>
+  </div>
+
+  <div class="member-church-grid">
+    <div class="member-church-card">
+      <div class="member-church-icon">⛪</div>
+      <div>
+        <span>Local Church</span>
+        <strong id="church-page-name">—</strong>
+      </div>
+    </div>
+
+    <div class="member-church-card">
+      <div class="member-church-icon">🏛️</div>
+      <div>
+        <span>Circuit</span>
+        <strong id="church-page-circuit">—</strong>
+      </div>
+    </div>
+
+    <div class="member-church-card">
+      <div class="member-church-icon">🙏</div>
+      <div>
+        <span>Fellowship</span>
+        <strong id="church-page-fellowship">—</strong>
+      </div>
+    </div>
+
+    <div class="member-church-card">
+      <div class="member-church-icon">👤</div>
+      <div>
+        <span>Church Position</span>
+        <strong id="church-page-position">—</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="member-church-info">
+    <div>
+      <span>Member ID</span>
+      <strong id="church-page-member-id">—</strong>
+    </div>
+    <div>
+      <span>Diocese</span>
+      <strong>Delta South Diocese</strong>
+    </div>
+    <div>
+      <span>Denomination</span>
+      <strong>Methodist Church Nigeria</strong>
+    </div>
+  </div>
+
+  <div class="member-church-actions">
+    <button type="button" onclick="memberGo('records',this)">📋 View Church Records</button>
+    <button type="button" onclick="showMemberCareForm()">🤝 Contact Member Care</button>
+  </div>
+</section>
+
 <section id="member-records" class="member-panel"><div class="panel-header"><h2>My Church Records</h2><span class="panel-badge">Official Record</span></div><div class="member-record-grid"><div class="member-record-card"><h3>Baptism</h3><div>Status: <strong id="record-baptism-status">—</strong></div><div>Date: <span id="record-baptism-date">—</span></div></div><div class="member-record-card"><h3>Confirmation</h3><div>Status: <strong id="record-confirmation-status">—</strong></div><div>Date: <span id="record-confirmation-date">—</span></div></div><div class="member-record-card"><h3>Marriage</h3><div>Status: <strong id="record-marriage-status">—</strong></div><div>Date: <span id="record-marriage-date">—</span></div></div><div class="member-record-card"><h3>Transfer</h3><div>Status: <strong id="record-transfer-status">—</strong></div><div>From: <span id="record-transfer-from">—</span></div><div>To: <span id="record-transfer-to">—</span></div></div><div class="member-record-card"><h3>Relocation</h3><div>Status: <strong id="record-relocation-status">—</strong></div><div>Destination: <span id="record-relocation-destination">—</span></div></div></div>
 <div style="text-align:center;margin:20px 0"><a href="/member/certificate" target="_blank" class="btn btn-primary">📄 Download Member Certificate</a></div>
 </section><section id="member-announcements" class="member-panel">
@@ -615,8 +1198,11 @@ loadMemberIDCard();
 
 <section id="member-events" class="member-panel">
   <div class="panel-header">
-    <h2>Mission & Church Events</h2>
-    <span class="panel-badge">Communication Centre</span>
+    <div>
+      <h2>📅 Events & Conference</h2>
+      <p class="panel-subtitle">Mission activities, church events and conference programmes.</p>
+    </div>
+    <span class="panel-badge">Events</span>
   </div>
   <div id="member-event-list">
     <div class="empty-state">Loading events...</div>
@@ -633,7 +1219,6 @@ loadMemberIDCard();
 </section>
 
 <script>
-async 
 
 async function loadMemberRecords(){try{const r=await fetch("/api/member/records");const d=await r.json();if(!r.ok)return;const set=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v||"—"};set("record-baptism-status",d.baptised);set("record-baptism-date",d.baptism_date);set("record-confirmation-status",d.confirmed);set("record-confirmation-date",d.confirmation_date);set("record-marriage-status",d.marriage);set("record-marriage-date",d.marriage_date);set("record-transfer-status",d.transfer);set("record-transfer-from",d.transfer_from);set("record-transfer-to",d.transfer_to);set("record-relocation-status",d.relocated);set("record-relocation-destination",d.relocation_destination)}catch(e){console.error("Member records:",e)}}
 
@@ -724,7 +1309,7 @@ async function loadMemberEvents(){
   }
 }
 
-function loadMemberNotifications() {
+async function loadMemberNotifications() {
   const box=document.getElementById("member-notification-list");
 
   try {
@@ -763,76 +1348,375 @@ function loadMemberNotifications() {
 
 async function markMemberNotificationRead(id) {
   try {
-    const r=await fetch(
-      "/api/member/notifications/"+id+"/read",
+    const r = await fetch(
+      "/api/member/notifications/" + id + "/read",
       {method:"POST"}
     );
 
     if (r.ok) {
-      loadMemberNotifications();
-  loadMemberEvents();
-  loadMemberAnnouncements();
-  loadMemberRecords();
+      await loadMemberNotifications();
     }
   } catch(e) {
-    console.error("Notification:",e);
+    console.error("Notification:", e);
   }
 }
 
 loadMemberNotifications();
+loadMemberEvents();
+loadMemberAnnouncements();
+loadMemberRecords();
+</script>
+
+
+<section id="member-online-giving" style="margin-top:24px;">
+  <div class="dashboard-card">
+
+    <div style="display:flex;justify-content:space-between;align-items:center;
+                gap:12px;flex-wrap:wrap;">
+      <div>
+        <h2 style="margin-bottom:4px;">💰 Online Giving</h2>
+        <p style="margin:0;color:#667085;">
+          Give securely through the church's online payment system.
+        </p>
+      </div>
+
+      <span style="padding:7px 11px;border-radius:20px;
+                   background:#e8f5e9;color:#176b2c;font-weight:700;">
+        🔒 Secure Payment
+      </span>
+    </div>
+
+    <div id="member-payment-message"
+         style="display:none;margin-top:15px;padding:12px;border-radius:10px;">
+    </div>
+
+    <form id="member-payment-form"
+          style="margin-top:20px;">
+
+      <label>Donor Name</label>
+      <input id="payment-donor-name"
+             type="text"
+             required
+             style="width:100%;padding:12px;margin:6px 0 14px;">
+
+      <label>Email Address</label>
+      <input id="payment-donor-email"
+             type="email"
+             required
+             placeholder="your@email.com"
+             style="width:100%;padding:12px;margin:6px 0 14px;">
+
+      <label>Phone Number</label>
+      <input id="payment-donor-phone"
+             type="tel"
+             placeholder="080..."
+             style="width:100%;padding:12px;margin:6px 0 14px;">
+
+      <label>Church Account</label>
+      <select id="payment-church-account"
+              required
+              style="width:100%;padding:12px;margin:6px 0 14px;">
+        <option value="">Loading church accounts...</option>
+      </select>
+
+      <label>Purpose of Giving</label>
+      <select id="payment-purpose"
+              style="width:100%;padding:12px;margin:6px 0 14px;">
+        <option value="Tithe">Tithe</option>
+        <option value="Seed of Faith">Seed of Faith</option>
+        <option value="Offering">Offering</option>
+        <option value="Pledge">Pledge</option>
+        <option value="Evangelism">Evangelism</option>
+        <option value="Church Project">Church Project</option>
+        <option value="General Giving">General Giving</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <label>Amount (₦)</label>
+      <input id="payment-amount"
+             type="number"
+             min="100"
+             step="0.01"
+             required
+             placeholder="Enter amount"
+             style="width:100%;padding:12px;margin:6px 0 18px;">
+
+      <button id="member-pay-button"
+              type="submit"
+              style="width:100%;padding:14px;border:0;border-radius:10px;
+                     background:#123b2a;color:#fff;font-size:16px;
+                     font-weight:800;cursor:pointer;">
+        💳 Continue to Secure Payment
+      </button>
+
+    </form>
+
+  </div>
+</section>
+
+<script>
+(function(){
+
+  function paymentMessage(text,success){
+    const box=document.getElementById("member-payment-message");
+    if(!box)return;
+
+    box.textContent=text;
+    box.style.display="block";
+    box.style.background=success ? "#e8f5e9" : "#ffe4e4";
+    box.style.color=success ? "#176b2c" : "#9b0000";
+  }
+
+  async function loadMemberPaymentAccounts(){
+
+    const select=document.getElementById("payment-church-account");
+    if(!select)return;
+
+    try{
+      const r=await fetch("/api/church-accounts");
+      const data=await r.json();
+
+      if(!r.ok){
+        throw new Error(data.error || "Unable to load church accounts.");
+      }
+
+      if(!data.length){
+        select.innerHTML='<option value="">No active church account available</option>';
+        return;
+      }
+
+      select.innerHTML='<option value="">Select church account</option>';
+
+      data.forEach(a=>{
+        const option=document.createElement("option");
+        option.value=a.id;
+
+        const level=a.account_level || "Church";
+        const circuit=a.circuit ? " • "+a.circuit : "";
+        const church=a.church_name ? " • "+a.church_name : "";
+
+        option.textContent=level+circuit+church;
+
+        select.appendChild(option);
+      });
+
+    }catch(e){
+      select.innerHTML='<option value="">Unable to load accounts</option>';
+      paymentMessage(e.message,false);
+    }
+  }
+
+  async function loadMemberPaymentIdentity(){
+
+    try{
+      const r=await fetch("/api/member/me");
+      const data=await r.json();
+
+      if(!r.ok)return;
+
+      const m=data.member || {};
+
+      const name=document.getElementById("payment-donor-name");
+
+      if(name && !name.value){
+        name.value=m.full_name || "";
+      }
+
+      const phone=document.getElementById("payment-donor-phone");
+
+      if(phone && !phone.value){
+        phone.value=m.phone || "";
+      }
+
+    }catch(e){
+      console.error("Payment identity:",e);
+    }
+  }
+
+  async function startMemberPayment(event){
+
+    event.preventDefault();
+
+    const button=document.getElementById("member-pay-button");
+
+    const donor_name=document.getElementById("payment-donor-name").value.trim();
+    const donor_email=document.getElementById("payment-donor-email").value.trim();
+    const donor_phone=document.getElementById("payment-donor-phone").value.trim();
+    const church_account_id=document.getElementById("payment-church-account").value;
+    const purpose=document.getElementById("payment-purpose").value;
+    const amount=Number(document.getElementById("payment-amount").value);
+
+    if(!donor_name || !donor_email){
+      paymentMessage("Please enter your name and email address.",false);
+      return;
+    }
+
+    if(!church_account_id){
+      paymentMessage("Please select the church account for this payment.",false);
+      return;
+    }
+
+    if(!Number.isFinite(amount) || amount<=0){
+      paymentMessage("Please enter a valid amount.",false);
+      return;
+    }
+
+    button.disabled=true;
+    button.textContent="⏳ Connecting to secure payment...";
+
+    paymentMessage("Initializing secure payment...",true);
+
+    try{
+
+      const r=await fetch("/api/payment/initiate",{
+        method:"POST",
+        headers:{
+          "Content-Type":"application/json"
+        },
+        body:JSON.stringify({
+          donor_name,
+          donor_email,
+          donor_phone,
+          church_account_id:Number(church_account_id),
+          purpose,
+          amount,
+          payment_method:"Paystack"
+        })
+      });
+
+      const data=await r.json();
+
+      if(!r.ok){
+        throw new Error(data.error || "Unable to initialize payment.");
+      }
+
+      if(!data.authorization_url){
+        throw new Error("Payment authorization URL was not returned.");
+      }
+
+      paymentMessage(
+        "Payment initialized. Redirecting to secure payment...",
+        true
+      );
+
+      window.location.href=data.authorization_url;
+
+    }catch(e){
+
+      paymentMessage(e.message,false);
+
+      button.disabled=false;
+      button.textContent="💳 Continue to Secure Payment";
+    }
+  }
+
+  const form=document.getElementById("member-payment-form");
+
+  if(form){
+    form.addEventListener("submit",startMemberPayment);
+  }
+
+  loadMemberPaymentAccounts();
+  loadMemberPaymentIdentity();
+
+})();
 </script>
 
 <section id="member-giving-history" style="margin-top:24px;">
-  <div class="dashboard-card">
-    <h2>💰 My Giving History</h2>
-    <div id="member-giving-list">Loading giving history...</div>
+  <div class="dashboard-card member-history-card">
+    <div class="member-history-head">
+      <div>
+        <h2>💳 Payment History</h2>
+        <p>View your recorded giving and payment transactions.</p>
+      </div>
+      <div class="member-history-total">
+        <span>Total Giving</span>
+        <strong id="member-giving-total">₦0</strong>
+      </div>
+    </div>
+
+    <div id="member-giving-list" class="member-giving-list">
+      <div class="member-history-loading">Loading payment history...</div>
+    </div>
   </div>
 </section>
 
 <script>
 async function loadMemberGivingHistory() {
-  const box=document.getElementById("member-giving-list");
+  const box = document.getElementById("member-giving-list");
+  const totalBox = document.getElementById("member-giving-total");
 
   try {
-    const r=await fetch("/api/member/giving-history");
-    const data=await r.json();
+    const r = await fetch("/api/member/giving-history");
+    const data = await r.json();
 
-    if (!r.ok) throw new Error(data.error || "Unable to load giving history");
+    if (!r.ok) {
+      throw new Error(data.error || "Unable to load payment history");
+    }
 
-    if (!data.length) {
-      box.innerHTML="<p>No giving records available yet.</p>";
+    if (!Array.isArray(data) || !data.length) {
+      totalBox.textContent = "₦0";
+      box.innerHTML = `
+        <div class="member-history-empty">
+          <div class="member-history-empty-icon">💳</div>
+          <strong>No payment records yet</strong>
+          <p>Your giving and payment transactions will appear here after they are recorded.</p>
+        </div>
+      `;
       return;
     }
 
-    let total=0;
+    let total = 0;
 
-    box.innerHTML=data.map(x => {
-      const amount=Number(x.amount || 0);
-      total+=amount;
+    box.innerHTML = data.map(x => {
+      const amount = Number(x.amount || 0);
+      total += amount;
+
+      const fund = x.fund || x.source || "Giving";
+      const date = x.date || "Date not available";
+      const method = x.method || "Not specified";
+      const reference = x.reference || "";
+      const notes = x.notes || "";
 
       return `
-        <div style="padding:14px;margin:10px 0;border-radius:12px;
-                    border:1px solid #ddd;background:#fff;">
-          <div style="display:flex;justify-content:space-between;gap:10px;">
-            <strong>${x.fund || x.source || "Giving"}</strong>
-            <strong>₦${amount.toLocaleString()}</strong>
+        <div class="member-payment-item">
+          <div class="member-payment-top">
+            <div class="member-payment-purpose">
+              <span class="member-payment-icon">💰</span>
+              <div>
+                <strong>${esc(fund)}</strong>
+                <small>${esc(date)}</small>
+              </div>
+            </div>
+
+            <strong class="member-payment-amount">
+              ₦${amount.toLocaleString()}
+            </strong>
           </div>
-          <div style="margin-top:6px;">
-            ${x.date || ""}
+
+          <div class="member-payment-details">
+            <span>💳 ${esc(method)}</span>
+            ${reference ? `<span>🔖 ${esc(reference)}</span>` : ""}
+            ${notes ? `<span>📝 ${esc(notes)}</span>` : ""}
           </div>
-          <small>${x.method || ""} ${x.reference ? "• "+x.reference : ""}</small>
+
+          <div class="member-payment-status">
+            <span>✓ Recorded</span>
+          </div>
         </div>
       `;
     }).join("");
 
-    box.innerHTML += `
-      <div style="margin-top:15px;padding:15px;border-radius:12px;
-                  font-weight:800;background:#f5f7fa;">
-        Total recorded giving: ₦${total.toLocaleString()}
+    totalBox.textContent = "₦" + total.toLocaleString();
+
+  } catch(e) {
+    totalBox.textContent = "₦0";
+    box.innerHTML = `
+      <div class="member-history-error">
+        <strong>Unable to load payment history.</strong>
+        <p>Please try again later.</p>
       </div>
     `;
-  } catch(e) {
-    box.innerHTML="<p>Unable to load giving history.</p>";
   }
 }
 
@@ -920,5 +1804,56 @@ async function loadMemberAttendance() {
 loadMemberAttendance();
 </script>
 <script src="/static/member-care-popup.js?v=20261006-1"></script>
+
+<script>
+function toggleMemberMenu(){
+  const menu=document.getElementById("member-sidebar");
+  if(menu) menu.classList.toggle("open");
+}
+
+function memberGo(page,button){
+  document.querySelectorAll(".member-nav button").forEach(x=>{
+    x.classList.remove("active");
+  });
+
+  if(button) button.classList.add("active");
+
+  const menu=document.getElementById("member-sidebar");
+  if(menu && window.innerWidth<=850){
+    menu.classList.remove("open");
+  }
+
+  const targets={
+    dashboard:"content",
+    profile:"content",
+    church:"member-church",
+    records:"member-records",
+    idcard:"member-id-card",
+    documents:"member-documents",
+    giving:"member-online-giving",
+    payments:"member-giving-history",
+    attendance:"member-attendance-summary",
+    testimonies:"member-testimonies",
+    appreciation:"member-appreciations",
+    announcements:"member-announcements",
+    events:"member-events",
+    notifications:"member-notifications",
+    care:"member-care",
+    account:"content"
+  };
+
+  const target=document.getElementById(targets[page] || "content");
+
+  if(target){
+    setTimeout(()=>{
+      target.scrollIntoView({
+        behavior:"smooth",
+        block:"start"
+      });
+    },50);
+  }
+}
+</script>
+
 </body>
 </html>
