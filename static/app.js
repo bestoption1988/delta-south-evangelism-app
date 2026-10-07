@@ -1548,7 +1548,7 @@ async function loadMemberRegistrations(){
               <td>${esc(r.church_name || "—")}</td>
               <td>
                 ${r.passport_photo
-                  ? `<a href="${esc(r.passport_photo)}" target="_blank" rel="noopener">View</a>`
+                  ? `<a href="/api/member-registration-photo/${encodeURIComponent(String(r.passport_photo).split("/").pop())}" target="_blank" rel="noopener">View</a>`
                   : "—"}
               </td>
               <td><span class="status-badge">${esc(r.status)}</span></td>

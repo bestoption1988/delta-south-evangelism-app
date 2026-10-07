@@ -4170,6 +4170,43 @@ def upload_member_registration_photo(rid):
     }), 201
 
 
+
+@app.get("/api/member-registration-photo/<path:filename>")
+@login_required
+def view_member_registration_photo(filename):
+    u = current_user()
+
+    allowed_roles = {
+        "Admin",
+        "Bishop / Diocesan Executive",
+        "Evangelism Minister",
+        "Planting Officer",
+        "Diocesan Secretary",
+        "Circuit Coordinator",
+        "Local Church Evangelism Officer",
+        "Auditor"
+    }
+
+    if u["role"] not in allowed_roles:
+        return jsonify({"error": "You are not authorized to view member photos."}), 403
+
+    safe_name = os.path.basename(filename)
+
+    if safe_name != filename or not safe_name:
+        return jsonify({"error": "Invalid photo filename."}), 400
+
+    photo_path = os.path.join(MEMBER_PHOTO_DIR, safe_name)
+
+    if not os.path.isfile(photo_path):
+        return jsonify({"error": "Photo not found."}), 404
+
+    return send_file(
+        photo_path,
+        conditional=True,
+        max_age=0
+    )
+
+
 @app.get("/api/membership-statistics")
 @login_required
 def membership_statistics():
