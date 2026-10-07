@@ -5607,7 +5607,7 @@ def reports():
         fellow_rows.append(r)
     years=[]
     for yr in range(year,year+5):
-        planned=count("church_plants","year=?"+((" AND circuit=?") if scope else ""),(yr,scope) if scope else (yr,)); launched_y=count("church_plants","year=? AND status IN ('Launched','Growing','Active')"+((" AND circuit=?") if scope else ""),(yr,scope) if scope else (yr,)); years.append({"year":yr,"target":5,"planned":planned,"launched":launched_y,"remaining":max(0,5-planned)})
+        planned=count("church_plants","year=?"+((" AND circuit=?") if scope else ""),(yr,scope) if scope else (yr,)); launched_y=count("church_plants","year=? AND status IN ('Launched','Growing','Active')"+((" AND circuit=?") if scope else ""),(yr,scope) if scope else (yr,)); years.append({"year":yr,"target":5,"planned":planned,"launched":launched_y,"remaining":max(0,5-launched_y)})
     return jsonify({"year":year,"circuit":circuit or "All","finance_visible":finance_visible,"summary":{"members":members,"churches":churches,"plants":plants,"launched_plants":launched,"outreach":outreach,"attendance":attendance,"decisions":decisions,"followups":followups,"outreach_cost":outreach_cost,"contacts":contacts,"converts":converts,"joined":joined,"followups_due":due,"calendar":calendar,"calendar_completed":completed},"finance":finance,"circuits":circuit_rows,"fellowships":fellow_rows,"five_year":years})
 
 @app.post("/api/circuit_reports/<int:report_id>/review")
