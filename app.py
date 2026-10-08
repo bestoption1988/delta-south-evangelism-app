@@ -1899,7 +1899,7 @@ def home():
     turn_config = {
         "host": os.environ.get(
             "TURN_HOST",
-            "standard.relay.metered.ca"
+            "global.relay.metered.ca"
         ),
         "username": os.environ.get(
             "TURN_USERNAME",

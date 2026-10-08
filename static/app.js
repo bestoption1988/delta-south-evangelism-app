@@ -3596,6 +3596,7 @@ window.DSConferenceCall = {
   pollTimer: null,
   presenceTimer: null,
   lastSignalId: 0,
+  pollInFlight: false,
   peers: new Map(),
   remoteStreams: new Map(),
   pendingIce: new Map(),
@@ -3641,8 +3642,8 @@ window.DSConferenceCall = {
 
     this.setCallStatus(
       this.audioOnly
-        ? "Audio conference connected. Waiting for participants..."
-        : "Video conference connected. Waiting for participants..."
+        ? "Microphone ready. Waiting for the other participant..."
+        : "Camera and microphone ready. Waiting for the other participant..."
     );
 
     this.ensureConferenceUI();
@@ -3834,50 +3835,50 @@ window.DSConferenceCall = {
   },
 
   async pollSignals() {
-    if (!this.active || !this.roomId) return;
+    // Do not process the same signaling records in overlapping polls.
+    if (!this.active || !this.roomId || this.pollInFlight) return;
 
-    const response = await fetch(
-      "/api/conference/" +
-      this.roomId +
-      "/signals?since_id=" +
-      encodeURIComponent(this.lastSignalId)
-    );
-
-    if (!response.ok) return;
-
-    const signals = await response.json();
-
-    for (const signal of signals) {
-      this.lastSignalId = Math.max(
-        this.lastSignalId,
-        Number(signal.id) || 0
+    this.pollInFlight = true;
+    try {
+      const response = await fetch(
+        "/api/conference/" +
+        this.roomId +
+        "/signals?since_id=" +
+        encodeURIComponent(this.lastSignalId),
+        { cache: "no-store" }
       );
 
-      if (
-        signal.recipient_id &&
-        signal.recipient_id !== this.participantId
-      ) {
-        continue;
+      if (!response.ok) {
+        throw new Error("Signal endpoint returned HTTP " + response.status);
       }
 
-      if (signal.sender_id === this.participantId) {
-        continue;
-      }
+      const signals = await response.json();
+      for (const signal of signals) {
+        this.lastSignalId = Math.max(this.lastSignalId, Number(signal.id) || 0);
+        if (signal.recipient_id && signal.recipient_id !== this.participantId) continue;
+        if (signal.sender_id === this.participantId) continue;
 
-      let payload = signal.payload;
+        let payload = signal.payload;
+        if (typeof payload === "string") {
+          try { payload = JSON.parse(payload); }
+          catch {
+            console.error("Invalid conference signal JSON:", signal.id);
+            continue;
+          }
+        }
 
-      if (typeof payload === "string") {
         try {
-          payload = JSON.parse(payload);
-        } catch {
-          payload = {};
+          await this.handleSignal({ ...signal, payload });
+        } catch (error) {
+          console.error("Conference signal handling failed:", signal.signal_type, error);
+          this.setCallStatus("Call negotiation error (" + signal.signal_type + "): " + (error.message || "unknown error"));
         }
       }
-
-      await this.handleSignal({
-        ...signal,
-        payload
-      });
+    } catch (error) {
+      console.error("Conference signal polling failed:", error);
+      this.setCallStatus("Cannot exchange call setup messages: " + (error.message || "network error"));
+    } finally {
+      this.pollInFlight = false;
     }
   },
 
@@ -3894,9 +3895,22 @@ window.DSConferenceCall = {
         payload.participant_id || sender
       );
 
-      const pc = await this.createPeer(remoteId, false);
+      // The smaller participant ID is the sole offerer.
+      if (this.participantId < remoteId) {
+        console.warn("Ignoring unexpected offer from non-offering peer:", remoteId);
+        return;
+      }
 
+      const pc = await this.createPeer(remoteId, false);
       if (!pc) return;
+      if (pc.remoteDescription && pc.remoteDescription.type === "offer") {
+        console.warn("Ignoring duplicate conference offer:", remoteId);
+        return;
+      }
+      if (pc.signalingState !== "stable") {
+        console.warn("Ignoring offer in signaling state:", pc.signalingState);
+        return;
+      }
 
       await pc.setRemoteDescription(
         new RTCSessionDescription(payload.description)
@@ -3907,7 +3921,7 @@ window.DSConferenceCall = {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      await this.sendSignal(
+      const answerSent = await this.sendSignal(
         "answer",
         remoteId,
         {
@@ -3916,7 +3930,7 @@ window.DSConferenceCall = {
           description: pc.localDescription
         }
       );
-
+      this.setCallStatus(answerSent ? "Call answer sent. Establishing audio/video connection..." : "Signaling error: the call answer could not be sent.");
       this.updateParticipantCount();
       return;
     }
@@ -3929,13 +3943,21 @@ window.DSConferenceCall = {
       );
 
       const pc = this.peers.get(remoteId);
-      if (!pc) return;
-
-      await pc.setRemoteDescription(
-        new RTCSessionDescription(payload.description)
-      );
-
+      if (!pc) {
+        console.warn("Received answer but no peer connection exists:", remoteId);
+        return;
+      }
+      if (pc.remoteDescription && pc.remoteDescription.type === "answer") {
+        console.warn("Ignoring duplicate conference answer:", remoteId);
+        return;
+      }
+      if (pc.signalingState !== "have-local-offer") {
+        console.warn("Unexpected answer in signaling state:", pc.signalingState);
+        return;
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription(payload.description));
       await this.flushPendingIce(remoteId);
+      this.setCallStatus("Call answer received. Checking the media network path...");
       return;
     }
 
@@ -4045,26 +4067,28 @@ window.DSConferenceCall = {
     }
 
     pc.onicecandidate = event => {
-      if (!event.candidate) return;
-
-      this.sendSignal(
-        "ice",
-        peerId,
-        {
-          participant_id: this.participantId,
-          candidate: event.candidate.toJSON
-            ? event.candidate.toJSON()
-            : event.candidate
-        }
-      );
+      if (!event.candidate) {
+        console.log("ICE candidate gathering complete for:", peerId);
+        return;
+      }
+      console.log("Local ICE candidate gathered:", event.candidate.type, event.candidate.protocol);
+      this.sendSignal("ice", peerId, {
+        participant_id: this.participantId,
+        candidate: event.candidate.toJSON ? event.candidate.toJSON() : event.candidate
+      }).then(result => {
+        if (!result) this.setCallStatus("Could not send a network candidate to the other phone.");
+      });
+    };
+    pc.onicecandidateerror = event => {
+      console.warn("ICE server error:", event.errorCode, event.errorText, event.url);
+      if (event.errorCode === 401 || event.errorCode === 438) {
+        this.setCallStatus("TURN authentication failed. Check the TURN username and credential in Render.");
+      }
     };
 
     pc.ontrack = event => {
-      console.log(
-        "Conference remote track received:",
-        peerId,
-        event.track.kind
-      );
+      console.log("Conference remote track received:", peerId, event.track.kind, "readyState:", event.track.readyState);
+      this.setCallStatus("Remote " + event.track.kind + " track received; preparing playback...");
 
       let stream = this.remoteStreams.get(peerId);
 
@@ -4114,9 +4138,13 @@ window.DSConferenceCall = {
       );
 
       if (state === "connected") {
-        this.setCallStatus(
-          "Live conference connected."
-        );
+        this.setCallStatus("Live conference connected. Media transport is established.");
+      } else if (state === "connecting") {
+        this.setCallStatus("Remote participant found. Establishing the media connection...");
+      } else if (state === "disconnected") {
+        this.setCallStatus("Media connection temporarily disconnected; waiting for recovery...");
+      } else if (state === "failed") {
+        this.setCallStatus("Media connection FAILED. No usable network path was established.");
       }
 
       if (
@@ -4137,6 +4165,16 @@ window.DSConferenceCall = {
         state
       );
 
+      if (state === "checking") {
+        this.setCallStatus("ICE checking: trying direct and TURN relay paths...");
+      } else if (state === "connected" || state === "completed") {
+        this.setCallStatus("ICE connected. Waiting for remote audio/video tracks...");
+      } else if (state === "failed") {
+        this.setCallStatus("ICE FAILED. Check TURN hostname, username, credential and allowed transports.");
+      } else if (state === "disconnected") {
+        this.setCallStatus("ICE disconnected. Waiting briefly for recovery...");
+      }
+
       if (state === "failed") {
         try {
           if (typeof pc.restartIce === "function") {
@@ -4156,6 +4194,12 @@ window.DSConferenceCall = {
       }
     };
 
+    console.log("WebRTC peer created:", {
+      peerId,
+      initiator,
+      turnConfigured: Boolean(turnConfig.username && turnConfig.credential),
+      turnHost: turnConfig.host || "global.relay.metered.ca"
+    });
     if (initiator) {
       console.log("Creating conference offer for:", peerId);
     }
@@ -4210,27 +4254,44 @@ window.DSConferenceCall = {
       video.autoplay = true;
       video.playsInline = true;
       video.controls = false;
-      video.muted = false;
-      video.volume = 1;
+      // Muted video can autoplay on mobile browsers; a separate audio
+      // element handles sound without duplicating audio playback.
+      video.muted = true;
       video.className = "conference-remote-peer-video";
+
+      const audio = document.createElement("audio");
+      audio.autoplay = true;
+      audio.playsInline = true;
+      audio.controls = false;
+      audio.muted = false;
+      audio.volume = 1;
+      audio.className = "conference-remote-peer-audio";
+      audio.style.display = "none";
 
       card.appendChild(title);
       card.appendChild(video);
+      card.appendChild(audio);
       grid.appendChild(card);
     }
 
     const video = card.querySelector("video");
+    const audio = card.querySelector("audio");
 
     if (video && video.srcObject !== stream) {
       video.srcObject = stream;
-      video.muted = false;
-      video.volume = 1;
-
+      video.muted = true;
       video.play().catch(error => {
-        console.warn(
-          "Remote autoplay blocked. User interaction may be required.",
-          error
-        );
+        console.warn("Remote video autoplay blocked:", error);
+        this.setCallStatus("Remote video arrived, but playback was blocked. Tap the video to start it.");
+      });
+    }
+    if (audio && audio.srcObject !== stream) {
+      audio.srcObject = stream;
+      audio.muted = false;
+      audio.volume = 1;
+      audio.play().catch(error => {
+        console.warn("Remote audio autoplay blocked:", error);
+        this.setCallStatus("Remote audio arrived, but sound was blocked. Tap the page once to enable audio.");
       });
     }
   },
