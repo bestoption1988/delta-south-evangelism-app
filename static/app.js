@@ -3978,15 +3978,62 @@ window.DSConferenceCall = {
       return this.peers.get(peerId);
     }
 
-    const pc = new RTCPeerConnection({
-      iceServers: [
+    /*
+     * WebRTC ICE configuration.
+     *
+     * STUN discovers direct/NAT candidates.
+     * TURN provides a relay when two mobile networks cannot
+     * establish a direct peer-to-peer media path.
+     *
+     * TURN values are supplied by the server through the
+     * global DS_TURN_CONFIG object.
+     */
+    const turnConfig =
+      window.DS_TURN_CONFIG || {};
+
+    const iceServers = [
+      {
+        urls: [
+          "stun:stun.l.google.com:19302",
+          "stun:stun1.l.google.com:19302"
+        ]
+      }
+    ];
+
+    if (
+      turnConfig.username &&
+      turnConfig.credential
+    ) {
+      const host =
+        turnConfig.host ||
+        "standard.relay.metered.ca";
+
+      iceServers.push(
         {
           urls: [
-            "stun:stun.l.google.com:19302",
-            "stun:stun1.l.google.com:19302"
-          ]
+            "turn:" + host + ":80",
+            "turn:" + host + ":80?transport=tcp",
+            "turn:" + host + ":443",
+            "turns:" + host + ":443?transport=tcp"
+          ],
+          username: turnConfig.username,
+          credential: turnConfig.credential
         }
-      ]
+      );
+
+      console.log(
+        "Delta South WebRTC: TURN relay enabled."
+      );
+    } else {
+      console.warn(
+        "Delta South WebRTC: TURN credentials are not configured. " +
+        "Mobile networks may fail to establish media."
+      );
+    }
+
+    const pc = new RTCPeerConnection({
+      iceServers: iceServers,
+      iceTransportPolicy: "all"
     });
 
     this.peers.set(peerId, pc);
@@ -4013,30 +4060,68 @@ window.DSConferenceCall = {
     };
 
     pc.ontrack = event => {
+      console.log(
+        "Conference remote track received:",
+        peerId,
+        event.track.kind
+      );
+
       let stream = this.remoteStreams.get(peerId);
 
-      if (!stream) {
-        stream = new MediaStream();
+      /*
+       * Prefer the browser-provided remote stream when available.
+       * This keeps audio and video synchronized.
+       */
+      if (
+        event.streams &&
+        event.streams.length &&
+        event.streams[0]
+      ) {
+        stream = event.streams[0];
         this.remoteStreams.set(peerId, stream);
+      } else {
+        if (!stream) {
+          stream = new MediaStream();
+          this.remoteStreams.set(peerId, stream);
+        }
+
+        const track = event.track;
+
+        if (
+          !stream.getTracks().some(
+            t => t.id === track.id
+          )
+        ) {
+          stream.addTrack(track);
+        }
       }
 
-      const track = event.track;
+      this.renderRemoteParticipant(
+        peerId,
+        stream
+      );
 
-      if (!stream.getTracks().some(t => t.id === track.id)) {
-        stream.addTrack(track);
-      }
-
-      this.renderRemoteParticipant(peerId, stream);
       this.updateParticipantCount();
     };
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
 
+      console.log(
+        "Conference connection state:",
+        peerId,
+        state
+      );
+
+      if (state === "connected") {
+        this.setCallStatus(
+          "Live conference connected."
+        );
+      }
+
       if (
         state === "failed" ||
-        state === "closed" ||
-        state === "disconnected"
+        state === "closed"
       ) {
         this.removePeer(peerId);
         this.updateParticipantCount();
@@ -4044,10 +4129,28 @@ window.DSConferenceCall = {
     };
 
     pc.oniceconnectionstatechange = () => {
-      if (
-        pc.iceConnectionState === "failed" ||
-        pc.iceConnectionState === "closed"
-      ) {
+      const state = pc.iceConnectionState;
+
+      console.log(
+        "Conference ICE state:",
+        peerId,
+        state
+      );
+
+      if (state === "failed") {
+        try {
+          if (typeof pc.restartIce === "function") {
+            pc.restartIce();
+          }
+        } catch (error) {
+          console.warn(
+            "ICE restart failed:",
+            error
+          );
+        }
+      }
+
+      if (state === "closed") {
         this.removePeer(peerId);
         this.updateParticipantCount();
       }

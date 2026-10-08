@@ -1896,7 +1896,25 @@ def member_dashboard():
 @app.route("/")
 @page_login_required
 def home():
-    return render_template("index.html")
+    turn_config = {
+        "host": os.environ.get(
+            "TURN_HOST",
+            "standard.relay.metered.ca"
+        ),
+        "username": os.environ.get(
+            "TURN_USERNAME",
+            ""
+        ),
+        "credential": os.environ.get(
+            "TURN_CREDENTIAL",
+            ""
+        )
+    }
+
+    return render_template(
+        "index.html",
+        turn_config=turn_config
+    )
 
 
 def role_allows_table(u, table, method):
