@@ -3221,6 +3221,148 @@ def api_conference_clear_signals(rid):
     return jsonify({"ok": True})
 
 
+
+# =========================================================
+# CONFERENCE LIVE PARTICIPANT PRESENCE
+# =========================================================
+
+@app.post("/api/conference/<int:rid>/presence")
+@login_required
+def api_conference_presence(rid):
+    room = db().execute(
+        "SELECT room_code FROM conference_rooms WHERE id=?",
+        (rid,)
+    ).fetchone()
+
+    if not room:
+        return jsonify({"error": "Conference not found"}), 404
+
+    data = request.get_json(silent=True) or {}
+
+    participant_id = str(data.get("participant_id") or "").strip()
+    participant_name = str(data.get("participant_name") or "").strip()
+    audio_only = 1 if data.get("audio_only") else 0
+
+    if not participant_id:
+        return jsonify({"error": "participant_id is required"}), 400
+
+    now = datetime.now().isoformat(timespec="seconds")
+
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS conference_presence(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_code TEXT NOT NULL,
+            participant_id TEXT NOT NULL,
+            participant_name TEXT DEFAULT '',
+            audio_only INTEGER DEFAULT 0,
+            last_seen TEXT DEFAULT '',
+            UNIQUE(room_code, participant_id)
+        )
+    """)
+
+    db().execute("""
+        INSERT INTO conference_presence
+        (room_code, participant_id, participant_name, audio_only, last_seen)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(room_code, participant_id)
+        DO UPDATE SET
+            participant_name=excluded.participant_name,
+            audio_only=excluded.audio_only,
+            last_seen=excluded.last_seen
+    """, (
+        room["room_code"],
+        participant_id,
+        participant_name,
+        audio_only,
+        now
+    ))
+
+    db().commit()
+
+    return jsonify({
+        "ok": True,
+        "participant_id": participant_id,
+        "last_seen": now
+    })
+
+
+@app.get("/api/conference/<int:rid>/presence")
+@login_required
+def api_conference_presence_list(rid):
+    room = db().execute(
+        "SELECT room_code FROM conference_rooms WHERE id=?",
+        (rid,)
+    ).fetchone()
+
+    if not room:
+        return jsonify({"error": "Conference not found"}), 404
+
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS conference_presence(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_code TEXT NOT NULL,
+            participant_id TEXT NOT NULL,
+            participant_name TEXT DEFAULT '',
+            audio_only INTEGER DEFAULT 0,
+            last_seen TEXT DEFAULT '',
+            UNIQUE(room_code, participant_id)
+        )
+    """)
+
+    cutoff = (
+        datetime.now() -
+        timedelta(seconds=12)
+    ).isoformat(timespec="seconds")
+
+    # Remove stale participants first.
+    db().execute("""
+        DELETE FROM conference_presence
+        WHERE room_code=? AND last_seen < ?
+    """, (room["room_code"], cutoff))
+
+    db().commit()
+
+    rows = db().execute("""
+        SELECT
+            participant_id,
+            participant_name,
+            audio_only,
+            last_seen
+        FROM conference_presence
+        WHERE room_code=?
+        ORDER BY id ASC
+    """, (room["room_code"],)).fetchall()
+
+    return jsonify([dict(r) for r in rows])
+
+
+@app.delete("/api/conference/<int:rid>/presence")
+@login_required
+def api_conference_presence_leave(rid):
+    room = db().execute(
+        "SELECT room_code FROM conference_rooms WHERE id=?",
+        (rid,)
+    ).fetchone()
+
+    if not room:
+        return jsonify({"error": "Conference not found"}), 404
+
+    participant_id = str(
+        request.args.get("participant_id") or ""
+    ).strip()
+
+    if participant_id:
+        db().execute("""
+            DELETE FROM conference_presence
+            WHERE room_code=? AND participant_id=?
+        """, (
+            room["room_code"],
+            participant_id
+        ))
+        db().commit()
+
+    return jsonify({"ok": True})
+
 @app.get("/api/church-accounts")
 @login_required
 def api_church_accounts():

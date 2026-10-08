@@ -3594,6 +3594,7 @@ window.DSConferenceCall = {
   active: false,
   audioOnly: false,
   pollTimer: null,
+  presenceTimer: null,
   lastSignalId: 0,
   peers: new Map(),
   remoteStreams: new Map(),
@@ -3646,16 +3647,10 @@ window.DSConferenceCall = {
 
     this.ensureConferenceUI();
     this.startPolling();
+    this.startPresence();
 
-    await this.sendSignal(
-      "offer",
-      "",
-      {
-        kind: "join-request",
-        participant_id: this.participantId,
-        audio_only: this.audioOnly
-      }
-    );
+    await this.updatePresence();
+    await this.syncPresence();
   },
 
   async sendSignal(signalType, recipientId, payload) {
@@ -3699,6 +3694,136 @@ window.DSConferenceCall = {
     }, 600);
 
     this.pollSignals().catch(() => {});
+  },
+
+  startPresence() {
+    this.stopPresence();
+
+    this.presenceTimer = setInterval(() => {
+      this.updatePresence().catch(error => {
+        console.warn("Conference presence update failed:", error);
+      });
+
+      this.syncPresence().catch(error => {
+        console.warn("Conference presence sync failed:", error);
+      });
+    }, 2500);
+
+    this.updatePresence().catch(() => {});
+    this.syncPresence().catch(() => {});
+  },
+
+  stopPresence() {
+    if (this.presenceTimer) {
+      clearInterval(this.presenceTimer);
+      this.presenceTimer = null;
+    }
+  },
+
+  async updatePresence() {
+    if (!this.active || !this.roomId || !this.participantId) {
+      return;
+    }
+
+    const response = await fetch(
+      "/api/conference/" +
+      this.roomId +
+      "/presence",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          participant_id: this.participantId,
+          participant_name: "Participant",
+          audio_only: this.audioOnly
+        })
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(await response.text());
+    }
+
+    return response.json();
+  },
+
+  async syncPresence() {
+    if (!this.active || !this.roomId || !this.participantId) {
+      return;
+    }
+
+    const response = await fetch(
+      "/api/conference/" +
+      this.roomId +
+      "/presence"
+    );
+
+    if (!response.ok) return;
+
+    const participants = await response.json();
+    const activeIds = new Set();
+
+    for (const participant of participants) {
+      const remoteId = String(
+        participant.participant_id || ""
+      );
+
+      if (!remoteId || remoteId === this.participantId) {
+        continue;
+      }
+
+      activeIds.add(remoteId);
+
+      /*
+       * Only the participant with the smaller ID
+       * creates the initial WebRTC offer.
+       */
+      if (
+        this.participantId < remoteId &&
+        !this.peers.has(remoteId)
+      ) {
+        try {
+          const pc = await this.createPeer(remoteId, true);
+
+          if (
+            pc &&
+            pc.signalingState === "stable"
+          ) {
+            const offer = await pc.createOffer();
+
+            await pc.setLocalDescription(offer);
+
+            await this.sendSignal(
+              "offer",
+              remoteId,
+              {
+                kind: "sdp-offer",
+                participant_id: this.participantId,
+                description: pc.localDescription
+              }
+            );
+          }
+        } catch (error) {
+          console.error(
+            "Conference offer creation failed:",
+            remoteId,
+            error
+          );
+
+          this.removePeer(remoteId);
+        }
+      }
+    }
+
+    for (const peerId of Array.from(this.peers.keys())) {
+      if (!activeIds.has(peerId)) {
+        this.removePeer(peerId);
+      }
+    }
+
+    this.updateParticipantCount();
   },
 
   stopPolling() {
@@ -3761,44 +3886,6 @@ window.DSConferenceCall = {
     const payload = signal.payload || {};
 
     if (!sender || sender === this.participantId) return;
-
-    /*
-     * Join requests use the same backend "offer" signal type.
-     * Only the participant with the lexicographically smaller
-     * ID starts the WebRTC offer. This prevents offer collisions.
-     */
-    if (
-      signal.signal_type === "offer" &&
-      payload.kind === "join-request"
-    ) {
-      const remoteId = String(
-        payload.participant_id || sender
-      );
-
-      if (remoteId === this.participantId) return;
-
-      if (this.participantId < remoteId) {
-        const pc = await this.createPeer(remoteId, true);
-
-        if (pc && pc.signalingState === "stable") {
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-
-          await this.sendSignal(
-            "offer",
-            remoteId,
-            {
-              kind: "sdp-offer",
-              participant_id: this.participantId,
-              description: pc.localDescription
-            }
-          );
-        }
-      }
-
-      this.updateParticipantCount();
-      return;
-    }
 
     if (signal.signal_type === "offer") {
       if (payload.kind !== "sdp-offer") return;
