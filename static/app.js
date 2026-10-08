@@ -3584,347 +3584,860 @@ document.addEventListener("DOMContentLoaded",()=>{
 });
 
 /* =========================================================
-   DELTA SOUTH CONFERENCE — WEBRTC LIVE AUDIO / VIDEO
+   DELTA SOUTH CONFERENCE — CLEAN MULTI-PARTICIPANT WEBRTC
    ========================================================= */
 
 window.DSConferenceCall = {
-  pc: null,
-  localStream: null,
   roomId: null,
+  localStream: null,
   participantId: null,
-  lastSignalId: 0,
-  pollTimer: null,
   active: false,
   audioOnly: false,
+  pollTimer: null,
+  lastSignalId: 0,
+  peers: new Map(),
+  remoteStreams: new Map(),
+  pendingIce: new Map(),
+  recorder: null,
+  recordedChunks: [],
+  recording: false,
 
   async start(roomId, audioOnly = false) {
-    if (this.active) return;
+    if (this.active) {
+      console.warn("Conference is already active.");
+      return;
+    }
 
     this.roomId = roomId;
-    this.audioOnly = audioOnly;
+    this.audioOnly = !!audioOnly;
     this.participantId =
       "p-" + Date.now() + "-" + Math.random().toString(36).slice(2, 9);
 
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: !audioOnly
+        audio: true,
+        video: !this.audioOnly
       });
-
-      this.pc = new RTCPeerConnection({
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" }
-        ]
-      });
-
-      this.localStream.getTracks().forEach(track => {
-        this.pc.addTrack(track, this.localStream);
-      });
-
-      this.pc.onicecandidate = async event => {
-        if (!event.candidate) return;
-
-        await this.sendSignal(
-          "ice",
-          "",
-          event.candidate.toJSON()
-        );
-      };
-
-      this.pc.ontrack = event => {
-        const remote = document.querySelector("#conferenceRemoteVideo");
-        if (!remote) return;
-
-        if (event.streams && event.streams[0]) {
-          remote.srcObject = event.streams[0];
-          remote.muted = false;
-          remote.volume = 0.35;
-          remote.play().catch(error => {
-            console.warn("Remote media autoplay was blocked:", error);
-          });
-        }
-      };
-
-      const local = document.querySelector("#conferenceLocalVideo");
-
-      if (local) {
-        local.srcObject = this.localStream;
-        local.muted = true;
-        local.play().catch(() => {});
-      }
-
-      this.active = true;
-
-      this.setCallStatus(
-        audioOnly
-          ? "Live audio call started."
-          : "Live video call started."
-      );
-
-      await this.sendSignal(
-        "offer",
-        "",
-        {
-          type: "offer-request",
-          audioOnly: this.audioOnly
-        }
-      );
-
-      this.startPolling();
-
     } catch (error) {
-      console.error(error);
-
+      console.error("Conference media error:", error);
       this.setCallStatus(
-        "Camera/microphone permission was not granted or is unavailable."
+        "Microphone/camera permission failed: " +
+        (error.message || "permission denied")
       );
-
-      this.stop();
+      return;
     }
+
+    this.active = true;
+
+    const local = document.querySelector("#conferenceLocalVideo");
+    if (local) {
+      local.srcObject = this.localStream;
+      local.muted = true;
+      local.autoplay = true;
+      local.playsInline = true;
+      local.play().catch(() => {});
+    }
+
+    this.setCallStatus(
+      this.audioOnly
+        ? "Audio conference connected. Waiting for participants..."
+        : "Video conference connected. Waiting for participants..."
+    );
+
+    this.ensureConferenceUI();
+    this.startPolling();
+
+    await this.sendSignal(
+      "offer",
+      "",
+      {
+        kind: "join-request",
+        participant_id: this.participantId,
+        audio_only: this.audioOnly
+      }
+    );
   },
 
-  async sendSignal(type, recipientId, payload) {
-    if (!this.roomId || !this.participantId) return;
+  async sendSignal(signalType, recipientId, payload) {
+    if (!this.roomId || !this.participantId) return null;
 
     try {
-      await api(
+      const response = await fetch(
         "/api/conference/" + this.roomId + "/signals",
         {
           method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
           body: JSON.stringify({
             sender_id: this.participantId,
             recipient_id: recipientId || "",
-            signal_type: type,
-            payload: payload
+            signal_type: signalType,
+            payload: payload || {}
           })
         }
       );
+
+      if (!response.ok) {
+        throw new Error(await response.text());
+      }
+
+      return await response.json();
     } catch (error) {
       console.error("Conference signal error:", error);
+      return null;
     }
   },
 
   startPolling() {
-    clearInterval(this.pollTimer);
+    this.stopPolling();
 
-    this.pollTimer = setInterval(
-      () => this.pollSignals(),
-      1200
-    );
+    this.pollTimer = setInterval(() => {
+      this.pollSignals().catch(error => {
+        console.error("Conference polling error:", error);
+      });
+    }, 600);
 
-    this.pollSignals();
+    this.pollSignals().catch(() => {});
+  },
+
+  stopPolling() {
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = null;
+    }
   },
 
   async pollSignals() {
     if (!this.active || !this.roomId) return;
 
-    try {
-      const signals = await api(
-        "/api/conference/" +
-        this.roomId +
-        "/signals?since_id=" +
-        this.lastSignalId
+    const response = await fetch(
+      "/api/conference/" +
+      this.roomId +
+      "/signals?since_id=" +
+      encodeURIComponent(this.lastSignalId)
+    );
+
+    if (!response.ok) return;
+
+    const signals = await response.json();
+
+    for (const signal of signals) {
+      this.lastSignalId = Math.max(
+        this.lastSignalId,
+        Number(signal.id) || 0
       );
 
-      if (!Array.isArray(signals)) return;
-
-      for (const signal of signals) {
-        this.lastSignalId = Math.max(
-          this.lastSignalId,
-          Number(signal.id || 0)
-        );
-
-        if (signal.sender_id === this.participantId) {
-          continue;
-        }
-
-        if (
-          signal.recipient_id &&
-          signal.recipient_id !== this.participantId
-        ) {
-          continue;
-        }
-
-        await this.handleSignal(signal);
+      if (
+        signal.recipient_id &&
+        signal.recipient_id !== this.participantId
+      ) {
+        continue;
       }
 
-    } catch (error) {
-      console.error("Conference polling error:", error);
+      if (signal.sender_id === this.participantId) {
+        continue;
+      }
+
+      let payload = signal.payload;
+
+      if (typeof payload === "string") {
+        try {
+          payload = JSON.parse(payload);
+        } catch {
+          payload = {};
+        }
+      }
+
+      await this.handleSignal({
+        ...signal,
+        payload
+      });
     }
   },
 
   async handleSignal(signal) {
-    if (!this.pc) return;
+    const sender = String(signal.sender_id || "");
+    const payload = signal.payload || {};
 
-    let payload = signal.payload;
+    if (!sender || sender === this.participantId) return;
 
-    try {
-      payload = typeof payload === "string"
-        ? JSON.parse(payload)
-        : payload;
-    } catch (_) {}
+    /*
+     * Join requests use the same backend "offer" signal type.
+     * Only the participant with the lexicographically smaller
+     * ID starts the WebRTC offer. This prevents offer collisions.
+     */
+    if (
+      signal.signal_type === "offer" &&
+      payload.kind === "join-request"
+    ) {
+      const remoteId = String(
+        payload.participant_id || sender
+      );
 
-    if (signal.signal_type === "offer") {
+      if (remoteId === this.participantId) return;
 
-      if (payload && payload.type === "offer-request") {
-        if (this.participantId > signal.sender_id) {
-          return;
+      if (this.participantId < remoteId) {
+        const pc = await this.createPeer(remoteId, true);
+
+        if (pc && pc.signalingState === "stable") {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+
+          await this.sendSignal(
+            "offer",
+            remoteId,
+            {
+              kind: "sdp-offer",
+              participant_id: this.participantId,
+              description: pc.localDescription
+            }
+          );
         }
-
-        const offer = await this.pc.createOffer();
-        await this.pc.setLocalDescription(offer);
-
-        await this.sendSignal(
-          "offer",
-          signal.sender_id,
-          this.pc.localDescription
-        );
-
-        return;
       }
 
-      if (
-        payload &&
-        payload.type === "offer" &&
-        payload.sdp
-      ) {
-        await this.pc.setRemoteDescription(
-          new RTCSessionDescription(payload)
-        );
-
-        const answer = await this.pc.createAnswer();
-
-        await this.pc.setLocalDescription(answer);
-
-        await this.sendSignal(
-          "answer",
-          signal.sender_id,
-          this.pc.localDescription
-        );
-
-        return;
-      }
+      this.updateParticipantCount();
+      return;
     }
 
-    if (
-      signal.signal_type === "answer" &&
-      payload &&
-      payload.sdp
-    ) {
-      await this.pc.setRemoteDescription(
-        new RTCSessionDescription(payload)
+    if (signal.signal_type === "offer") {
+      if (payload.kind !== "sdp-offer") return;
+
+      const remoteId = String(
+        payload.participant_id || sender
       );
+
+      const pc = await this.createPeer(remoteId, false);
+
+      if (!pc) return;
+
+      await pc.setRemoteDescription(
+        new RTCSessionDescription(payload.description)
+      );
+
+      await this.flushPendingIce(remoteId);
+
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+
+      await this.sendSignal(
+        "answer",
+        remoteId,
+        {
+          kind: "sdp-answer",
+          participant_id: this.participantId,
+          description: pc.localDescription
+        }
+      );
+
+      this.updateParticipantCount();
+      return;
+    }
+
+    if (signal.signal_type === "answer") {
+      if (payload.kind !== "sdp-answer") return;
+
+      const remoteId = String(
+        payload.participant_id || sender
+      );
+
+      const pc = this.peers.get(remoteId);
+      if (!pc) return;
+
+      await pc.setRemoteDescription(
+        new RTCSessionDescription(payload.description)
+      );
+
+      await this.flushPendingIce(remoteId);
+      return;
+    }
+
+    if (signal.signal_type === "ice") {
+      const remoteId = String(
+        payload.participant_id || sender
+      );
+
+      const candidate = payload.candidate;
+      if (!candidate) return;
+
+      const pc = this.peers.get(remoteId);
+
+      if (!pc || !pc.remoteDescription) {
+        if (!this.pendingIce.has(remoteId)) {
+          this.pendingIce.set(remoteId, []);
+        }
+
+        this.pendingIce.get(remoteId).push(candidate);
+        return;
+      }
+
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (error) {
+        console.warn("ICE candidate rejected:", error);
+      }
 
       return;
     }
 
-    if (
-      signal.signal_type === "ice" &&
-      payload
-    ) {
-      try {
-        await this.pc.addIceCandidate(
-          new RTCIceCandidate(payload)
-        );
-      } catch (error) {
-        console.warn(
-          "ICE candidate could not be added:",
-          error
-        );
+    if (signal.signal_type === "leave") {
+      this.removePeer(sender);
+      this.updateParticipantCount();
+    }
+  },
+
+  async createPeer(peerId, initiator = false) {
+    if (this.peers.has(peerId)) {
+      return this.peers.get(peerId);
+    }
+
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        {
+          urls: [
+            "stun:stun.l.google.com:19302",
+            "stun:stun1.l.google.com:19302"
+          ]
+        }
+      ]
+    });
+
+    this.peers.set(peerId, pc);
+
+    if (this.localStream) {
+      for (const track of this.localStream.getTracks()) {
+        pc.addTrack(track, this.localStream);
       }
     }
+
+    pc.onicecandidate = event => {
+      if (!event.candidate) return;
+
+      this.sendSignal(
+        "ice",
+        peerId,
+        {
+          participant_id: this.participantId,
+          candidate: event.candidate.toJSON
+            ? event.candidate.toJSON()
+            : event.candidate
+        }
+      );
+    };
+
+    pc.ontrack = event => {
+      let stream = this.remoteStreams.get(peerId);
+
+      if (!stream) {
+        stream = new MediaStream();
+        this.remoteStreams.set(peerId, stream);
+      }
+
+      const track = event.track;
+
+      if (!stream.getTracks().some(t => t.id === track.id)) {
+        stream.addTrack(track);
+      }
+
+      this.renderRemoteParticipant(peerId, stream);
+      this.updateParticipantCount();
+    };
+
+    pc.onconnectionstatechange = () => {
+      const state = pc.connectionState;
+
+      if (
+        state === "failed" ||
+        state === "closed" ||
+        state === "disconnected"
+      ) {
+        this.removePeer(peerId);
+        this.updateParticipantCount();
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (
+        pc.iceConnectionState === "failed" ||
+        pc.iceConnectionState === "closed"
+      ) {
+        this.removePeer(peerId);
+        this.updateParticipantCount();
+      }
+    };
+
+    if (initiator) {
+      console.log("Creating conference offer for:", peerId);
+    }
+
+    return pc;
+  },
+
+  async flushPendingIce(peerId) {
+    const pc = this.peers.get(peerId);
+    const queue = this.pendingIce.get(peerId);
+
+    if (!pc || !queue || !pc.remoteDescription) return;
+
+    for (const candidate of queue) {
+      try {
+        await pc.addIceCandidate(
+          new RTCIceCandidate(candidate)
+        );
+      } catch (error) {
+        console.warn("Queued ICE candidate rejected:", error);
+      }
+    }
+
+    this.pendingIce.delete(peerId);
+  },
+
+  renderRemoteParticipant(peerId, stream) {
+    let grid = document.querySelector(".conference-video-grid");
+
+    if (!grid) {
+      grid = document.querySelector(
+        "#conferenceRemoteVideo"
+      )?.parentElement;
+    }
+
+    if (!grid) return;
+
+    let card = document.querySelector(
+      '[data-conference-peer="' + CSS.escape(peerId) + '"]'
+    );
+
+    if (!card) {
+      card = document.createElement("div");
+      card.className = "conference-video-card";
+      card.dataset.conferencePeer = peerId;
+
+      const title = document.createElement("div");
+      title.className = "conference-peer-name";
+      title.textContent = "Remote Participant";
+
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      video.controls = false;
+      video.muted = false;
+      video.volume = 1;
+      video.className = "conference-remote-peer-video";
+
+      card.appendChild(title);
+      card.appendChild(video);
+      grid.appendChild(card);
+    }
+
+    const video = card.querySelector("video");
+
+    if (video && video.srcObject !== stream) {
+      video.srcObject = stream;
+      video.muted = false;
+      video.volume = 1;
+
+      video.play().catch(error => {
+        console.warn(
+          "Remote autoplay blocked. User interaction may be required.",
+          error
+        );
+      });
+    }
+  },
+
+  removePeer(peerId) {
+    const pc = this.peers.get(peerId);
+
+    if (pc) {
+      try {
+        pc.close();
+      } catch {}
+    }
+
+    this.peers.delete(peerId);
+    this.remoteStreams.delete(peerId);
+    this.pendingIce.delete(peerId);
+
+    const card = document.querySelector(
+      '[data-conference-peer="' +
+      CSS.escape(peerId) +
+      '"]'
+    );
+
+    if (card) {
+      card.remove();
+    }
+
+    this.updateParticipantCount();
   },
 
   toggleMute() {
     if (!this.localStream) return;
 
-    const track = this.localStream.getAudioTracks()[0];
+    const tracks = this.localStream.getAudioTracks();
 
-    if (!track) return;
+    if (!tracks.length) return;
 
-    track.enabled = !track.enabled;
+    const enabled = !tracks[0].enabled;
 
-    const btn = document.querySelector(
-      "#conferenceMuteBtn"
-    );
+    tracks.forEach(track => {
+      track.enabled = enabled;
+    });
 
-    if (btn) {
-      btn.textContent = track.enabled
-        ? "🔇 Mute"
-        : "🎙️ Unmute";
+    const button = document.querySelector("#conferenceMuteBtn");
+
+    if (button) {
+      button.textContent = enabled ? "Mute" : "Unmute";
     }
+
+    this.setCallStatus(
+      enabled ? "Microphone on" : "Microphone muted"
+    );
   },
 
   toggleCamera() {
     if (!this.localStream) return;
 
-    const track = this.localStream.getVideoTracks()[0];
+    const tracks = this.localStream.getVideoTracks();
 
-    if (!track) return;
+    if (!tracks.length) return;
 
-    track.enabled = !track.enabled;
+    const enabled = !tracks[0].enabled;
 
-    const btn = document.querySelector(
-      "#conferenceCameraBtn"
-    );
+    tracks.forEach(track => {
+      track.enabled = enabled;
+    });
 
-    if (btn) {
-      btn.textContent = track.enabled
-        ? "📷 Camera Off"
-        : "📷 Camera On";
+    const button = document.querySelector("#conferenceCameraBtn");
+
+    if (button) {
+      button.textContent = enabled
+        ? "Camera Off"
+        : "Camera On";
     }
+
+    this.setCallStatus(
+      enabled ? "Camera on" : "Camera off"
+    );
   },
 
-  setCallStatus(message) {
-    const el = document.querySelector(
-      "#conferenceCallStatus"
-    );
-
-    if (el) {
-      el.textContent = message;
+  async startRecording() {
+    if (!this.active) {
+      this.setCallStatus("Start the conference before recording.");
+      return;
     }
-  },
 
-  stop() {
-    clearInterval(this.pollTimer);
+    if (this.recording) return;
 
-    this.pollTimer = null;
+    const tracks = [];
 
     if (this.localStream) {
       this.localStream
-        .getTracks()
-        .forEach(track => track.stop());
+        .getAudioTracks()
+        .forEach(track => tracks.push(track));
     }
 
-    if (this.pc) {
-      this.pc.close();
+    for (const stream of this.remoteStreams.values()) {
+      stream
+        .getAudioTracks()
+        .forEach(track => tracks.push(track));
+    }
+
+    if (!tracks.length) {
+      this.setCallStatus("No audio stream available for recording.");
+      return;
+    }
+
+    let recordStream;
+
+    const videoElements = [];
+
+    const localVideo = document.querySelector(
+      "#conferenceLocalVideo"
+    );
+
+    if (localVideo && !this.audioOnly) {
+      videoElements.push(localVideo);
+    }
+
+    document
+      .querySelectorAll(".conference-remote-peer-video")
+      .forEach(video => videoElements.push(video));
+
+    if (videoElements.length && !this.audioOnly) {
+      const canvas = document.createElement("canvas");
+      canvas.width = 1280;
+      canvas.height = 720;
+
+      const ctx = canvas.getContext("2d");
+
+      const draw = () => {
+        if (!this.recording) return;
+
+        ctx.fillStyle = "#111";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const count = videoElements.length;
+        const cols = count <= 1 ? 1 : count <= 4 ? 2 : 3;
+        const rows = Math.ceil(count / cols);
+
+        const cellW = canvas.width / cols;
+        const cellH = canvas.height / rows;
+
+        videoElements.forEach((video, index) => {
+          const x = (index % cols) * cellW;
+          const y = Math.floor(index / cols) * cellH;
+
+          try {
+            ctx.drawImage(video, x, y, cellW, cellH);
+          } catch {}
+        });
+
+        requestAnimationFrame(draw);
+      };
+
+      recordStream = canvas.captureStream(20);
+
+      for (const track of tracks) {
+        recordStream.addTrack(track);
+      }
+
+      this.recording = true;
+      draw();
+    } else {
+      recordStream = new MediaStream(tracks);
+      this.recording = true;
+    }
+
+    const mimeTypes = [
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+      "audio/webm;codecs=opus",
+      "audio/webm"
+    ];
+
+    const mimeType = mimeTypes.find(type =>
+      MediaRecorder.isTypeSupported(type)
+    );
+
+    try {
+      this.recordedChunks = [];
+
+      this.recorder = new MediaRecorder(
+        recordStream,
+        mimeType ? { mimeType } : undefined
+      );
+
+      this.recorder.ondataavailable = event => {
+        if (event.data && event.data.size) {
+          this.recordedChunks.push(event.data);
+        }
+      };
+
+      this.recorder.onstop = () => {
+        const blob = new Blob(
+          this.recordedChunks,
+          {
+            type: mimeType || "video/webm"
+          }
+        );
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+
+        a.href = url;
+        a.download =
+          "MCN-Delta-South-Conference-" +
+          new Date()
+            .toISOString()
+            .replace(/[:.]/g, "-") +
+          ".webm";
+
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+
+        this.recordedChunks = [];
+        this.recording = false;
+
+        this.setCallStatus(
+          "Recording saved to this device."
+        );
+
+        this.updateRecordingButton();
+      };
+
+      this.recorder.onerror = error => {
+        console.error("Conference recording error:", error);
+        this.recording = false;
+        this.setCallStatus("Recording failed.");
+        this.updateRecordingButton();
+      };
+
+      this.recorder.start(1000);
+
+      this.setCallStatus("Conference recording started.");
+      this.updateRecordingButton();
+
+    } catch (error) {
+      console.error("Unable to start recording:", error);
+      this.recording = false;
+      this.recorder = null;
+      this.setCallStatus(
+        "This browser does not support conference recording."
+      );
+    }
+  },
+
+  stopRecording() {
+    if (!this.recorder || this.recorder.state === "inactive") {
+      this.recording = false;
+      this.updateRecordingButton();
+      return;
+    }
+
+    this.setCallStatus("Finishing conference recording...");
+    this.recorder.stop();
+  },
+
+  ensureConferenceUI() {
+    const controls = document.querySelector(
+      ".conference-call-controls"
+    );
+
+    if (!controls) return;
+
+    if (!document.querySelector("#conferenceParticipantCount")) {
+      const count = document.createElement("span");
+      count.id = "conferenceParticipantCount";
+      count.className = "conference-participant-count";
+      count.textContent = "Participants: 1";
+      controls.appendChild(count);
+    }
+
+    if (!document.querySelector("#conferenceRecordBtn")) {
+      const button = document.createElement("button");
+
+      button.id = "conferenceRecordBtn";
+      button.type = "button";
+      button.className = "btn btn-secondary";
+      button.textContent = "Start Recording";
+
+      button.addEventListener("click", () => {
+        if (this.recording) {
+          this.stopRecording();
+        } else {
+          this.startRecording();
+        }
+      });
+
+      controls.appendChild(button);
+    }
+
+    this.updateRecordingButton();
+    this.updateParticipantCount();
+  },
+
+  updateRecordingButton() {
+    const button = document.querySelector(
+      "#conferenceRecordBtn"
+    );
+
+    if (!button) return;
+
+    button.textContent = this.recording
+      ? "Stop Recording"
+      : "Start Recording";
+  },
+
+  updateParticipantCount() {
+    const count = document.querySelector(
+      "#conferenceParticipantCount"
+    );
+
+    if (!count) return;
+
+    count.textContent =
+      "Participants: " +
+      (this.active ? 1 + this.peers.size : 0);
+  },
+
+  setCallStatus(message) {
+    const status = document.querySelector(
+      "#conferenceCallStatus"
+    );
+
+    if (status) {
+      status.textContent = message;
+    }
+
+    console.log("Conference:", message);
+  },
+
+  async stop() {
+    if (!this.active && !this.localStream) return;
+
+    try {
+      await this.sendSignal(
+        "leave",
+        "",
+        {
+          participant_id: this.participantId
+        }
+      );
+    } catch {}
+
+    this.stopRecording();
+    this.stopPolling();
+
+    for (const [peerId, pc] of this.peers) {
+      try {
+        pc.close();
+      } catch {}
+
+      const card = document.querySelector(
+        '[data-conference-peer="' +
+        CSS.escape(peerId) +
+        '"]'
+      );
+
+      if (card) card.remove();
+    }
+
+    this.peers.clear();
+    this.remoteStreams.clear();
+    this.pendingIce.clear();
+
+    if (this.localStream) {
+      this.localStream.getTracks().forEach(track => {
+        try {
+          track.stop();
+        } catch {}
+      });
     }
 
     this.localStream = null;
-    this.pc = null;
-    this.remoteStream = null;
-    this.pendingIceCandidates = [];
     this.active = false;
 
-    const local =
-      document.querySelector("#conferenceLocalVideo");
+    const local = document.querySelector(
+      "#conferenceLocalVideo"
+    );
 
-    const remote =
-      document.querySelector("#conferenceRemoteVideo");
+    if (local) {
+      local.srcObject = null;
+    }
 
-    if (local) local.srcObject = null;
-    if (remote) remote.srcObject = null;
-
-    this.setCallStatus("Call ended.");
+    this.updateParticipantCount();
+    this.setCallStatus("Conference call ended.");
   }
 };
 
-console.log("Delta South WebRTC conference engine loaded.");
+console.log(
+  "Delta South NEW multi-participant WebRTC conference engine loaded."
+);
 
 document.addEventListener("DOMContentLoaded", function () {
   const memberRefreshBtn = document.getElementById("memberRegistrationsRefreshBtn");
