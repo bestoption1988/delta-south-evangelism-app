@@ -719,6 +719,9 @@ def ensure_runtime_schema():
       'income': {
         'church_account_id': 'INTEGER DEFAULT NULL'
       },
+      'expenses': {
+        'church_name': "TEXT DEFAULT ''"
+      },
       'member_registrations': {
         'username': "TEXT DEFAULT ''",
         'password': "TEXT DEFAULT ''",
