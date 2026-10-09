@@ -467,6 +467,14 @@ def init_db():
       target_phone TEXT DEFAULT '', source_table TEXT DEFAULT '', source_id INTEGER DEFAULT NULL,
       due_date TEXT DEFAULT '', status TEXT DEFAULT 'Unread', created_at TEXT DEFAULT '', read_at TEXT DEFAULT ''
     );
+    CREATE TABLE IF NOT EXISTS password_reset_tokens(
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      used INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
     CREATE TABLE IF NOT EXISTS users(
       id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE NOT NULL, password TEXT NOT NULL,
       role TEXT DEFAULT 'Admin', circuit TEXT DEFAULT '', church_name TEXT DEFAULT '',
