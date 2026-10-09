@@ -182,6 +182,19 @@ def init_db():
         )
     """)
 
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS conference_signals(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            room_code TEXT NOT NULL,
+            sender_id TEXT NOT NULL,
+            recipient_id TEXT DEFAULT '',
+            signal_type TEXT NOT NULL,
+            payload TEXT DEFAULT '',
+            created_at TEXT DEFAULT ''
+        )
+    """)
+    db().execute("CREATE INDEX IF NOT EXISTS idx_conference_signals_room_id ON conference_signals(room_code, id)")
+
     db().commit()
 
     conn = sqlite3.connect(DB_PATH)
