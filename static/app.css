@@ -2987,3 +2987,27 @@ html,body{
     padding:16px;
   }
 }
+
+
+/* Conference audio cleanup and responsive video tile controls */
+.conference-video-card{isolation:isolate;transition:height .18s ease,min-height .18s ease,box-shadow .18s ease}
+.conference-video-tools{position:absolute;z-index:5;top:8px;right:8px;display:flex;gap:5px;max-width:calc(100% - 16px)}
+.conference-video-tools button{width:34px;height:32px;min-width:34px;padding:0;border:1px solid #ffffff70;border-radius:8px;background:#101713d9;color:#fff;font-size:20px;font-weight:800;line-height:1;cursor:pointer;touch-action:manipulation}
+.conference-video-tools button:focus-visible{outline:2px solid #86efac;outline-offset:2px}
+.conference-video-card.is-minimized{height:58px!important;min-height:58px!important}
+.conference-video-card.is-minimized video{display:none!important;height:0!important;min-height:0!important}
+.conference-video-card.is-minimized .conference-video-tools{top:12px}
+.conference-video-card.is-maximized{position:fixed!important;inset:8px!important;z-index:9998!important;width:auto!important;height:calc(100dvh - 16px)!important;min-height:0!important;margin:0!important;border:2px solid #fff;border-radius:14px;box-shadow:0 0 0 9999px #000b,0 12px 40px #0008}
+.conference-video-card.is-maximized video{width:100%!important;height:100%!important;min-height:0!important;object-fit:contain!important}
+.conference-video-card.is-floating{position:fixed!important;right:12px!important;bottom:18px!important;z-index:9997!important;width:min(48vw,300px)!important;height:auto!important;min-height:0!important;aspect-ratio:4/3;box-shadow:0 8px 28px #0008;border:2px solid #fff}
+.conference-video-card.is-floating video{width:100%!important;height:100%!important;min-height:0!important;object-fit:cover!important}
+.conference-video-card.is-floating .conference-video-tools{gap:3px}
+.conference-video-card.is-floating .conference-video-tools button{width:30px;height:29px;min-width:30px}
+@media(max-width:700px){
+  .conference-video-grid{grid-template-columns:minmax(0,1fr)}
+  .conference-video-card,.conference-video-card video{min-height:200px}
+  .conference-video-card.is-minimized{min-height:58px!important}
+  .conference-video-card.is-maximized{inset:5px!important;height:calc(100dvh - 10px)!important}
+  .conference-video-card.is-floating{width:min(54vw,230px)!important;right:8px!important;bottom:12px!important}
+  .conference-video-tools button{width:32px;height:31px;min-width:32px}
+}

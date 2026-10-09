@@ -636,6 +636,8 @@ async function openConference(id){
       </div>
     `;
 
+    window.DSConferenceCall?.decorateExistingVideoCards();
+
     $("#conferenceVideoBtn")?.addEventListener("click", async () => {
       await window.DSConferenceCall.start(room.id, false);
     });
@@ -3617,7 +3619,12 @@ window.DSConferenceCall = {
 
     try {
       this.localStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1
+        },
         video: !this.audioOnly
       });
     } catch (error) {
@@ -3647,6 +3654,7 @@ window.DSConferenceCall = {
     );
 
     this.ensureConferenceUI();
+    this.decorateExistingVideoCards();
     this.startPolling();
     this.startPresence();
 
@@ -4226,6 +4234,85 @@ window.DSConferenceCall = {
     this.pendingIce.delete(peerId);
   },
 
+  decorateExistingVideoCards() {
+    document.querySelectorAll(".conference-video-card").forEach(card => {
+      this.decorateVideoCard(card);
+    });
+  },
+
+  decorateVideoCard(card) {
+    if (!card || card.querySelector(".conference-video-tools")) return;
+
+    card.classList.add("conference-video-enhanced");
+
+    const tools = document.createElement("div");
+    tools.className = "conference-video-tools";
+    tools.innerHTML = `
+      <button type="button" data-video-action="minimize" title="Minimize or restore video" aria-label="Minimize or restore video">−</button>
+      <button type="button" data-video-action="maximize" title="Maximize or restore video" aria-label="Maximize or restore video">⛶</button>
+      <button type="button" data-video-action="popup" title="Open video popup" aria-label="Open video popup">▣</button>
+    `;
+    card.appendChild(tools);
+
+    tools.addEventListener("click", async event => {
+      const button = event.target.closest("[data-video-action]");
+      if (!button) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const action = button.dataset.videoAction;
+      const video = card.querySelector("video");
+
+      if (action === "minimize") {
+        const minimized = card.classList.toggle("is-minimized");
+        button.textContent = minimized ? "＋" : "−";
+        button.title = minimized ? "Restore video" : "Minimize video";
+        return;
+      }
+
+      if (action === "maximize") {
+        const wasMaximized = card.classList.contains("is-maximized");
+        document.querySelectorAll(".conference-video-card.is-maximized")
+          .forEach(tile => tile.classList.remove("is-maximized"));
+        if (!wasMaximized) card.classList.add("is-maximized");
+        button.textContent = wasMaximized ? "⛶" : "↙";
+        button.title = wasMaximized ? "Maximize video" : "Restore video size";
+        return;
+      }
+
+      if (action === "popup") {
+        if (card.classList.contains("is-floating")) {
+          card.classList.remove("is-floating");
+          button.title = "Open video popup";
+          return;
+        }
+
+        if (video && document.pictureInPictureElement === video) {
+          try { await document.exitPictureInPicture(); } catch {}
+          card.classList.remove("is-minimized");
+          return;
+        }
+
+        if (video && typeof video.requestPictureInPicture === "function") {
+          try {
+            await video.requestPictureInPicture();
+            card.classList.add("is-minimized");
+            video.addEventListener("leavepictureinpicture", () => {
+              card.classList.remove("is-minimized");
+            }, { once: true });
+            return;
+          } catch (error) {
+            console.warn("Picture-in-picture unavailable; using floating video tile.", error);
+          }
+        }
+
+        card.classList.add("is-floating");
+        button.title = "Close floating video popup";
+      }
+    });
+  },
+
   renderRemoteParticipant(peerId, stream) {
     let grid = document.querySelector(".conference-video-grid");
 
@@ -4273,6 +4360,8 @@ window.DSConferenceCall = {
       card.appendChild(audio);
       grid.appendChild(card);
     }
+
+    this.decorateVideoCard(card);
 
     const video = card.querySelector("video");
     const audio = card.querySelector("audio");
