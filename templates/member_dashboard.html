@@ -825,23 +825,52 @@ loadMemberCareRequests();
 <script>
 
 async function loadMemberChurch(){
-  try{
-    const r=await fetch("/api/member/me");
-    const data=await r.json();
-    if(!r.ok) return;
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value || "—";
+  };
 
-    const set=(id,v)=>{
-      const el=document.getElementById(id);
-      if(el) el.textContent=v || "—";
-    };
+  const setSummary = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value || "—";
+  };
 
-    set("church-page-name",data.church_name);
-    set("church-page-circuit",data.circuit);
-    set("church-page-fellowship",data.fellowship);
-    set("church-page-position",data.role_position || "Member");
-    set("church-page-member-id",data.member_id);
-  }catch(e){
-    console.error("My Church:",e);
+  try {
+    const r = await fetch("/api/member/me");
+    const data = await r.json();
+
+    if (!r.ok) {
+      const message = data.error ||
+        "Unable to load membership information.";
+
+      setSummary("portal-member-id", "Not linked");
+      setSummary("portal-church", "Not linked");
+      setSummary("portal-circuit", "Not linked");
+      setSummary("portal-fellowship", "Not linked");
+
+      console.warn("Member summary:", message);
+      return;
+    }
+
+    const m = data.member || data;
+
+    setSummary("portal-member-id", m.member_id);
+    setSummary("portal-church", m.church_name);
+    setSummary("portal-circuit", m.circuit);
+    setSummary("portal-fellowship", m.fellowship);
+
+    set("church-page-name", m.church_name);
+    set("church-page-circuit", m.circuit);
+    set("church-page-fellowship", m.fellowship);
+    set("church-page-position", m.role_position || "Member");
+    set("church-page-member-id", m.member_id);
+
+  } catch (e) {
+    ["portal-member-id", "portal-church",
+     "portal-circuit", "portal-fellowship"].forEach(id => {
+      setSummary(id, "Unavailable");
+    });
+    console.error("Member summary:", e);
   }
 }
 
@@ -1027,6 +1056,19 @@ async function loadMemberIDCard() {
     }
   } catch(e) {
     console.error("ID card:",e);
+    const fields = [
+      "id-full-name", "id-member-id", "id-position",
+      "id-church", "id-circuit", "id-fellowship"
+    ];
+    fields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = "Unavailable";
+    });
+    const placeholder = document.getElementById("id-photo-placeholder");
+    if (placeholder) {
+      placeholder.style.display = "block";
+      placeholder.textContent = "Membership record unavailable";
+    }
   }
 }
 
