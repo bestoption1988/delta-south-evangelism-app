@@ -770,7 +770,7 @@ def current_user():
     # Normalize Member portal links. Older accounts may contain the
     # official member code (for example DSD-OTH-0005) instead of
     # the numeric members.id expected by the portal APIs.
-    if user["role"] == "Member" and user["member_id"]:
+    if user["member_id"]:
         member = db().execute(
             "SELECT id FROM members WHERE id=? OR member_id=? LIMIT 1",
             (user["member_id"], str(user["member_id"]))
@@ -824,43 +824,42 @@ def login_required(fn):
 @app.post("/api/member/change-password")
 @login_required
 def member_change_password():
-    u=current_user()
+    u = current_user()
     if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+        return jsonify({"error": "Member access required."}), 403
 
-    data=request.get_json(silent=True) or {}
-    current=data.get("current_password","")
-    new=data.get("new_password","")
-    confirm=data.get("confirm_password","")
+    data = request.get_json(silent=True) or {}
+    current = data.get("current_password", "")
+    new = data.get("new_password", "")
+    confirm = data.get("confirm_password", "")
 
     if not current or not new or not confirm:
-        return jsonify({"error":"Current password, new password and confirmation are required."}),400
+        return jsonify({"error": "Current password, new password and confirmation are required."}), 400
 
     if not check_password_hash(u["password"], current):
-        return jsonify({"error":"Current password is incorrect."}),400
+        return jsonify({"error": "Current password is incorrect."}), 400
 
     if len(new) < 8:
-        return jsonify({"error":"New password must be at least 8 characters."}),400
+        return jsonify({"error": "New password must be at least 8 characters."}), 400
 
     if new != confirm:
-        return jsonify({"error":"New passwords do not match."}),400
+        return jsonify({"error": "New passwords do not match."}), 400
 
-    conn=db()
+    conn = db()
     conn.execute(
         "UPDATE users SET password=?, must_change_password=0 WHERE id=?",
-        (generate_password_hash(new),u["id"])
+        (generate_password_hash(new), u["id"])
     )
     conn.commit()
 
-    return jsonify({"success":True,"message":"Password changed successfully."})
+    return jsonify({"success": True, "message": "Password changed successfully."})
 
 
 @app.put("/api/member/profile")
 @login_required
 def member_update_profile():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -896,8 +895,7 @@ def member_update_profile():
 @login_required
 def member_id_card():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1124,8 +1122,7 @@ def api_notifications_generate():
 @login_required
 def member_notifications():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1152,8 +1149,7 @@ def member_notifications():
 @login_required
 def member_notification_read(nid):
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1190,13 +1186,12 @@ def member_notification_read(nid):
 @login_required
 def member_giving_history():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
     member=db().execute(
-        "SELECT full_name FROM members WHERE id=?",
+        "SELECT id FROM members WHERE id=?",
         (u["member_id"],)
     ).fetchone()
 
@@ -1206,9 +1201,9 @@ def member_giving_history():
     return jsonify(rows(
         """SELECT id,date,source,fund,amount,method,reference,notes
            FROM income
-           WHERE member_id=? OR (member_id IS NULL AND donor_name=?)
+           WHERE member_id=?
            ORDER BY id DESC""",
-        (u["member_id"],member["full_name"])
+        (u["member_id"],)
     ))
 
 
@@ -1267,8 +1262,7 @@ def record_bulk_attendance():
 @login_required
 def member_attendance_summary():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1304,8 +1298,7 @@ def member_attendance_summary():
 @login_required
 def member_attendance():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1325,8 +1318,7 @@ def member_attendance():
 @login_required
 def member_certificate():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1400,7 +1392,6 @@ def member_certificate():
 @login_required
 def member_records():
     u=current_user()
-    if u["role"] != "Member": return jsonify({"error":"Member access required."}),403
     if not u["member_id"]: return jsonify({"error":"Member account is not linked."}),403
     m=db().execute("SELECT member_id,full_name,circuit,church_name,baptised,baptism_date,confirmed,confirmation_date,marriage,marriage_date,relocated,relocation_destination,relocation_date,transfer,transfer_from,transfer_to,transfer_date FROM members WHERE id=?",(u["member_id"],)).fetchone()
     if not m: return jsonify({"error":"Member record not found."}),404
@@ -1410,8 +1401,7 @@ def member_records():
 @login_required
 def member_announcements():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1439,8 +1429,7 @@ def member_announcements():
 @login_required
 def member_events():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1466,8 +1455,7 @@ def member_events():
 @login_required
 def member_testimonies():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1492,8 +1480,7 @@ def member_testimonies():
 @login_required
 def member_appreciations():
     u=current_user()
-    if u["role"] != "Member":
-        return jsonify({"error":"Member access required."}),403
+
     if not u["member_id"]:
         return jsonify({"error":"Member account is not linked."}),403
 
@@ -1519,8 +1506,7 @@ def member_appreciations():
 @login_required
 def member_me():
     u = current_user()
-    if u["role"] != "Member":
-        return jsonify({"error": "Member access required."}), 403
+
     if not u["member_id"]:
         return jsonify({"error": "This member account is not linked to a membership record."}), 403
     member = db().execute("SELECT * FROM members WHERE id=?", (u["member_id"],)).fetchone()
@@ -1913,8 +1899,6 @@ def change_password():
 @page_login_required
 def member_dashboard():
     u=current_user()
-    if u["role"] != "Member":
-        return redirect(url_for("home"))
     return render_template("member_dashboard.html")
 
 @app.route("/")
