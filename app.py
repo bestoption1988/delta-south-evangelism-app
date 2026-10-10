@@ -111,6 +111,27 @@ def ensure_column(conn, table, column, definition):
 
 
 def init_db():
+    # Account registration requests: initialize before the Admin
+    # account-requests API is used. Existing records are preserved.
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS account_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            full_name TEXT NOT NULL,
+            username TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            email TEXT DEFAULT '',
+            circuit TEXT NOT NULL,
+            church_name TEXT NOT NULL,
+            password TEXT NOT NULL,
+            status TEXT DEFAULT 'Pending',
+            review_note TEXT DEFAULT '',
+            reviewed_by INTEGER DEFAULT NULL,
+            reviewed_at TEXT DEFAULT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    db().commit()
+
 
     # Customer Care and Conference communication tables
     db().execute("""
@@ -5677,60 +5698,207 @@ def reject_account_request(rid):
     })
 
 
+@app.get("/api/user-linkable-members")
+@login_required
+def user_linkable_members():
+    u = current_user()
+    if u["role"] != "Admin":
+        return jsonify({"error": "Administrator access required."}), 403
+
+    return jsonify(rows("""
+        SELECT m.id, m.member_id, m.full_name, m.circuit, m.church_name,
+               u.id AS linked_user_id, u.username AS linked_username
+        FROM members m
+        LEFT JOIN users u ON u.member_id = m.id
+        ORDER BY m.full_name
+    """))
+
+
 @app.get("/api/users")
 @login_required
 def get_users():
     u = current_user()
     if u["role"] != "Admin": return jsonify({"error":"Administrator access required."}),403
-    return jsonify(rows("SELECT id,username,role,circuit,church_name,active,must_change_password,created_at FROM users ORDER BY username"))
+    return jsonify(rows("""
+        SELECT u.id, u.username, u.role, u.circuit, u.church_name,
+               u.active, u.must_change_password, u.created_at,
+               u.member_id, m.full_name AS member_name,
+               m.member_id AS official_member_code
+        FROM users u
+        LEFT JOIN members m ON m.id = u.member_id
+        ORDER BY u.username
+    """))
 
 
 @app.post("/api/users")
 @login_required
 def create_user():
     u = current_user()
-    if u["role"] != "Admin": return jsonify({"error":"Administrator access required."}),403
+    if u["role"] != "Admin":
+        return jsonify({"error": "Administrator access required."}), 403
+
     data = request.get_json(force=True) or {}
-    username = (data.get("username") or "").strip(); password = data.get("password") or ""; role = data.get("role") or "Auditor"
-    circuit = (data.get("circuit") or "").strip(); church_name = (data.get("church_name") or "").strip(); member_id = data.get("member_id")
-    if len(username) < 3 or len(password) < 8: return jsonify({"error":"Username must be at least 3 characters and password at least 8 characters."}),400
-    if role not in ROLES: return jsonify({"error":"Invalid role."}),400
-    if role=="Member":
-        if not member_id: return jsonify({"error":"A Member account must be linked to an official member record."}),400
-        existing=db().execute("SELECT id,username FROM users WHERE role=? AND member_id=?",("Member",member_id)).fetchone()
-        if existing: return jsonify({"error":f"This member already has a portal account: {existing["username"]}"}),400
-        linked=db().execute("SELECT id,circuit,church_name FROM members WHERE id=?",(member_id,)).fetchone()
-        if not linked: return jsonify({"error":"The selected member record was not found."}),400
-        circuit=linked["circuit"] or circuit
-        church_name=linked["church_name"] or church_name
-    assignment_error = validate_user_assignment(role, circuit, church_name)
-    if assignment_error: return jsonify({"error":assignment_error}),400
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+    role = data.get("role") or "Member"
+
+    if len(username) < 3 or len(password) < 8:
+        return jsonify({
+            "error": "Username must be at least 3 characters and password at least 8 characters."
+        }), 400
+
+    if role not in ROLES:
+        return jsonify({"error": "Invalid role."}), 400
+
     try:
-        cur = db().execute("INSERT INTO users(username,password,role,circuit,church_name,active,must_change_password,created_at,member_id) VALUES(?,?,?,?,?,?,?,?,?)",
-                           (username,generate_password_hash(password),role,circuit,church_name,1,1,datetime.now().isoformat(timespec="seconds"),member_id))
-        db().commit(); audit("CREATE", "users", cur.lastrowid, json.dumps({"username":username,"role":role}))
-        return jsonify({"id":cur.lastrowid,"ok":True}),201
+        member_id = int(data.get("member_id") or 0)
+    except (ValueError, TypeError):
+        return jsonify({"error": "Select a valid official member record."}), 400
+
+    if member_id <= 0:
+        return jsonify({"error": "Select an official member record for this account."}), 400
+
+    conn = db()
+    linked = conn.execute(
+        "SELECT id, circuit, church_name FROM members WHERE id=?",
+        (member_id,)
+    ).fetchone()
+
+    if not linked:
+        return jsonify({"error": "The selected member record was not found."}), 400
+
+    existing = conn.execute(
+        "SELECT id, username FROM users WHERE member_id=?",
+        (member_id,)
+    ).fetchone()
+
+    if existing:
+        return jsonify({
+            "error": f"This member is already linked to account: {existing['username']}."
+        }), 400
+
+    circuit = (data.get("circuit") or "").strip()
+    church_name = (data.get("church_name") or "").strip()
+
+    # Preserve the established role-assignment rules.
+    if role in DIOSAN_ROLES:
+        circuit = ""
+        church_name = ""
+    elif role == "Circuit Coordinator":
+        circuit = linked["circuit"] or circuit
+        church_name = ""
+    elif role in {"Member", "Local Church Evangelism Officer"}:
+        circuit = linked["circuit"] or circuit
+        church_name = linked["church_name"] or church_name
+
+    assignment_error = validate_user_assignment(role, circuit, church_name)
+    if assignment_error:
+        return jsonify({"error": assignment_error}), 400
+
+    try:
+        cur = conn.execute("""
+            INSERT INTO users(
+                username, password, role, circuit, church_name,
+                active, must_change_password, created_at, member_id
+            ) VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)
+        """, (
+            username,
+            generate_password_hash(password),
+            role,
+            circuit,
+            church_name,
+            datetime.now().isoformat(timespec="seconds"),
+            member_id
+        ))
+        conn.commit()
+        audit("CREATE", "users", cur.lastrowid, json.dumps({
+            "username": username,
+            "role": role,
+            "member_id": member_id
+        }))
+        return jsonify({"id": cur.lastrowid, "ok": True}), 201
+
     except sqlite3.IntegrityError:
-        return jsonify({"error":"That username already exists."}),400
+        conn.rollback()
+        return jsonify({"error": "That username or membership link already exists."}), 400
 
 
 @app.put("/api/users/<int:uid>")
 @login_required
 def update_user(uid):
     u = current_user()
-    if u["role"] != "Admin": return jsonify({"error":"Administrator access required."}),403
-    target = db().execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
-    if not target: return jsonify({"error":"User not found."}),404
+    if u["role"] != "Admin":
+        return jsonify({"error": "Administrator access required."}), 403
+
+    conn = db()
+    target = conn.execute("SELECT * FROM users WHERE id=?", (uid,)).fetchone()
+    if not target:
+        return jsonify({"error": "User not found."}), 404
+
     data = request.get_json(force=True) or {}
-    role = data.get("role", target["role"]) or "Auditor"
+    role = data.get("role", target["role"]) or "Member"
     circuit = (data.get("circuit", target["circuit"]) or "").strip()
     church_name = (data.get("church_name", target["church_name"]) or "").strip()
-    if role not in ROLES: return jsonify({"error":"Invalid role."}),400
+
+    if role not in ROLES:
+        return jsonify({"error": "Invalid role."}), 400
+
+    member_id = target["member_id"]
+    if "member_id" in data:
+        try:
+            member_id = int(data.get("member_id") or 0)
+        except (ValueError, TypeError):
+            return jsonify({"error": "Select a valid official member record."}), 400
+
+        if member_id <= 0:
+            return jsonify({"error": "An account must remain linked to an official member record."}), 400
+
+    linked = conn.execute(
+        "SELECT id, circuit, church_name FROM members WHERE id=?",
+        (member_id,)
+    ).fetchone()
+
+    if not linked:
+        return jsonify({"error": "The selected member record was not found."}), 400
+
+    existing = conn.execute(
+        "SELECT id, username FROM users WHERE member_id=? AND id<>?",
+        (member_id, uid)
+    ).fetchone()
+
+    if existing:
+        return jsonify({
+            "error": f"This member is already linked to account: {existing['username']}."
+        }), 400
+
+    if role in DIOSAN_ROLES:
+        circuit = ""
+        church_name = ""
+    elif role == "Circuit Coordinator":
+        circuit = linked["circuit"] or circuit
+        church_name = ""
+    elif role in {"Member", "Local Church Evangelism Officer"}:
+        circuit = linked["circuit"] or circuit
+        church_name = linked["church_name"] or church_name
+
     assignment_error = validate_user_assignment(role, circuit, church_name)
-    if assignment_error: return jsonify({"error":assignment_error}),400
-    db().execute("UPDATE users SET role=?,circuit=?,church_name=? WHERE id=?", (role,circuit,church_name,uid))
-    db().commit(); audit("USER_ASSIGNMENT_UPDATED","users",uid,json.dumps({"role":role,"circuit":circuit,"church_name":church_name}))
-    return jsonify({"ok":True})
+    if assignment_error:
+        return jsonify({"error": assignment_error}), 400
+
+    conn.execute("""
+        UPDATE users
+        SET role=?, circuit=?, church_name=?, member_id=?
+        WHERE id=?
+    """, (role, circuit, church_name, member_id, uid))
+    conn.commit()
+
+    audit("USER_ASSIGNMENT_UPDATED", "users", uid, json.dumps({
+        "role": role,
+        "circuit": circuit,
+        "church_name": church_name,
+        "member_id": member_id
+    }))
+    return jsonify({"ok": True})
 
 
 @app.delete("/api/users/<int:uid>")
