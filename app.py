@@ -4397,6 +4397,10 @@ def upload_member_registration_photo(rid):
 def view_member_registration_photo(filename):
     u = current_user()
 
+    safe_name = os.path.basename(filename)
+    if safe_name != filename or not safe_name:
+        return jsonify({"error": "Invalid photo filename."}), 400
+
     allowed_roles = {
         "Admin",
         "Bishop / Diocesan Executive",
@@ -4408,13 +4412,30 @@ def view_member_registration_photo(filename):
         "Auditor"
     }
 
-    if u["role"] not in allowed_roles:
-        return jsonify({"error": "You are not authorized to view member photos."}), 403
+    if u["role"] == "Member":
+        if not u["member_id"]:
+            return jsonify({
+                "error": "Member account is not linked to a membership record."
+            }), 403
 
-    safe_name = os.path.basename(filename)
+        member = db().execute(
+            "SELECT passport_photo FROM members WHERE id=?",
+            (u["member_id"],)
+        ).fetchone()
 
-    if safe_name != filename or not safe_name:
-        return jsonify({"error": "Invalid photo filename."}), 400
+        if not member:
+            return jsonify({"error": "Member record not found."}), 404
+
+        own_photo = os.path.basename(member["passport_photo"] or "")
+        if not own_photo or own_photo != safe_name:
+            return jsonify({
+                "error": "You are not authorized to view this photo."
+            }), 403
+
+    elif u["role"] not in allowed_roles:
+        return jsonify({
+            "error": "You are not authorized to view member photos."
+        }), 403
 
     photo_path = os.path.join(MEMBER_PHOTO_DIR, safe_name)
 
