@@ -51,35 +51,51 @@ ROLES = {
 DIOSAN_ROLES = {"Admin", "Bishop / Diocesan Executive", "Evangelism Minister", "Planting Officer", "Diocesan Secretary", "Finance Officer", "Auditor"}
 
 def validate_user_assignment(role, circuit, church_name):
+    # Normalize office names for comparisons without changing stored names.
+    role_key = (role or "").strip().casefold()
     circuit = (circuit or "").strip()
     church_name = (church_name or "").strip()
 
-    if role == "Circuit Coordinator":
-        if not circuit or circuit == "Diocesan":
+    circuit_key = circuit.casefold()
+    is_diocesan_circuit = circuit_key == "diocesan"
+
+    if role_key == "circuit coordinator".casefold():
+        if not circuit or is_diocesan_circuit:
             return "A Circuit Coordinator must be assigned to a circuit."
         if church_name:
             return "A Circuit Coordinator should not be assigned to a local church."
 
-    elif role in {"Member", "Local Church Evangelism Officer"}:
-        if not circuit or circuit == "Diocesan":
-            if role == "Member":
+    elif role_key in {
+        "member".casefold(),
+        "local church evangelism officer".casefold()
+    }:
+        if not circuit or is_diocesan_circuit:
+            if role_key == "member":
                 return "A Member must be assigned to a circuit."
             return "A Local Church Evangelism Officer must be assigned to a circuit."
 
         if not church_name:
-            if role == "Member":
+            if role_key == "member":
                 return "A Member must be assigned to a local church."
             return "A Local Church Evangelism Officer must be assigned to a local church."
 
         church = db().execute(
-            "SELECT 1 FROM churches WHERE circuit=? AND church_name=?",
+            """
+            SELECT 1
+            FROM churches
+            WHERE circuit COLLATE NOCASE = ?
+              AND church_name COLLATE NOCASE = ?
+            LIMIT 1
+            """,
             (circuit, church_name)
         ).fetchone()
 
         if not church:
             return "The assigned local church does not belong to the selected circuit."
 
-    elif role in DIOSAN_ROLES:
+    elif role_key in {
+        str(item).strip().casefold() for item in DIOSAN_ROLES
+    }:
         if circuit or church_name:
             return "This diocesan role should not be assigned to a circuit or local church."
 
@@ -924,7 +940,7 @@ def login_required(fn):
         u = current_user()
         if not u or not u["active"]:
             return jsonify({"error": "Authentication required"}), 401
-        if u["must_change_password"] and request.endpoint not in {"api_change_password", "logout"}:
+        if u["must_change_password"] and request.endpoint not in {"member_change_password", "api_change_password", "logout"}:
             return jsonify({"error": "Password change required", "code": "PASSWORD_CHANGE_REQUIRED"}), 403
         return fn(*args, **kwargs)
     return wrapper
@@ -4952,6 +4968,11 @@ def review_member_registration(rid):
         "Auditor"
     }
 
+    # Accept office names regardless of capitalization while retaining
+    # the application's official role spelling.
+    role_by_key = {name.casefold(): name for name in allowed_roles}
+    role = role_by_key.get(role.casefold(), role)
+
     if status == "Approved" and role not in allowed_roles:
         return jsonify({"error": "A valid system role is required for approval."}), 400
 
@@ -5137,7 +5158,7 @@ def review_member_registration(rid):
                 VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?)
             """, (
                 registration["username"],
-                registration["password"],
+                generate_password_hash("12345678"),
                 role,
                 circuit,
                 church_name,
@@ -5241,8 +5262,7 @@ def public_member_registration():
     full_name = (data.get("full_name") or "").strip()
     phone = (data.get("phone") or "").strip()
     username = (data.get("username") or "").strip()
-    password = data.get("password") or ""
-    confirm_password = data.get("confirm_password") or ""
+    # Initial account password is assigned only after approval.
 
     if not circuit or not church_name or not full_name:
         return jsonify({
@@ -5251,12 +5271,6 @@ def public_member_registration():
 
     if len(username) < 3:
         return jsonify({"error": "Username must be at least 3 characters."}), 400
-
-    if len(password) < 8:
-        return jsonify({"error": "Password must be at least 8 characters."}), 400
-
-    if password != confirm_password:
-        return jsonify({"error": "Passwords do not match."}), 400
 
     existing_username = db().execute(
         "SELECT id FROM users WHERE username=?",
@@ -5369,7 +5383,7 @@ def public_member_registration():
                 "Pending",
                 datetime.now().isoformat(timespec="seconds"),
                 username,
-                generate_password_hash(password),
+                generate_password_hash(secrets.token_urlsafe(32)),
                 "Pending"
             )
         )

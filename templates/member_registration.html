@@ -775,8 +775,7 @@ textarea{
       <h3>🔐 Login Account</h3>
 
       <div class="notice">
-        Create the username and password you will use to log in after
-        your membership registration has been approved.
+        After approval, your initial password will be 12345678. You must change it when you first log in.
       </div>
 
       <div class="grid">
@@ -792,38 +791,6 @@ textarea{
             minlength="3"
             maxlength="50"
             autocomplete="username"
-            required>
-        </div>
-
-        <div>
-          <label for="password">
-            Password <span class="required">*</span>
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            minlength="8"
-            maxlength="100"
-            autocomplete="new-password"
-            required>
-
-          <div class="help-text">
-            Minimum 8 characters.
-          </div>
-        </div>
-
-        <div>
-          <label for="confirm_password">
-            Confirm Password <span class="required">*</span>
-          </label>
-          <input
-            id="confirm_password"
-            name="confirm_password"
-            type="password"
-            minlength="8"
-            maxlength="100"
-            autocomplete="new-password"
             required>
         </div>
 
@@ -1300,42 +1267,9 @@ form.addEventListener("submit", async function(event){
     return;
   }
 
-  const password =
-    document.getElementById("password").value;
-
-  const confirmPassword =
-    document.getElementById("confirm_password").value;
-
-  if(password.length < 8){
-
-    showMessage(
-      "error",
-      "Password must contain at least 8 characters."
-    );
-
-    document.getElementById("password").focus();
-
-    return;
-  }
-
-  if(password !== confirmPassword){
-
-    showMessage(
-      "error",
-      "Password and Confirm Password do not match."
-    );
-
-    document.getElementById("confirm_password").focus();
-
-    return;
-  }
-
-
   const formData = new FormData(form);
 
-  /* The backend validates both password fields,
-     so keep confirm_password in the request. */
-  const data = {};
+const data = {};
 
   formData.forEach(function(value, key){
     data[key] = value;

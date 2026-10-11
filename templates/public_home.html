@@ -98,8 +98,8 @@
 </section>
 
 <section class="quick-links" id="ministries">
-  <a class="quick-card" href="{{ url_for('account_registration') }}"><span class="icon purple">♟</span><b>Church Membership</b><small>Register or Login</small></a>
-  <a class="quick-card" href="{{ url_for('account_registration') }}"><span class="icon green">▤</span><b>New Converts</b><small>Start Your Journey</small></a>
+  <a class="quick-card" href="{{ url_for('public_member_registration_page') }}"><span class="icon purple">♟</span><b>Church Membership</b><small>Register or Login</small></a>
+  <a class="quick-card" href="{{ url_for('public_member_registration_page') }}"><span class="icon green">▤</span><b>New Converts</b><small>Start Your Journey</small></a>
   <a class="quick-card" href="#contact"><span class="icon gold">🙏</span><b>Prayer Request</b><small>We Pray With You</small></a>
   <a class="quick-card" href="#online"><span class="icon red-bg">♡</span><b>Give Online</b><small>Support God's Work</small></a>
   <a class="quick-card" href="#events"><span class="icon blue">▦</span><b>Events</b><small>Stay Informed</small></a>
@@ -251,7 +251,7 @@
     {% endfor %}
   </div>
 
-  <a class="button blue-button" href="{{ url_for('account_registration') }}">Register Your Interest</a>
+  <a class="button blue-button" href="{{ url_for('public_member_registration_page') }}">Register Your Interest</a>
 </section>
 
 <section class="contact-section" id="contact">
@@ -272,7 +272,7 @@
 <footer>
   <div class="footer-brand"><img class="footer-logo" src="/static/uploads/leadership/mcn-logo.png?v=4" alt="Official Methodist Church Nigeria emblem"><div><b>METHODIST CHURCH NIGERIA</b><br><strong>DELTA SOUTH DIOCESE</strong><small>WORSHIP · WITNESS · SERVICE · DISCIPLESHIP</small></div></div>
   <div><h3>Useful Links</h3><a href="#about">About Us</a><a href="#diocese">Our Diocese</a><a href="#ministries">Ministries</a><a href="#events">Events</a></div>
-  <div><h3>Online Services</h3><a href="#watch">Sermons</a><a href="/live">Live Service</a><a href="{{ url_for('account_registration') }}">Registration</a><a href="{{ url_for('login') }}">Member Login</a></div>
+  <div><h3>Online Services</h3><a href="#watch">Sermons</a><a href="/live">Live Service</a><a href="{{ url_for('public_member_registration_page') }}">Registration</a><a href="{{ url_for('login') }}">Member Login</a></div>
   <div><h3>Connect With Us</h3><a href="mailto:{{ homepage_content.get('contact_email') or 'info@mcn-deltasouth.org' }}">Email</a><p>“Together for a Greater Harvest in His Kingdom.”</p></div>
   <div class="copyright">© <span id="year"></span> Methodist Church Nigeria, Delta South Diocese. All rights reserved.</div>
 </footer>
