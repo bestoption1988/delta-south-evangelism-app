@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sermons and Events Management</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f1f5f9;color:#18304f;margin:0}
+header{background:#10284c;color:white;padding:20px}
+main{max-width:950px;margin:auto;padding:15px}
+.card{background:white;padding:18px;border-radius:10px;margin:16px 0}
+label{display:block;font-weight:bold;margin-top:12px}
+input,textarea{box-sizing:border-box;width:100%;padding:10px;margin-top:5px}
+textarea{min-height:70px}
+button,a{display:inline-block;background:#123d70;color:white;border:0;border-radius:5px;padding:11px 15px;margin-top:12px;text-decoration:none}
+.save{background:#147447}
+hr{margin:22px 0;border:0;border-top:1px solid #ddd}
+</style>
+</head>
+<body>
+<header>
+<h2>METHODIST CHURCH NIGERIA</h2>
+<p>Delta South Diocese — Sermons and Events</p>
+</header>
+<main>
+<a href="/admin/homepage">Homepage Management</a>
+<a href="/">View Public Homepage</a>
+{% if message %}<p>{{ message }}</p>{% endif %}
+{% if error %}<p>{{ error }}</p>{% endif %}
+
+<section class="card">
+<h2>Add Sermon</h2>
+<form method="post">
+<input type="hidden" name="kind" value="sermon">
+<label>Sermon title</label><input name="title" maxlength="250" required>
+<label>Description</label><textarea name="description" maxlength="3000"></textarea>
+<label>Video URL</label><input type="url" name="video_url">
+<label>Display order</label><input type="number" name="display_order" value="1" min="1">
+<button class="save" type="submit">Add Sermon</button>
+</form>
+</section>
+
+<section class="card">
+<h2>Add Event</h2>
+<form method="post">
+<input type="hidden" name="kind" value="event">
+<label>Event title</label><input name="title" maxlength="250" required>
+<label>Description</label><textarea name="description" maxlength="3000"></textarea>
+<label>Date</label><input type="date" name="event_date">
+<label>Venue</label><input name="venue" maxlength="300">
+<button class="save" type="submit">Add Event</button>
+</form>
+</section>
+
+<section class="card">
+<h2>Existing Sermons</h2>
+{% for x in sermons %}
+<hr><h3>{{ x.title }}</h3>
+<p>{{ x.description }}</p>
+{% if x.video_url %}<p><a href="{{ x.video_url }}" target="_blank" rel="noopener">Open video</a></p>{% endif %}
+<form method="post">
+<input type="hidden" name="kind" value="toggle_sermon">
+<input type="hidden" name="id" value="{{ x.id }}">
+<input type="hidden" name="active" value="{{ 0 if x.active else 1 }}">
+<button type="submit">{{ 'Hide' if x.active else 'Publish' }}</button>
+</form>
+<form method="post" onsubmit="return confirm('Delete this sermon permanently?')">
+<input type="hidden" name="kind" value="delete_sermon">
+<input type="hidden" name="id" value="{{ x.id }}">
+<button type="submit">Delete Sermon</button>
+</form>
+{% else %}<p>No sermons added yet.</p>{% endfor %}
+</section>
+
+<section class="card">
+<h2>Existing Events</h2>
+{% for x in events %}
+<hr><h3>{{ x.title }}</h3>
+<p>{{ x.event_date }} — {{ x.venue }}</p><p>{{ x.description }}</p>
+<form method="post">
+<input type="hidden" name="kind" value="toggle_event">
+<input type="hidden" name="id" value="{{ x.id }}">
+<input type="hidden" name="active" value="{{ 0 if x.active else 1 }}">
+<button type="submit">{{ 'Hide' if x.active else 'Publish' }}</button>
+</form>
+<form method="post" onsubmit="return confirm('Delete this event permanently?')">
+<input type="hidden" name="kind" value="delete_event">
+<input type="hidden" name="id" value="{{ x.id }}">
+<button type="submit">Delete Event</button>
+</form>
+{% else %}<p>No events added yet.</p>{% endfor %}
+</section>
+</main>
+</body>
+</html>

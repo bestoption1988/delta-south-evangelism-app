@@ -2654,7 +2654,7 @@ document.addEventListener("click", async e => {
   }
 });
 
-if("serviceWorker" in navigator)navigator.serviceWorker.register("/static/sw.js").catch(()=>{});
+if("serviceWorker" in navigator)navigator.serviceWorker.register("/static/sw.js?v=20261010-dashboard-cache-fix",{updateViaCache:"none"}).catch(e=>console.error("Service worker update failed:",e));
 
 /* Member Care floating button */
 document.addEventListener("click", function(e){

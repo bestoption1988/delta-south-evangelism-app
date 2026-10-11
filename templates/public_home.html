@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#08245b">
+<meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
+<title>Methodist Church Nigeria | Delta South Diocese</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261010-logo-fix">
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">
+    <div class="church-mark official-church-logo">
+      <img src="/static/uploads/leadership/mcn-logo.png?v=3"
+           alt="Official Methodist Church Nigeria emblem">
+    </div>
+    <div>
+      <strong>METHODIST CHURCH NIGERIA</strong>
+      <b>DELTA SOUTH DIOCESE</b>
+      <small>WORSHIP · WITNESS · SERVICE · DISCIPLESHIP</small>
+    </div>
+  </div>
+  <div class="contact">
+    <span>☎ Contact the Diocese</span>
+    <a href="mailto:info@mcn-deltasouth.org">✉ Email Us</a>
+    <a class="member-btn" href="{{ url_for('login') }}">♙ Member Portal / Login</a>
+  </div>
+</div>
+
+<nav class="navbar">
+  <button id="menuToggle" aria-label="Open navigation" aria-expanded="false">☰ Menu</button>
+  <div id="navLinks">
+    <a href="#home">⌂ Home</a>
+    <a href="#about">About Us</a>
+    <a href="#diocese">Our Diocese</a>
+    <a href="#ministries">Ministries</a>
+    <a href="#watch">Sermons & Media</a>
+    <a href="#events">Events</a>
+    <a href="#online">Online Services</a>
+    <a href="#resources">Resources</a>
+    <a href="#contact">Contact</a>
+  </div>
+</nav>
+
+<main>
+<section class="hero" id="home">
+  <div class="hero-content">
+    <p class="eyebrow">WELCOME TO</p>
+    <h1>{{ homepage_content.get("hero_heading") or "METHODIST CHURCH NIGERIA" }}<br><span>{{ homepage_content.get("hero_subheading") or "DELTA SOUTH DIOCESE" }}</span></h1>
+    <p class="verse">“Go into all the world and preach the Gospel to every creature.” — Mark 16:15</p>
+    <div class="hero-actions">
+      <a class="button red" href="/live">▶ Watch Live Service</a>
+      <a class="button outline" href="#churches">⌖ Find a Church Near You</a>
+    </div>
+  </div>
+  <div class="live-panel" id="online">
+    <div class="live-label">● LIVE SERVICE</div>
+    <div class="live-screen">
+      <div class="cross">✝</div>
+      <h2>Worship with Us</h2>
+      <p>Methodist Church Nigeria<br>Delta South Diocese</p>
+      {% if homepage_content.get("livestream_url") %}
+      <a class="button red" href="{{ homepage_content.get('livestream_url') }}" target="_blank" rel="noopener">▶ Watch Live Service</a>
+      {% else %}
+      <a class="button red" href="/live">Watch & Listen</a>
+      {% endif %}
+
+      <a class="button outline" href="{{ url_for('login') }}">🎥 Member Conference Login</a>
+    </div>
+    <p class="caption">{{ homepage_content.get("livestream_announcement") or "Live service video will appear here when the official stream is configured." }}</p>
+    {% set stream_url = homepage_content.get("livestream_url", "") %}
+    {% set youtube_id = "" %}
+    {% if "youtube.com/watch?v=" in stream_url %}
+      {% set youtube_id = stream_url.split("youtube.com/watch?v=")[1].split("&")[0] %}
+    {% elif "youtu.be/" in stream_url %}
+      {% set youtube_id = stream_url.split("youtu.be/")[1].split("?")[0].split("&")[0] %}
+    {% elif "youtube.com/live/" in stream_url %}
+      {% set youtube_id = stream_url.split("youtube.com/live/")[1].split("?")[0].split("&")[0] %}
+    {% endif %}
+    {% if youtube_id %}
+    <div class="youtube-player">
+      <iframe
+        src="https://www.youtube-nocookie.com/embed/{{ youtube_id }}"
+        title="Methodist Church Nigeria Delta South Diocese Live Service"
+        loading="lazy"
+        referrerpolicy="strict-origin-when-cross-origin"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen></iframe>
+    </div>
+    {% elif stream_url %}
+    <p><a class="button red" href="{{ stream_url }}" target="_blank" rel="noopener">Open Live Broadcast</a></p>
+    {% else %}
+    <p class="stream-not-configured">Our online broadcast will appear here when the official streaming link is configured.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="quick-links" id="ministries">
+  <a class="quick-card" href="{{ url_for('account_registration') }}"><span class="icon purple">♟</span><b>Church Membership</b><small>Register or Login</small></a>
+  <a class="quick-card" href="{{ url_for('account_registration') }}"><span class="icon green">▤</span><b>New Converts</b><small>Start Your Journey</small></a>
+  <a class="quick-card" href="#contact"><span class="icon gold">🙏</span><b>Prayer Request</b><small>We Pray With You</small></a>
+  <a class="quick-card" href="#online"><span class="icon red-bg">♡</span><b>Give Online</b><small>Support God's Work</small></a>
+  <a class="quick-card" href="#events"><span class="icon blue">▦</span><b>Events</b><small>Stay Informed</small></a>
+  <a class="quick-card" href="/live"><span class="icon violet">▶</span><b>Live Streaming</b><small>Watch Our Services</small></a>
+  <a class="quick-card" href="#watch"><span class="icon navy">♫</span><b>Sermons</b><small>Listen & Be Blessed</small></a>
+  <a class="quick-card" href="#churches"><span class="icon indigo">⌖</span><b>Find a Church</b><small>Locate a Church</small></a>
+  <a class="quick-card" href="{{ url_for('login') }}"><span class="icon green">♙</span><b>Member Portal</b><small>Registration & Login</small></a>
+</section>
+
+<section class="feature-grid" id="about">
+  <article class="prelate feature-card">
+    <div class="profile-symbol">✝</div>
+    <div>
+      <p class="eyebrow">CHURCH LEADERSHIP</p>
+      <h2>His Eminence<br>Dr. Oliver Ali Aba (JP)</h2>
+      <p>Prelate, Methodist Church Nigeria</p>
+      <p class="quote">“A Church on Fire for Christ, Transforming Lives and Impacting Nations.”</p>
+      <a class="button gold-button" href="#diocese">Read More →</a>
+    </div>
+  </article>
+
+  <article class="feature-card vision" id="diocese">
+    <p class="eyebrow">{{ homepage_content.get("about_title") or "OUR VISION & MISSION" }}</p>
+    <div class="vision-row"><span>◉</span><div><h3>Vision</h3><p>{{ homepage_content.get("vision") or "To be spiritually vibrant and one of the largest Churches in Nigeria." }}</p></div></div>
+    <div class="vision-row"><span>◎</span><div><h3>Mission</h3><ul class="mission-list"><li>{{ homepage_content.get("mission_1") or "To consistently win more souls for Christ." }}</li><li>{{ homepage_content.get("mission_2") or "To develop spiritually fulfilled members." }}</li><li>{{ homepage_content.get("mission_3") or "To remain very active in serving humanity." }}</li></ul></div></div>
+    <a class="button gold-button" href="#contact">Learn More About Our Diocese →</a>
+  </article>
+
+  <article class="feature-card announcements" id="events">
+    <div class="section-heading"><h2>📣 Latest Announcements</h2><a href="#resources">View All →</a></div>
+    <div class="announcement"><span class="date">10<br><small>OCT</small></span><div><b>Diocesan Harvest Thanksgiving</b><p>Join the Diocese in thanksgiving and praise.</p></div></div>
+    <div class="announcement"><span class="date">08<br><small>OCT</small></span><div><b>Evangelism Outreach Programme</b><p>Join us in reaching communities across our circuits.</p></div></div>
+    <div class="announcement"><span class="date">05<br><small>OCT</small></span><div><b>Workers' Meeting</b><p>Ministers, stewards and workers are encouraged to participate.</p></div></div>
+    <div class="announcement"><span class="date">01<br><small>OCT</small></span><div><b>New Member Registration</b><p>Begin your membership registration online.</p></div></div>
+    <p class="notice">Sample announcements are shown here. Replace them with verified diocesan announcements and actual dates.</p>
+  </article>
+</section>
+
+<section class="leadership-section" id="leadership">
+<div class="leadership-heading">
+<p class="eyebrow">METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE</p>
+<h2>Meet Our Church Leaders</h2>
+<p>Worship, witness, service and discipleship.</p>
+</div>
+<div class="leadership-grid">
+{% for profile in leadership_profiles %}
+<article class="leader-card">
+{% if profile.photo_path %}
+<img class="leader-photo" src="{{ url_for('static', filename=profile.photo_path) }}" alt="{{ profile.title }}">
+{% else %}
+<div class="leader-photo leader-placeholder">✝</div>
+{% endif %}
+<div class="leader-info">
+<p class="eyebrow">{{ profile.title }}</p>
+<h3>{{ profile.full_name or "Profile coming soon" }}</h3>
+<p>{{ profile.biography or "Official profile information will be published here." }}</p>
+</div>
+</article>
+{% endfor %}
+</div>
+</section>
+
+<section class="watch-section" id="watch">
+  <div class="section-title"><h2>WATCH & LISTEN</h2><p>Live streaming, sermons, teachings and more</p></div>
+  <div class="media-grid">
+    <a href="#online" class="media-card"><span>▶</span><b>Live Service</b><small>Join Us in Worship</small></a>
+    <a href="#resources" class="media-card"><span>🎙</span><b>Recent Sermons</b><small>Watch & Listen</small></a>
+    <a href="#resources" class="media-card"><span>📖</span><b>Bible Teachings</b><small>Grow in the Word</small></a>
+    <a href="#resources" class="media-card"><span>🎤</span><b>Special Programmes</b><small>Watch on Demand</small></a>
+    <a href="#resources" class="media-card"><span>♫</span><b>Choir & Music</b><small>Inspiration Through Music</small></a>
+    <a href="#resources" class="media-card"><span>♡</span><b>Testimonies</b><small>Be Encouraged</small></a>
+  </div>
+</section>
+
+<section class="bottom-grid" id="resources">
+  <article class="feature-card">
+    <div class="section-heading"><h2>▦ Upcoming Events</h2><a href="#contact">View Events</a></div>
+    {% for event in homepage_events %}
+    <div class="event-row">
+      <span class="date">{{ event.event_date or "TBA" }}</span>
+      <div><b>{{ event.title }}</b>
+      <p>{{ event.description or "" }}</p>
+      {% if event.venue %}<p>{{ event.venue }}</p>{% endif %}</div>
+    </div>
+    {% else %}
+    <p>No upcoming events have been published yet.</p>
+    {% endfor %}
+  </article>
+
+  <article class="feature-card">
+    <div class="section-heading"><h2>▶ Featured Sermon</h2><a href="#watch">View All</a></div>
+    {% for sermon in homepage_sermons[:3] %}
+    <div class="sermon-entry">
+      <div class="sermon-art">✝</div>
+      <h3>{{ sermon.title }}</h3>
+      <p>{{ sermon.description or "" }}</p>
+      {% if sermon.video_url %}
+      <a class="button blue-button" href="{{ sermon.video_url }}" target="_blank" rel="noopener">Watch Sermon</a>
+      {% endif %}
+    </div>
+    {% else %}
+    <div class="sermon-art">✝</div>
+    <p>No sermons have been published yet.</p>
+    {% endfor %}
+{% if homepage_content.get("featured_sermon_title") %}<p>{{ homepage_content.get("featured_sermon_title") }}</p>{% endif %}
+{% if homepage_content.get("featured_sermon_url") %}<a class="button blue-button" href="{{ homepage_content.get('featured_sermon_url') }}" target="_blank" rel="noopener">Watch Featured Sermon</a>{% endif %}
+    <h3>Growing in Faith and Purpose</h3>
+    <p>Scripture teaching and spiritual encouragement.</p>
+    <a href="#watch" class="button blue-button">Explore Sermons →</a>
+  </article>
+
+  <article class="feature-card">
+    <div class="section-heading"><h2>Quick Links</h2></div>
+    <div class="resource-links">
+      <a href="#online">♡<small>Online Giving</small></a>
+      <a href="#contact">🙏<small>Prayer Request</small></a>
+      <a href="#churches">⌖<small>Church Locator</small></a>
+      <a href="#contact">✉<small>Contact Us</small></a>
+    </div>
+  </article>
+</section>
+
+<section class="church-finder feature-card" id="churches">
+  <p class="eyebrow">WORSHIP WITH US</p>
+  <h2>Find a Methodist Church Near You</h2>
+  <p>Explore congregations across Effurun, Warri, Sapele and Steel Town circuits.</p>
+
+  <div class="church-list">
+    {% for circuit, churches in homepage_churches|groupby('circuit') %}
+    <div class="circuit-group">
+      <h3>{{ circuit }} Circuit</h3>
+      <div class="church-grid">
+        {% for church in churches %}
+        <article class="church-card">
+          <h4>{{ church.church_name }}</h4>
+          <p>{{ church.circuit }} Circuit</p>
+          {% if church.contact_person %}
+          <p>Contact: {{ church.contact_person }}</p>
+          {% endif %}
+          {% if church.phone %}
+          <p>Telephone: <a href="tel:{{ church.phone }}">{{ church.phone }}</a></p>
+          {% endif %}
+        </article>
+        {% endfor %}
+      </div>
+    </div>
+    {% else %}
+    <p>Church listings are being updated. Please contact the diocesan office for assistance.</p>
+    {% endfor %}
+  </div>
+
+  <a class="button blue-button" href="{{ url_for('account_registration') }}">Register Your Interest</a>
+</section>
+
+<section class="contact-section" id="contact">
+  <p class="eyebrow">WE WOULD LOVE TO HEAR FROM YOU</p>
+  <h2>Connect With the Diocese</h2>
+  <p>{{ homepage_content.get("diocese_text") or "For worship, membership, prayer and diocesan enquiries, please contact your local church or diocesan office." }}</p>
+  <a class="button gold-button" href="mailto:info@mcn-deltasouth.org">✉ Email the Diocese</a>
+  <div class="contact-details">
+{% if homepage_content.get("contact_email") %}<p>Email: <a href="mailto:{{ homepage_content.get('contact_email') }}">{{ homepage_content.get("contact_email") }}</a></p>{% endif %}
+{% if homepage_content.get("contact_phone") %}<p>Telephone: <a href="tel:{{ homepage_content.get('contact_phone') }}">{{ homepage_content.get("contact_phone") }}</a></p>{% endif %}
+{% if homepage_content.get("contact_address") %}<p>Address: {{ homepage_content.get("contact_address") }}</p>{% endif %}
+{% if homepage_content.get("facebook_url") %}<p><a href="{{ homepage_content.get('facebook_url') }}" target="_blank" rel="noopener">Facebook</a></p>{% endif %}
+{% if homepage_content.get("youtube_url") %}<p><a href="{{ homepage_content.get('youtube_url') }}" target="_blank" rel="noopener">YouTube</a></p>{% endif %}
+</div>
+</section>
+</main>
+
+<footer>
+  <div class="footer-brand"><img class="footer-logo" src="/static/uploads/leadership/mcn-logo.png?v=4" alt="Official Methodist Church Nigeria emblem"><div><b>METHODIST CHURCH NIGERIA</b><br><strong>DELTA SOUTH DIOCESE</strong><small>WORSHIP · WITNESS · SERVICE · DISCIPLESHIP</small></div></div>
+  <div><h3>Useful Links</h3><a href="#about">About Us</a><a href="#diocese">Our Diocese</a><a href="#ministries">Ministries</a><a href="#events">Events</a></div>
+  <div><h3>Online Services</h3><a href="#watch">Sermons</a><a href="/live">Live Service</a><a href="{{ url_for('account_registration') }}">Registration</a><a href="{{ url_for('login') }}">Member Login</a></div>
+  <div><h3>Connect With Us</h3><a href="mailto:{{ homepage_content.get('contact_email') or 'info@mcn-deltasouth.org' }}">Email</a><p>“Together for a Greater Harvest in His Kingdom.”</p></div>
+  <div class="copyright">© <span id="year"></span> Methodist Church Nigeria, Delta South Diocese. All rights reserved.</div>
+</footer>
+
+<script>
+const toggle = document.getElementById("menuToggle");
+const links = document.getElementById("navLinks");
+toggle.addEventListener("click", () => {
+  const open = links.classList.toggle("open");
+  toggle.setAttribute("aria-expanded", String(open));
+});
+links.querySelectorAll("a").forEach(a => a.addEventListener("click", () => {
+  links.classList.remove("open");
+  toggle.setAttribute("aria-expanded", "false");
+}));
+document.getElementById("year").textContent = new Date().getFullYear();
+</script>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diocesan Leadership Management</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f1f5f9;margin:0;color:#18304f}
+header{background:#10284c;color:white;padding:20px}
+main{max-width:900px;margin:20px auto;padding:12px}
+.card{background:white;padding:18px;margin:15px 0;border-radius:12px}
+label{display:block;margin:12px 0 5px;font-weight:bold}
+input,select,textarea{box-sizing:border-box;width:100%;padding:10px;border:1px solid #ccd5e1;border-radius:6px}
+textarea{min-height:90px}
+button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;border:0;border-radius:6px;text-decoration:none;margin-top:12px}
+</style>
+</head>
+<body>
+<header>
+<h2>Methodist Church Nigeria</h2>
+<p>Delta South Diocese — Leadership Management</p>
+</header>
+<main>
+<p><a href="/">View Public Homepage</a></p>
+{% if message %}<p>{{ message }}</p>{% endif %}
+{% if error %}<p>{{ error }}</p>{% endif %}
+
+<section class="card">
+<h3>Upload Official Church Logo</h3>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="action" value="logo">
+<label>Church logo</label>
+<input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp" required>
+<button type="submit">Upload Logo</button>
+</form>
+</section>
+
+<section class="card">
+<h3>Add Leadership Profile</h3>
+<form method="post" enctype="multipart/form-data">
+<label>Position</label>
+<select name="title" required>
+{% for title in titles %}<option>{{ title }}</option>{% endfor %}
+</select>
+<label>Full name</label>
+<input name="full_name" maxlength="160">
+<label>Biography</label>
+<textarea name="biography" maxlength="2500"></textarea>
+<label>Profile photo</label>
+<input type="file" name="photo" accept=".png,.jpg,.jpeg,.webp">
+<label>Display order</label>
+<input type="number" name="display_order" value="1" min="1" max="99">
+<label><input style="width:auto" type="checkbox" name="active" value="1" checked> Display publicly</label>
+<button type="submit" name="action" value="save">Save Profile</button>
+</form>
+</section>
+
+<section class="card">
+<h3>Existing Profiles</h3>
+{% for p in profiles %}
+<hr>
+<h4>{{ p.title }} — {{ p.full_name or 'Name not entered' }}</h4>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="id" value="{{ p.id }}">
+<label>Position</label>
+<select name="title">{% for title in titles %}<option {% if p.title==title %}selected{% endif %}>{{ title }}</option>{% endfor %}</select>
+<label>Full name</label>
+<input name="full_name" value="{{ p.full_name or '' }}" maxlength="160">
+<label>Biography</label>
+<textarea name="biography" maxlength="2500">{{ p.biography or '' }}</textarea>
+<label>Replace photo</label>
+<input type="file" name="photo" accept=".png,.jpg,.jpeg,.webp">
+<label>Display order</label>
+<input type="number" name="display_order" value="{{ p.display_order or 1 }}" min="1" max="99">
+<label><input style="width:auto" type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %}> Display publicly</label>
+<button type="submit" name="action" value="save">Save Changes</button>
+<button type="submit" name="action" value="delete">Hide Profile</button>
+</form>
+{% endfor %}
+</section>
+</main>
+</body>
+</html>

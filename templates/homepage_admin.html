@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Homepage Management</title>
+<style>
+body{font-family:Arial;background:#f1f5f9;color:#18304f;margin:0}
+header{background:#10284c;color:white;padding:20px}
+main{max-width:900px;margin:auto;padding:15px}
+section{background:white;padding:18px;margin:15px 0;border-radius:10px}
+label{display:block;font-weight:bold;margin-top:12px}
+input,textarea{box-sizing:border-box;width:100%;padding:10px;margin-top:5px}
+textarea{min-height:70px}
+button,a{display:inline-block;background:#123d70;color:white;padding:12px;border:0;border-radius:5px;text-decoration:none;margin:8px 4px 8px 0}
+</style>
+</head>
+<body>
+<header><h2>METHODIST CHURCH NIGERIA</h2><p>Delta South Diocese — Homepage Management</p></header>
+<main>
+<a href="/">Public Homepage</a> <a href="/admin/leadership">Leadership Management</a>
+{% if message %}<p>{{ message }}</p>{% endif %}
+{% if error %}<p>{{ error }}</p>{% endif %}
+<form method="post">
+<section><h2>Homepage & About Us</h2>
+<label>Main heading</label><input name="hero_heading" value="{{ content.get('hero_heading','') }}">
+<label>Subheading</label><input name="hero_subheading" value="{{ content.get('hero_subheading','') }}">
+<label>About title</label><input name="about_title" value="{{ content.get('about_title','') }}">
+<label>About information</label><textarea name="about_text">{{ content.get('about_text','') }}</textarea>
+<label>Our Diocese</label><textarea name="diocese_text">{{ content.get('diocese_text','') }}</textarea></section>
+<section><h2>Vision & Mission</h2>
+<label>Vision</label><textarea name="vision">{{ content.get('vision','') }}</textarea>
+<label>Mission 1</label><textarea name="mission_1">{{ content.get('mission_1','') }}</textarea>
+<label>Mission 2</label><textarea name="mission_2">{{ content.get('mission_2','') }}</textarea>
+<label>Mission 3</label><textarea name="mission_3">{{ content.get('mission_3','') }}</textarea></section>
+<section><h2>Contact Details</h2>
+<label>Email</label><input type="email" name="contact_email" value="{{ content.get('contact_email','') }}">
+<label>Phone</label><input name="contact_phone" value="{{ content.get('contact_phone','') }}">
+<label>Address</label><textarea name="contact_address">{{ content.get('contact_address','') }}</textarea>
+<label>Facebook URL</label><input type="url" name="facebook_url" value="{{ content.get('facebook_url','') }}">
+<label>YouTube URL</label><input type="url" name="youtube_url" value="{{ content.get('youtube_url','') }}"></section>
+<section><h2>Streaming & Sermon</h2>
+<label>Live stream URL</label><input type="url" name="livestream_url" value="{{ content.get('livestream_url','') }}">
+<label>Streaming announcement</label><textarea name="livestream_announcement">{{ content.get('livestream_announcement','') }}</textarea>
+<label>Featured sermon title</label><input name="featured_sermon_title" value="{{ content.get('featured_sermon_title','') }}">
+<label>Featured sermon URL</label><input type="url" name="featured_sermon_url" value="{{ content.get('featured_sermon_url','') }}"></section>
+<button type="submit">Save Homepage Changes</button>
+</form>
+</main>
+</body>
+</html>

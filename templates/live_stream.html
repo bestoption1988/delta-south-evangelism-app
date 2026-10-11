@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#14532d">
+<title>Live Worship | Methodist Church Nigeria, Delta South Diocese</title>
+<style>
+:root{color-scheme:dark;--green:#14532d;--gold:#e9bd54;--bg:#07130e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:#fff;font-family:Arial,sans-serif}
+header{padding:22px 16px;text-align:center;background:linear-gradient(135deg,#14532d,#07130e)}
+header h1{font-size:clamp(20px,4vw,32px);margin:8px 0}
+header p{color:#e9dcae;margin:5px}
+.brand{font-size:13px;letter-spacing:2px;color:var(--gold)}
+main{width:min(100% - 28px,1000px);margin:24px auto}
+.panel{background:#10251a;border:1px solid #294936;border-radius:16px;padding:18px;margin-bottom:20px}
+.status{display:inline-flex;align-items:center;gap:8px;padding:9px 13px;border-radius:30px;background:#263b2d;font-weight:bold;font-size:13px}
+.dot{width:9px;height:9px;border-radius:50%;background:#f0bd45}
+.player{position:relative;background:#000;border-radius:12px;overflow:hidden;margin-top:16px;aspect-ratio:16/9;display:grid;place-items:center}
+video{width:100%;height:100%;object-fit:contain;background:#000}
+#placeholder{position:absolute;text-align:center;padding:20px;color:#ddd}
+#placeholder strong{display:block;font-size:clamp(20px,5vw,34px);margin-bottom:10px}
+#message{font-size:14px;line-height:1.6;color:#d7e3da}
+button,.button{display:inline-block;border:0;border-radius:8px;background:var(--gold);color:#152015;padding:12px 17px;font-weight:bold;text-decoration:none;cursor:pointer}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:15px}
+.secondary{background:#294936;color:white}
+footer{text-align:center;padding:24px;color:#a8b9ad;font-size:13px}
+a{color:var(--gold)}
+@media(max-width:500px){main{width:calc(100% - 20px);margin:14px auto}.panel{padding:13px}}
+</style>
+</head>
+<body>
+<header>
+<div class="brand">METHODIST CHURCH NIGERIA</div>
+<h1>Delta South Diocese</h1>
+<p>Worship · Witness · Service · Discipleship</p>
+</header>
+<main>
+<section class="panel">
+<div class="status"><span class="dot"></span><span id="status">CHECKING STREAM</span></div>
+<h2>Live Worship Service</h2>
+<p>Join the Methodist Church Nigeria, Delta South Diocese, for worship, prayer and the Word of God.</p>
+<div class="player">
+<video id="video" controls playsinline preload="none"></video>
+<div id="placeholder">
+<strong>✝ Live Worship</strong>
+<div id="message">Connecting to the broadcast service…</div>
+</div>
+</div>
+<div class="actions">
+<button id="retry" type="button">Reconnect to Stream</button>
+<a class="button secondary" href="/">Return to Diocese Homepage</a>
+</div>
+<p id="help" style="font-size:12px;color:#a8b9ad;margin-top:16px">The broadcast will play here when the streaming server is online.</p>
+</section>
+<section class="panel">
+<h2>Worship With Us</h2>
+<p>“Go into all the world and preach the Gospel to every creature.” — Mark 16:15</p>
+<p>For assistance, please contact your local church or the diocesan office.</p>
+</section>
+</main>
+<footer>© <span id="year"></span> Methodist Church Nigeria, Delta South Diocese.</footer>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+<script>
+(function(){
+const video=document.getElementById('video');
+const status=document.getElementById('status');
+const placeholder=document.getElementById('placeholder');
+const message=document.getElementById('message');
+document.getElementById('year').textContent=new Date().getFullYear();
+
+/* Configure STREAM_HLS_URL on the Flask server for public playback. */
+const streamUrl={{ stream_hls_url|tojson }};
+let hls=null;
+
+function showOffline(text){
+ status.textContent='STREAM NOT CONNECTED';
+ placeholder.style.display='block';
+ message.textContent=text;
+}
+function connect(){
+ if(hls){hls.destroy();hls=null}
+ video.pause();
+ video.removeAttribute('src');
+ video.load();
+ placeholder.style.display='block';
+ status.textContent='CONNECTING';
+ message.textContent='Connecting to the broadcast service…';
+
+ if(!streamUrl){
+   showOffline('The public streaming address has not been configured yet.');
+   return;
+ }
+ if(video.canPlayType('application/vnd.apple.mpegurl')){
+   video.src=streamUrl;
+   video.load();
+   video.addEventListener('loadedmetadata',function(){
+     status.textContent='STREAM READY';
+     placeholder.style.display='none';
+   },{once:true});
+   video.addEventListener('error',function(){
+     showOffline('The stream is not currently available. Please try again shortly.');
+   },{once:true});
+ }else if(window.Hls&&Hls.isSupported()){
+   hls=new Hls({enableWorker:true});
+   hls.loadSource(streamUrl);
+   hls.attachMedia(video);
+   hls.on(Hls.Events.MANIFEST_PARSED,function(){
+     status.textContent='STREAM READY';
+     placeholder.style.display='none';
+   });
+   hls.on(Hls.Events.ERROR,function(event,data){
+     if(data.fatal) showOffline('The broadcast is unavailable or the streaming server rejected the connection.');
+   });
+ }else{
+   showOffline('This browser cannot play this stream. Please try an updated browser.');
+ }
+}
+video.addEventListener('playing',function(){
+ status.textContent='PLAYING LIVE';
+ placeholder.style.display='none';
+});
+video.addEventListener('waiting',function(){
+ status.textContent='BUFFERING';
+});
+document.getElementById('retry').addEventListener('click',connect);
+connect();
+})();
+</script>
+</body>
+</html>

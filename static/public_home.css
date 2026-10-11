@@ -1,0 +1,210 @@
+:root{--navy:#071b50;--blue:#102c70;--green:#14532d;--red:#e51c35;--gold:#f5c21b;--ink:#17213b;--muted:#657087;--paper:#f2f5fa}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:75px}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:var(--ink);background:var(--paper);line-height:1.5}a{text-decoration:none;color:inherit}.topbar{background:#fff;display:flex;justify-content:space-between;align-items:center;gap:20px;padding:14px clamp(16px,4vw,55px);box-shadow:0 2px 8px #00000012}.brand{display:flex;align-items:center;gap:13px}.church-mark{width:78px;height:78px;border:4px solid var(--red);border-radius:50%;display:grid;place-items:center;color:var(--blue);font-size:42px;font-weight:bold;flex-shrink:0}.brand strong,.brand b,.brand small{display:block}.brand strong{font-family:Georgia,serif;color:var(--navy);font-size:clamp(16px,2vw,25px)}.brand b{font-family:Georgia,serif;color:#c9182b;font-size:clamp(15px,1.8vw,22px)}.brand small{font-size:10px;letter-spacing:2px;color:#596174;margin-top:4px}.contact{display:flex;align-items:center;gap:17px;font-size:12px;flex-wrap:wrap}.member-btn{background:var(--red);color:white;border-radius:7px;padding:13px 17px;font-weight:bold}.navbar{background:var(--navy);color:white;padding:0 clamp(12px,4vw,50px);position:sticky;top:0;z-index:10}.navbar #navLinks{display:flex;align-items:center;justify-content:space-between;gap:5px}.navbar a{display:block;padding:15px 9px;font-size:12px;font-weight:bold;border-bottom:3px solid transparent}.navbar a:hover{background:#ffffff12;border-color:var(--gold)}#menuToggle{display:none;background:transparent;color:white;border:0;font-size:17px;padding:13px}.hero{min-height:400px;background:linear-gradient(90deg,#061742f5,#061742c9 46%,#06174255),linear-gradient(135deg,#102a63,#c17b43 53%,#081b45);color:white;padding:42px clamp(22px,5vw,70px);display:grid;grid-template-columns:1.3fr .7fr;gap:35px;align-items:center}.hero-content{max-width:720px}.eyebrow{font-size:12px;font-weight:bold;letter-spacing:1.6px;color:#e3ae00;margin:0 0 10px}.hero h1{font-family:Georgia,serif;font-size:clamp(30px,4.2vw,55px);line-height:1.08;margin:0 0 15px}.hero h1 span{color:#ffd02e}.verse{font-family:Georgia,serif;font-size:19px;max-width:590px}.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:23px}.button{display:inline-block;border-radius:8px;padding:12px 17px;font-weight:bold;font-size:14px}.red{background:var(--red);color:white}.outline{border:2px solid #fff;color:white}.live-panel{border:2px solid #aabbe8;border-radius:15px;background:#101d3d;padding:9px;box-shadow:0 10px 30px #0005}.live-label{display:inline-block;background:var(--red);padding:5px 10px;border-radius:5px;font-size:11px;font-weight:bold}.live-screen{min-height:190px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 20%,#d5a36d,#4b4260 42%,#071331 80%);border-radius:8px;padding:16px}.live-screen .cross{font-size:38px}.live-screen h2{margin:0;font-family:Georgia,serif}.live-screen p{margin:7px}.caption{font-size:11px;color:#d9e0f2;margin:9px 2px 2px}.quick-links{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:10px;padding:16px 20px}.quick-card{background:white;border-radius:10px;padding:15px 8px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:5px;box-shadow:0 3px 12px #17213b0c;transition:transform .2s}.quick-card:hover{transform:translateY(-4px)}.quick-card b{font-size:12px}.quick-card small{font-size:10px;color:var(--muted)}.icon{width:49px;height:49px;border-radius:50%;display:grid;place-items:center;color:white;font-size:23px;margin-bottom:3px}.purple{background:#392080}.green{background:#176b37}.gold{background:#b48b27}.red-bg{background:#b9152c}.blue{background:#0875bd}.violet{background:#4820c2}.navy{background:#132550}.indigo{background:#1c2787}.feature-grid{display:grid;grid-template-columns:1.1fr .9fr 1fr;gap:13px;padding:0 22px 17px}.feature-card{background:white;border-radius:11px;padding:20px;box-shadow:0 3px 14px #17213b0c;min-width:0}.prelate{background:linear-gradient(135deg,#07133d,#10285d);color:white;display:flex;align-items:center;gap:16px}.profile-symbol{width:100px;height:140px;flex-shrink:0;display:grid;place-items:center;background:linear-gradient(150deg,#ec9a9f,#be1748,#07133d);font-size:60px;border-radius:9px}.prelate h2{font-family:Georgia,serif;font-size:21px;line-height:1.2;margin:5px 0}.prelate p{font-size:13px}.quote{font-style:italic}.gold-button{background:var(--gold);color:#101936}.vision-row{display:flex;gap:12px;margin:15px 0}.vision-row>span{font-size:29px;color:var(--blue)}.vision h3{margin:0;color:var(--navy)}.vision p{margin:2px 0;font-size:13px;color:var(--muted)}.section-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:12px}.section-heading h2{font-size:16px;margin:0;color:var(--navy)}.section-heading>a{font-size:11px;color:#4036c9}.announcement,.event-row{display:flex;gap:12px;align-items:center;margin:12px 0}.date{flex-shrink:0;min-width:49px;text-align:center;padding:6px;background:#f1f3f8;border-radius:6px;font-weight:bold;font-size:17px;line-height:1.1}.date small{font-size:10px;color:var(--muted)}.announcement b,.event-row b{font-size:12px;color:var(--navy)}.announcement p,.event-row p{font-size:11px;color:var(--muted);margin:2px 0}.notice{font-size:10px;color:#747d8c}.watch-section{background:linear-gradient(110deg,#061640,#10275f);padding:19px 22px 23px;color:white}.section-title{text-align:center;margin-bottom:15px}.section-title h2{color:#ffd22d;margin:0;font-size:23px}.section-title p{margin:0;font-size:12px}.media-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}.media-card{min-height:130px;border:1px solid #ffffff66;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px;background:linear-gradient(145deg,#304a77,#111d43)}.media-card span{font-size:32px;color:#ffce28}.media-card b{font-size:13px}.media-card small{font-size:10px;color:#d4dced}.bottom-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:13px;padding:17px 22px}.sermon-art{height:75px;background:linear-gradient(120deg,#0b1c4b,#b27845,#111b3d);color:white;display:grid;place-items:center;font-size:35px;border-radius:7px}.bottom-grid h3{font-size:14px;color:var(--navy)}.bottom-grid p{font-size:12px;color:var(--muted)}.blue-button{background:#12377b;color:white}.resource-links{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.resource-links a{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:22px;color:#32217c}.resource-links small{font-size:10px;color:var(--ink);text-align:center}.church-finder,.contact-section{text-align:center;margin:0 22px 18px;padding:30px}.church-finder h2,.contact-section h2{color:var(--navy);margin:4px}.church-finder p,.contact-section p{color:var(--muted);font-size:14px}.contact-section{background:#e8edf6;border-radius:10px}footer{background:#061640;color:white;padding:25px clamp(18px,4vw,48px);display:grid;grid-template-columns:2fr 1fr 1fr 1.2fr;gap:25px}footer h3{font-size:13px;color:#ffcf27}footer a{display:block;font-size:12px;color:#e1e7f4;margin:7px 0}.footer-brand{display:flex;gap:10px;align-items:center}.footer-cross{font-size:42px;color:#ffcf27}.footer-brand b,.footer-brand strong,.footer-brand small{display:block;font-family:Georgia,serif}.footer-brand strong{color:#ffcf27}.footer-brand small{font-family:Arial,sans-serif;font-size:8px;letter-spacing:1px;margin-top:7px}.copyright{grid-column:1/-1;border-top:1px solid #ffffff30;padding-top:13px;font-size:11px;color:#c8d2e6}
+@media(max-width:1050px){.quick-links{grid-template-columns:repeat(5,1fr)}.feature-grid{grid-template-columns:1fr 1fr}.announcements{grid-column:1/-1}.navbar a{font-size:11px;padding:13px 5px}.hero{grid-template-columns:1fr .8fr}.media-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.topbar{align-items:flex-start;padding:12px;gap:8px}.church-mark{width:53px;height:53px;font-size:30px;border-width:3px}.brand{gap:8px}.brand strong{font-size:14px}.brand b{font-size:13px}.brand small{font-size:7px;letter-spacing:1px}.contact{justify-content:flex-end;gap:6px}.contact>span,.contact>a:not(.member-btn){display:none}.member-btn{font-size:10px;padding:9px}.navbar #menuToggle{display:block}.navbar #navLinks{display:none;flex-direction:column;align-items:stretch;padding-bottom:8px}.navbar #navLinks.open{display:flex}.navbar a{padding:10px;font-size:13px}.hero{grid-template-columns:1fr;padding:30px 18px;gap:20px}.hero h1{font-size:34px}.verse{font-size:16px}.live-panel{max-width:450px;width:100%;margin:auto}.quick-links{grid-template-columns:repeat(3,minmax(0,1fr));padding:12px;gap:8px}.quick-card{padding:12px 5px}.icon{width:42px;height:42px}.feature-grid,.bottom-grid{grid-template-columns:1fr;padding:10px}.announcements{grid-column:auto}.prelate{align-items:flex-start}.profile-symbol{width:75px;height:120px;font-size:45px}.media-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.media-card{min-height:115px}.church-finder,.contact-section{margin:10px;padding:22px 15px}footer{grid-template-columns:1fr 1fr;gap:15px;padding:22px 15px}.footer-brand{grid-column:1/-1}.copyright{grid-column:1/-1}}
+@media(max-width:380px){.brand strong{font-size:12px}.brand b{font-size:11px}.brand small{font-size:6px}.member-btn{font-size:9px}.quick-card b{font-size:11px}.quick-card small{font-size:9px}.hero h1{font-size:29px}.hero-actions .button{font-size:12px;padding:10px}}
+
+.leadership-section{padding:34px 22px;background:#fff}
+.leadership-heading{text-align:center;margin:0 auto 24px}
+.leadership-heading h2{color:var(--navy);font-family:Georgia,serif;font-size:30px}
+.leadership-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:17px}
+.leader-card{overflow:hidden;background:#fff;border:1px solid #e0e6ef;border-radius:12px;box-shadow:0 5px 18px #071b5010}
+.leader-photo{display:block;width:100%;height:220px;object-fit:cover;background:linear-gradient(135deg,#102c70,#c9a14c)}
+.leader-placeholder{display:grid;place-items:center;color:white;font-size:60px}
+.leader-info{padding:15px}
+.leader-info h3{color:var(--navy);font-size:17px}
+.leader-info>p:last-child{color:var(--muted);font-size:12px;line-height:1.6}
+@media(max-width:1050px){.leadership-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.leadership-grid{grid-template-columns:1fr}.leadership-section{padding:24px 12px}}
+}
+
+.church-mark{overflow:hidden;background:#fff;border:0;border-radius:50%}
+.church-mark img{display:block;width:100%;height:100%;object-fit:contain;border-radius:50%}
+
+/* Official Methodist Church Nigeria emblem */
+.topbar .brand .church-mark {
+  width: 78px;
+  height: 78px;
+  flex: 0 0 78px;
+  overflow: hidden;
+  display: block;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+}
+.topbar .brand .church-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 0;
+  border-radius: 50%;
+}
+@media(max-width:700px) {
+  .topbar .brand .church-mark {
+    width: 53px;
+    height: 53px;
+    flex-basis: 53px;
+  }
+}
+
+/* Final official church emblem correction */
+.topbar .brand .official-church-logo {
+  width: 78px !important;
+  height: 78px !important;
+  min-width: 78px;
+  flex: 0 0 78px !important;
+  display: block !important;
+  overflow: hidden;
+  border: 0 !important;
+  border-radius: 50%;
+  background: #fff;
+}
+.topbar .brand .official-church-logo img {
+  display: block !important;
+  visibility: visible !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+}
+@media(max-width:700px) {
+  .topbar .brand .official-church-logo {
+    width: 78px !important;
+    height: 78px !important;
+    min-width: 78px;
+    flex-basis: 78px !important;
+  }
+}
+
+/* Definitive homepage emblem display */
+.topbar .brand .church-mark.official-church-logo {
+  display: block !important;
+  position: relative !important;
+  width: 78px !important;
+  height: 78px !important;
+  min-width: 78px !important;
+  flex: 0 0 78px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: hidden !important;
+  border: none !important;
+  border-radius: 50% !important;
+  background: white !important;
+  font-size: 0 !important;
+}
+.topbar .brand .church-mark.official-church-logo img {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  object-fit: contain !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Official Methodist Church Nigeria footer emblem */
+footer .footer-brand .footer-logo {
+    display: block;
+    width: 76px;
+    height: 76px;
+    flex: 0 0 76px;
+    object-fit: contain;
+    background: #fff;
+    border-radius: 50%;
+    padding: 4px;
+    box-sizing: border-box;
+}
+footer .footer-brand {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+/* Professional church finder cards */
+.church-list {
+    margin: 26px auto 20px;
+    max-width: 1150px;
+    text-align: left;
+}
+.circuit-group {
+    margin: 25px 0;
+}
+.circuit-group > h3 {
+    color: var(--navy);
+    font-family: Georgia, serif;
+    font-size: 21px;
+    padding: 0 0 10px 12px;
+    border-bottom: 3px solid var(--gold);
+}
+.church-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 15px;
+}
+.church-card {
+    background: #fff;
+    border: 1px solid #e0e6ef;
+    border-left: 4px solid var(--red);
+    border-radius: 10px;
+    padding: 17px;
+    box-shadow: 0 4px 14px #071b5010;
+    transition: transform .2s, box-shadow .2s;
+    overflow-wrap: anywhere;
+}
+.church-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 22px #071b501c;
+}
+.church-card h4 {
+    color: var(--navy);
+    font-size: 16px;
+    margin: 0 0 8px;
+}
+.church-card p {
+    font-size: 12px;
+    margin: 5px 0;
+}
+.church-card a {
+    color: #12377b;
+    font-weight: bold;
+}
+@media(max-width:850px) {
+    .church-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media(max-width:520px) {
+    .church-grid {
+        grid-template-columns: 1fr;
+    }
+    .circuit-group > h3 {
+        font-size: 18px;
+    }
+    .church-card {
+        padding: 15px;
+    }
+}
+
+/* Responsive public livestream player */
+.youtube-player {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    margin: 15px 0;
+    overflow: hidden;
+    border-radius: 10px;
+    background: #071331;
+}
+.youtube-player iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+.stream-not-configured {
+    padding: 12px;
+    background: #ffffff12;
+    border-radius: 8px;
+    font-size: 12px;
+}

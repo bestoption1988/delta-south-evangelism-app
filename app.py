@@ -9,6 +9,8 @@ import qrcode
 from qrcode.image.svg import SvgPathImage
 from werkzeug.security import generate_password_hash, check_password_hash
 
+LEADERSHIP_TITLES = ['Prelate', 'Archbishop', 'Bishop, Delta South Diocese', 'Evangelism Minister', 'Lay President', 'Men Fellowship President', 'Women Fellowship President', 'Youth Fellowship President']
+
 APP_VERSION = "19.2.1"
 APP_STAGE = "Stage 19.2.1 - API /api/me and Table Map Stability"
 ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -111,6 +113,36 @@ def ensure_column(conn, table, column, definition):
 
 
 def init_db():
+
+    # Public diocesan leadership profiles.
+    # Existing church membership and financial data remain untouched.
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS leadership_profiles (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            full_name TEXT DEFAULT '',
+            biography TEXT DEFAULT '',
+            photo_path TEXT DEFAULT '',
+            display_order INTEGER DEFAULT 0,
+            active INTEGER DEFAULT 1,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_by INTEGER DEFAULT NULL
+        )
+    """)
+    db().commit()
+
+    for position, title in enumerate(LEADERSHIP_TITLES, 1):
+        db().execute(
+            """INSERT INTO leadership_profiles
+               (title,full_name,biography,photo_path,display_order,active)
+               SELECT ?, '', '', '', ?, 1
+               WHERE NOT EXISTS (
+                   SELECT 1 FROM leadership_profiles WHERE title=?
+               )""",
+            (title, position, title)
+        )
+    db().commit()
+
     # Account registration requests: initialize before the Admin
     # account-requests API is used. Existing records are preserved.
     db().execute("""
@@ -219,6 +251,40 @@ def init_db():
     db().commit()
 
     conn = sqlite3.connect(DB_PATH)
+
+    # Editable public homepage content; separate from membership and finance data.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS homepage_content (
+            content_key TEXT PRIMARY KEY,
+            content_value TEXT NOT NULL DEFAULT '',
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_by INTEGER
+        )
+    """)
+    homepage_defaults = {
+        "hero_heading": "METHODIST CHURCH NIGERIA",
+        "hero_subheading": "DELTA SOUTH DIOCESE",
+        "about_title": "About Our Church",
+        "about_text": "Welcome to Methodist Church Nigeria, Delta South Diocese.",
+        "vision": "To be spiritually vibrant and one of the largest Churches in Nigeria.",
+        "mission_1": "To consistently win more souls for Christ.",
+        "mission_2": "To develop spiritually fulfilled members.",
+        "mission_3": "To remain very active in serving humanity.",
+        "diocese_text": "Serving God and humanity throughout Delta South Diocese.",
+        "contact_email": "",
+        "contact_phone": "",
+        "contact_address": "",
+        "facebook_url": "",
+        "youtube_url": "",
+        "livestream_url": "",
+        "livestream_announcement": "Join our online worship service.",
+        "featured_sermon_title": "Featured Sermon",
+        "featured_sermon_url": "",
+    }
+    conn.executemany(
+        "INSERT OR IGNORE INTO homepage_content (content_key, content_value) VALUES (?, ?)",
+        homepage_defaults.items()
+    )
     conn.executescript("""
     CREATE TABLE IF NOT EXISTS churches(
       id INTEGER PRIMARY KEY AUTOINCREMENT, circuit TEXT NOT NULL, church_name TEXT NOT NULL,
@@ -1558,7 +1624,7 @@ def page_login_required(fn):
 
 @app.before_request
 def protect_app():
-    public = {"login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password"}
+    public = {"public_home", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if is_setup_needed():
@@ -1893,7 +1959,7 @@ def logout():
     if u:
         audit("LOGOUT", "users", u["id"], "Logout")
     session.clear()
-    return redirect(url_for("login"))
+    return redirect(url_for("public_home"))
 
 
 @app.route("/change-password", methods=["GET", "POST"])
@@ -1919,31 +1985,257 @@ def change_password():
 @app.get("/member-dashboard")
 @page_login_required
 def member_dashboard():
-    u=current_user()
+    u = current_user()
     return render_template("member_dashboard.html")
 
-@app.route("/")
+
+
+@app.route("/admin/leadership", methods=["GET", "POST"])
+@page_login_required
+def admin_leadership():
+    user = current_user()
+    if not user or user["role"] != "Admin":
+        return "Administrator access required.", 403
+
+    message = ""
+    error = ""
+    if request.method == "POST":
+        try:
+            action = request.form.get("action", "save")
+            if action == "delete":
+                db().execute(
+                    "UPDATE leadership_profiles SET active=0 WHERE id=?",
+                    (request.form.get("id", type=int),)
+                )
+                db().commit()
+                message = "Profile hidden."
+            elif action == "logo":
+                f = request.files.get("logo")
+                if not f or not f.filename:
+                    raise ValueError("Choose the church logo.")
+                ext = f.filename.rsplit(".", 1)[-1].lower()
+                if ext not in {"png", "jpg", "jpeg", "webp"}:
+                    raise ValueError("Use PNG, JPG, JPEG or WEBP.")
+                folder = os.path.join(ROOT, "static", "uploads", "leadership")
+                os.makedirs(folder, exist_ok=True)
+                f.save(os.path.join(folder, "mcn-logo.png"))
+                message = "Logo uploaded."
+            else:
+                title = request.form.get("title", "").strip()
+                name = request.form.get("full_name", "").strip()
+                bio = request.form.get("biography", "").strip()
+                order = request.form.get("display_order", type=int) or 1
+                active = int(request.form.get("active") == "1")
+                if title not in LEADERSHIP_TITLES:
+                    raise ValueError("Choose a valid leadership position.")
+                if len(name) > 160 or len(bio) > 2500:
+                    raise ValueError("Name or biography is too long.")
+
+                photo_path = None
+                f = request.files.get("photo")
+                if f and f.filename:
+                    ext = f.filename.rsplit(".", 1)[-1].lower()
+                    if ext not in {"png", "jpg", "jpeg", "webp"}:
+                        raise ValueError("Use PNG, JPG, JPEG or WEBP.")
+                    folder = os.path.join(ROOT, "static", "uploads", "leadership")
+                    os.makedirs(folder, exist_ok=True)
+                    filename = secrets.token_hex(8) + "." + ext
+                    f.save(os.path.join(folder, filename))
+                    photo_path = "uploads/leadership/" + filename
+
+                pid = request.form.get("id", type=int)
+                if pid:
+                    db().execute(
+                        """UPDATE leadership_profiles SET title=?,full_name=?,
+                           biography=?,display_order=?,active=?,updated_at=CURRENT_TIMESTAMP,
+                           updated_by=? WHERE id=?""",
+                        (title,name,bio,order,active,user["id"],pid)
+                    )
+                    if photo_path:
+                        db().execute(
+                            "UPDATE leadership_profiles SET photo_path=? WHERE id=?",
+                            (photo_path,pid)
+                        )
+                    message = "Profile updated."
+                else:
+                    db().execute(
+                        """INSERT INTO leadership_profiles
+                           (title,full_name,biography,photo_path,display_order,active,updated_by)
+                           VALUES (?,?,?,?,?,?,?)""",
+                        (title,name,bio,photo_path or "",order,active,user["id"])
+                    )
+                    message = "Profile added."
+                db().commit()
+        except ValueError as e:
+            error = str(e)
+        except Exception:
+            db().rollback()
+            app.logger.exception("Leadership update failed")
+            error = "Unable to save changes."
+
+    profiles = db().execute(
+        "SELECT * FROM leadership_profiles ORDER BY display_order,title"
+    ).fetchall()
+    return render_template(
+        "leadership_admin.html", profiles=profiles,
+        titles=LEADERSHIP_TITLES, message=message, error=error
+    )
+
+
+@app.route("/admin/homepage", methods=["GET", "POST"])
+@page_login_required
+def admin_homepage_content():
+    user = current_user()
+    if not user or user["role"] != "Admin":
+        return "Administrator access required.", 403
+    allowed = ["hero_heading", "hero_subheading", "about_title", "about_text", "vision", "mission_1", "mission_2", "mission_3", "diocese_text", "contact_email", "contact_phone", "contact_address", "facebook_url", "youtube_url", "livestream_url", "livestream_announcement", "featured_sermon_title", "featured_sermon_url"]
+    message = ""
+    if request.method == "POST":
+        try:
+            for key in allowed:
+                value = request.form.get(key, "").strip()
+                if len(value) > 5000:
+                    raise ValueError("A field exceeds 5000 characters.")
+                db().execute("INSERT INTO homepage_content(content_key,content_value,updated_at,updated_by) VALUES(?,?,CURRENT_TIMESTAMP,?) ON CONFLICT(content_key) DO UPDATE SET content_value=excluded.content_value,updated_at=CURRENT_TIMESTAMP,updated_by=excluded.updated_by", (key,value,user["id"]))
+            db().commit()
+            message = "Homepage content saved."
+        except Exception:
+            db().rollback()
+            app.logger.exception("Homepage content save failed")
+            message = "Unable to save changes. Check the application log."
+    rows = db().execute("SELECT content_key,content_value FROM homepage_content").fetchall()
+    content = {r["content_key"]: r["content_value"] for r in rows}
+    return render_template("homepage_admin.html", content=content, message=message, error="")
+
+
+
+@app.route("/admin/homepage-media", methods=["GET", "POST"])
+@page_login_required
+def admin_homepage_media():
+    user = current_user()
+    if not user or user["role"] != "Admin":
+        return "Administrator access required.", 403
+
+    message = ""
+    error = ""
+    if request.method == "POST":
+        kind = request.form.get("kind", "")
+        try:
+            if kind in ("sermon", "event"):
+                title = request.form.get("title", "").strip()
+                description = request.form.get("description", "").strip()
+                if not title or len(title) > 250 or len(description) > 3000:
+                    raise ValueError("Enter a valid title and description.")
+                if kind == "sermon":
+                    url = request.form.get("video_url", "").strip()
+                    if url and not url.startswith(("https://", "http://")):
+                        raise ValueError("Use a valid HTTP or HTTPS video URL.")
+                    order = request.form.get("display_order", type=int) or 1
+                    db().execute(
+                        "INSERT INTO homepage_sermons(title,description,video_url,display_order) VALUES(?,?,?,?)",
+                        (title, description, url, order)
+                    )
+                else:
+                    date = request.form.get("event_date", "").strip()
+                    venue = request.form.get("venue", "").strip()
+                    db().execute(
+                        "INSERT INTO homepage_events(title,description,event_date,venue) VALUES(?,?,?,?)",
+                        (title, description, date, venue)
+                    )
+                db().commit()
+                message = "Content added successfully."
+            elif kind in ("toggle_sermon", "toggle_event"):
+                table = "homepage_sermons" if kind == "toggle_sermon" else "homepage_events"
+                db().execute(
+                    f"UPDATE {table} SET active=? WHERE id=?",
+                    (1 if request.form.get("active") == "1" else 0,
+                     request.form.get("id", type=int))
+                )
+                db().commit()
+                message = "Publication status updated."
+            elif kind in ("delete_sermon", "delete_event"):
+                table = "homepage_sermons" if kind == "delete_sermon" else "homepage_events"
+                db().execute(
+                    f"DELETE FROM {table} WHERE id=?",
+                    (request.form.get("id", type=int),)
+                )
+                db().commit()
+                message = "Content deleted."
+            else:
+                raise ValueError("Unknown action.")
+        except ValueError as exc:
+            db().rollback()
+            error = str(exc)
+        except Exception:
+            db().rollback()
+            app.logger.exception("Homepage media management failed")
+            error = "Unable to save changes."
+
+    sermons = db().execute(
+        "SELECT * FROM homepage_sermons ORDER BY display_order,id DESC"
+    ).fetchall()
+    events = db().execute(
+        "SELECT * FROM homepage_events ORDER BY event_date,id DESC"
+    ).fetchall()
+    return render_template(
+        "homepage_media_admin.html", sermons=sermons, events=events,
+        message=message, error=error
+    )
+
+
+@app.get("/live")
+def live_worship_page():
+    """Public diocesan live worship player."""
+    stream_hls_url = os.environ.get("STREAM_HLS_URL", "").strip()
+    return render_template(
+        "live_stream.html",
+        stream_hls_url=stream_hls_url
+    )
+
+
+@app.get("/")
+def public_home():
+    """Public diocesan homepage; no login required."""
+    profiles = db().execute(
+        "SELECT * FROM leadership_profiles WHERE active=1 ORDER BY display_order,title"
+    ).fetchall()
+    rows = db().execute(
+        "SELECT content_key, content_value FROM homepage_content"
+    ).fetchall()
+    homepage_content = {row["content_key"]: row["content_value"] for row in rows}
+    sermons = db().execute(
+        "SELECT * FROM homepage_sermons WHERE published=1 ORDER BY display_order,id DESC"
+    ).fetchall()
+    events = db().execute(
+        "SELECT * FROM homepage_events WHERE published=1 ORDER BY event_date,id DESC"
+    ).fetchall()
+    churches = db().execute(
+        "SELECT * FROM churches ORDER BY circuit,church_name"
+    ).fetchall()
+    return render_template(
+        "public_home.html", leadership_profiles=profiles,
+        leadership_titles=LEADERSHIP_TITLES,
+        homepage_content=homepage_content,
+        homepage_sermons=sermons,
+        homepage_events=events,
+        homepage_churches=churches
+    )
+
+
+@app.get("/dashboard")
 @page_login_required
 def home():
-    turn_config = {
-        "host": os.environ.get(
-            "TURN_HOST",
-            "global.relay.metered.ca"
-        ),
-        "username": os.environ.get(
-            "TURN_USERNAME",
-            ""
-        ),
-        "credential": os.environ.get(
-            "TURN_CREDENTIAL",
-            ""
-        )
-    }
+    """Existing authenticated staff dashboard."""
+    u = current_user()
+    if u["role"] == "Member":
+        return redirect(url_for("member_dashboard"))
 
-    return render_template(
-        "index.html",
-        turn_config=turn_config
-    )
+    turn_config = {
+        "host": os.environ.get("TURN_HOST", "global.relay.metered.ca"),
+        "username": os.environ.get("TURN_USERNAME", ""),
+        "credential": os.environ.get("TURN_CREDENTIAL", "")
+    }
+    return render_template("index.html", turn_config=turn_config)
 
 
 def role_allows_table(u, table, method):
