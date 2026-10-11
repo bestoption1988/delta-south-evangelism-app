@@ -286,6 +286,29 @@ def init_db():
         homepage_defaults.items()
     )
     conn.executescript("""
+    CREATE TABLE IF NOT EXISTS homepage_sermons (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL DEFAULT '',
+        description TEXT DEFAULT '',
+        video_url TEXT DEFAULT '',
+        display_order INTEGER DEFAULT 0,
+        published INTEGER DEFAULT 0,
+        active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS homepage_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL DEFAULT '',
+        description TEXT DEFAULT '',
+        event_date TEXT DEFAULT '',
+        venue TEXT DEFAULT '',
+        display_order INTEGER DEFAULT 0,
+        published INTEGER DEFAULT 0,
+        active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS churches(
       id INTEGER PRIMARY KEY AUTOINCREMENT, circuit TEXT NOT NULL, church_name TEXT NOT NULL,
       annual_target REAL DEFAULT 100000, contact_person TEXT DEFAULT '', phone TEXT DEFAULT '',
