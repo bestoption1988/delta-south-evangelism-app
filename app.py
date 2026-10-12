@@ -129,6 +129,8 @@ def ensure_column(conn, table, column, definition):
 
 
 def init_db():
+    db().execute("CREATE TABLE IF NOT EXISTS prayer_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT NOT NULL, phone TEXT DEFAULT '', email TEXT DEFAULT '', request_text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'New', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
+    db().commit()
 
     # Public diocesan leadership profiles.
     # Existing church membership and financial data remain untouched.
@@ -1663,7 +1665,7 @@ def page_login_required(fn):
 
 @app.before_request
 def protect_app():
-    public = {"public_home", "public_giving_page", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password"}
+    public = {"public_home", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if is_setup_needed():
@@ -2220,6 +2222,21 @@ def admin_homepage_media():
         "homepage_media_admin.html", sermons=sermons, events=events,
         message=message, error=error
     )
+
+
+@app.route("/prayer-request", methods=["GET", "POST"])
+def public_prayer_request():
+    if request.method == "POST":
+        name = (request.form.get("full_name") or "").strip()
+        phone = (request.form.get("phone") or "").strip()
+        email = (request.form.get("email") or "").strip()
+        message = (request.form.get("request_text") or "").strip()
+        if not name or not message:
+            return render_template("public_prayer_request.html", error="Please enter your name and prayer request.", success="")
+        db().execute("INSERT INTO prayer_requests (full_name, phone, email, request_text) VALUES (?, ?, ?, ?)", (name, phone, email, message))
+        db().commit()
+        return render_template("public_prayer_request.html", error="", success="Your prayer request has been received. We will keep you in our prayers.")
+    return render_template("public_prayer_request.html", error="", success="")
 
 
 @app.get("/giving")
