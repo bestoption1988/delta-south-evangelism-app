@@ -1,11 +1,11 @@
 /* PREMIUM HOMEPAGE ENHANCEMENT — MCN DELTA SOUTH DIOCESE */
 :root {
-  --mcn-burgundy: #761b32;
-  --mcn-deep: #451020;
-  --mcn-gold: #d9ad58;
-  --mcn-cream: #fffaf2;
-  --mcn-ink: #222b3a;
-  --mcn-muted: #687386;
+  --mcn-burgundy: #e7193f;
+  --mcn-deep: #0b1f55;
+  --mcn-gold: #ffca28;
+  --mcn-cream: #f1f5fc;
+  --mcn-ink: #17233f;
+  --mcn-muted: #68758b;
   --mcn-white: #fff;
   --mcn-shadow: 0 15px 40px rgba(42, 20, 29, .09);
 }
@@ -81,7 +81,7 @@ a {
 #navLinks a:hover,
 #navLinks a:focus-visible {
   color: var(--mcn-burgundy);
-  background: #f8edf0;
+  background: #edf2fc;
 }
 
 .hero {
@@ -92,7 +92,7 @@ a {
   color: white;
   background:
     radial-gradient(ellipse at 90% 10%, rgba(217,173,88,.24), transparent 35%),
-    linear-gradient(125deg, #35101e 0%, #761b32 53%, #982f43 100%);
+    linear-gradient(125deg, #07163f 0%, #102b68 58%, #263f70 100%);
 }
 
 .hero::before {
@@ -277,7 +277,7 @@ section {
   place-items: center;
   margin-bottom: 12px;
   border-radius: 13px;
-  background: #f8e9ed;
+  background: #eaf0fc;
   color: var(--mcn-burgundy);
 }
 
@@ -362,14 +362,14 @@ section {
   padding: 15px 19px;
   border-left: 4px solid var(--mcn-gold);
   border-radius: 8px;
-  background: #fff5df;
+  background: #fff8e6;
   color: #513a1d;
 }
 
 .live-panel {
   overflow: hidden;
   padding: clamp(18px, 4vw, 35px);
-  background: linear-gradient(135deg, #28101b, #51192c);
+  background: linear-gradient(135deg, #07163f, #102b68);
   color: #fff;
 }
 
@@ -423,7 +423,7 @@ section {
   height: 55px;
   place-items: center;
   border-radius: 12px;
-  background: #f8e9ed;
+  background: #eaf0fc;
   color: var(--mcn-burgundy);
 }
 
@@ -435,7 +435,7 @@ section {
 
 .contact-section,
 .contact {
-  background: #f8f1ec;
+  background: #f1f5fc;
 }
 
 .contact-details {
@@ -452,7 +452,7 @@ section {
 footer {
   padding: 38px 5%;
   color: rgba(255,255,255,.84);
-  background: #2d111c;
+  background: #07163f;
 }
 
 footer a {
@@ -488,7 +488,7 @@ footer a {
   display: inline-block;
   padding: 5px 10px;
   border-radius: 30px;
-  background: #fbe8e8;
+  background: #fff0f2;
   color: #9b1c31;
   font-size: 11px;
   font-weight: 850;
@@ -629,4 +629,35 @@ button:focus-visible {
     transition-duration: .01ms !important;
     animation-duration: .01ms !important;
   }
+}
+
+
+/* FINAL THEME OVERRIDE: ORIGINAL NAVY, BLUE, WHITE, RED AND GOLD */
+.hero {
+  background: linear-gradient(125deg, #07163f 0%, #102b68 58%, #263f70 100%) !important;
+}
+footer {
+  background: #07163f !important;
+}
+.live-panel {
+  background: linear-gradient(135deg, #07163f, #102b68) !important;
+}
+.brand {
+  color: #0b1f55;
+}
+.section-title,
+.feature-card h3,
+.media-card h3,
+.church-card h3,
+.leader-info h3 {
+  color: #0b1f55;
+}
+.gold-button {
+  background: #ffca28 !important;
+  color: #0b1f55 !important;
+}
+.red,
+.button.red {
+  background: #e7193f !important;
+  color: #fff !important;
 }
