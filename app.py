@@ -2239,6 +2239,23 @@ def public_prayer_request():
     return render_template("public_prayer_request.html", error="", success="")
 
 
+@app.post("/admin/prayer-requests/<int:rid>/status")
+@page_login_required
+def admin_prayer_request_status(rid):
+    user = current_user()
+    allowed = {"Admin", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary"}
+    if not user or user["role"] not in allowed:
+        return "Authorized diocesan access required.", 403
+    status = (request.form.get("status") or "").strip()
+    if status not in {"New", "Pending", "Prayed For", "Completed"}:
+        return "Invalid prayer-request status.", 400
+    cur = db().execute("UPDATE prayer_requests SET status=? WHERE id=?", (status, rid))
+    db().commit()
+    if cur.rowcount == 0:
+        return "Prayer request not found.", 404
+    return redirect(url_for("admin_prayer_requests"))
+
+
 @app.get("/admin/prayer-requests")
 @page_login_required
 def admin_prayer_requests():
