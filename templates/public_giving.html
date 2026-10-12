@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Online Giving | Methodist Church Nigeria</title>
+<style>
+body{margin:0;font-family:Arial,sans-serif;background:#f2f5fa;color:#17233b}
+header{background:#08245b;color:white;padding:24px;text-align:center}
+main{max-width:600px;margin:30px auto;padding:24px;background:white;border-radius:14px;box-shadow:0 5px 24px #0001}
+h2{color:#08245b}
+label{display:block;margin-top:16px;font-weight:bold}
+input,select{width:100%;box-sizing:border-box;padding:13px;margin-top:7px;border:1px solid #ccd3df;border-radius:7px;font-size:16px}
+button{width:100%;padding:15px;margin-top:22px;background:#b51f32;color:white;border:0;border-radius:8px;font-size:17px;font-weight:bold}
+.notice{padding:12px;background:#edf3ff;border-radius:7px;line-height:1.5}
+#message{margin-top:16px;overflow-wrap:anywhere}
+a{color:#08245b}
+</style>
+</head>
+<body>
+<header>
+<h1>METHODIST CHURCH NIGERIA</h1>
+<p>DELTA SOUTH DIOCESE</p>
+</header>
+<main>
+<h2>Online Giving & Donations</h2>
+<p class="notice">Support the work of God through tithes, offerings, missions, evangelism and other contributions.</p>
+<form id="givingForm">
+<label for="donor_name">Full Name</label>
+<input id="donor_name" name="donor_name" required>
+<label for="donor_email">Email Address</label>
+<input id="donor_email" name="donor_email" type="email" required>
+<label for="donor_phone">Phone Number</label>
+<input id="donor_phone" name="donor_phone" type="tel">
+<label for="church_account_id">Church / Giving Account</label>
+<select id="church_account_id" name="church_account_id" required>
+<option value="">Loading church accounts...</option>
+{% for a in accounts %}
+<option value="{{ a.id }}">{{ a.church_name }} — {{ a.account_level }}{% if a.circuit %} ({{ a.circuit }}){% endif %}</option>
+{% endfor %}
+</select>
+<label for="purpose">Purpose of Giving</label>
+<select id="purpose" name="purpose" required>
+<option value="Tithe">Tithe</option>
+<option value="Offering">Offering</option>
+<option value="Evangelism">Evangelism</option>
+<option value="Church Planting">Church Planting</option>
+<option value="Missions">Missions</option>
+<option value="Thanksgiving">Thanksgiving</option>
+<option value="Donation">General Donation</option>
+</select>
+<label for="amount">Amount (₦)</label>
+<input id="amount" name="amount" type="number" min="100" step="1" required>
+<button type="submit">Continue to Secure Payment</button>
+<div id="message" role="status"></div>
+</form>
+<p><a href="/">← Return to Diocese Homepage</a></p>
+</main>
+<script>
+const form=document.getElementById('givingForm');
+const msg=document.getElementById('message');
+form.addEventListener('submit',async e=>{
+ e.preventDefault();
+ const button=form.querySelector('button');
+ button.disabled=true;
+ button.textContent='Connecting securely...';
+ msg.textContent='';
+ const d=Object.fromEntries(new FormData(form).entries());
+ d.amount=Number(d.amount);
+ try{
+  const r=await fetch('/api/payment/initiate',{
+   method:'POST',
+   headers:{'Content-Type':'application/json'},
+   body:JSON.stringify(d)
+  });
+  const data=await r.json();
+  if(!r.ok) throw new Error(data.error||'Payment could not be started.');
+  if(!data.authorization_url) throw new Error('Payment provider did not return a checkout link.');
+  msg.textContent='Redirecting to secure payment...';
+  window.location.href=data.authorization_url;
+ }catch(err){
+  msg.textContent=err.message;
+  button.disabled=false;
+  button.textContent='Try Again';
+ }
+});
+</script>
+</body>
+</html>

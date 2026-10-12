@@ -1663,7 +1663,7 @@ def page_login_required(fn):
 
 @app.before_request
 def protect_app():
-    public = {"public_home", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password"}
+    public = {"public_home", "public_giving_page", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if is_setup_needed():
@@ -2220,6 +2220,12 @@ def admin_homepage_media():
         "homepage_media_admin.html", sermons=sermons, events=events,
         message=message, error=error
     )
+
+
+@app.get("/giving")
+def public_giving_page():
+    accounts = db().execute("SELECT id, account_level, circuit, church_name, account_name, bank_name, account_number FROM church_accounts WHERE active=1 ORDER BY account_level, circuit, church_name").fetchall()
+    return render_template("public_giving.html", accounts=accounts)
 
 
 @app.get("/live")
