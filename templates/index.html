@@ -732,4 +732,68 @@ window.DS_TURN_CONFIG = {{ turn_config | tojson }};
 </section>
 
 <script src="/static/member-care-popup.js?v=20261006-1"></script>
+
+<script>
+/* PAYSTACK_RETURN_VERIFICATION_V1 */
+(async function () {
+    const params = new URLSearchParams(window.location.search);
+
+    if (params.get("payment") !== "return") return;
+
+    const reference = params.get("reference") || params.get("trxref");
+
+    if (!reference) {
+        alert(
+            "Payment return detected, but no transaction reference was supplied. " +
+            "Please contact the church finance office to confirm your payment."
+        );
+        return;
+    }
+
+    const storageKey = "paystack_verified_" + reference;
+
+    if (sessionStorage.getItem(storageKey) === "done") return;
+
+    try {
+        const response = await fetch(
+            "/api/payment/verify/" + encodeURIComponent(reference),
+            {
+                method: "GET",
+                headers: { "Accept": "application/json" },
+                cache: "no-store"
+            }
+        );
+
+        const result = await response.json();
+
+        if (response.ok && result.paid === true) {
+            sessionStorage.setItem(storageKey, "done");
+            alert(
+                "Payment successful! Reference: " + reference +
+                "\nAmount: ₦" + Number(result.amount).toLocaleString("en-NG") +
+                "\nStatus: PAID"
+            );
+        } else if (response.ok && result.paid === false) {
+            alert(
+                "Paystack has not confirmed this payment as successful yet. " +
+                "Current status: " + (result.status || "Pending") +
+                ". Please allow verification to complete before trying to pay again."
+            );
+        } else {
+            alert(
+                "We could not confirm your payment automatically. " +
+                (result.error || "Please contact the church finance office.") +
+                "\nKeep your payment reference: " + reference
+            );
+        }
+    } catch (error) {
+        alert(
+            "Your payment return was received, but verification could not be completed. " +
+            "Please do not pay again yet. Keep this reference for confirmation: " +
+            reference
+        );
+    }
+})();
+</script>
+
 </body></html>
