@@ -2143,7 +2143,122 @@ if(["members","testimonies","appreciations","mission_teams","mission_contacts","
     return;
   }
 }
-if(["members","testimonies","appreciations","mission_teams","mission_contacts","expenses","church_accounts"].includes(current)){const levelEl=document.querySelector('#fields select[name="account_level"]'),circuitEl=document.querySelector('#fields select[name="circuit"]'),churchEl=document.querySelector('#fields select[name="church_name"]');const refreshChurches=()=>{if(!circuitEl||!churchEl)return;const choices=churchOptions.filter(x=>x.circuit===circuitEl.value);churchEl.innerHTML='<option value="">Select Local Church</option>'+choices.map(x=>`<option value="${esc(x.church_name)}">${esc(x.church_name)}</option>`).join("");};if(current==="church_accounts"&&levelEl&&circuitEl&&churchEl){const syncLevel=()=>{const level=levelEl.value;circuitEl.disabled=level==="Diocese";if(level==="Diocese")circuitEl.value="Diocesan";else if(circuitEl.value==="Diocesan")circuitEl.value="";churchEl.disabled=level!=="Local Church";refreshChurches();if(level!=="Local Church")churchEl.value="";};levelEl.addEventListener("change",syncLevel);circuitEl.addEventListener("change",refreshChurches);syncLevel();}else if(circuitEl&&churchEl){const refresh=()=>{const choices=circuitEl.value==="Diocesan"?[{church_name:"Diocesan Office"}]:churchOptions.filter(x=>x.circuit===circuitEl.value);churchEl.innerHTML=choices.map(x=>`<option value="${esc(x.church_name)}">${esc(x.church_name)}</option>`).join("");};circuitEl.addEventListener("change",refresh);refresh();}}if(current==="members"){
+
+$("#fields").innerHTML=
+  (current==="members"
+    ? '<div class="field field-wide"><label>Member ID</label><input value="Automatic — generated when the member is saved" disabled></div>'
+    : ''
+  )+
+  fields.map(([key,label,type,opts])=>{
+    let control;
+
+    if(type==="select"){
+      let choices=key==="circuit"?circuitOptions:opts;
+
+      if(current==="users"&&key==="member_id"){
+        control=`<select name="member_id" required>
+          <option value="">Select official member</option>
+          ${userMemberOptions.filter(m=>!m.linked_user_id).map(m=>
+            `<option value="${m.id}">${esc(m.full_name)} — ${esc(m.member_id||"No member code")} · ${esc(m.church_name||"No church")}</option>`
+          ).join("")}
+        </select>`;
+        return `<div class="field"><label>${label}</label>${control}</div>`;
+      }
+
+      if(current==="users"&&key==="circuit"){
+        choices=["","Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"];
+      }
+
+      if(
+        ["members","testimonies","appreciations","mission_teams","mission_contacts","expenses"].includes(current)
+        && key==="church_name"
+      ){
+        choices=churchOptions.map(x=>x.church_name);
+      }
+
+      if(current==="church_accounts"&&key==="church_name"){
+        choices=[];
+      }
+
+      control=`<select name="${key}">
+        ${choices.map(o=>
+          `<option value="${esc(o)}">${esc(o||"Select an option")}</option>`
+        ).join("")}
+      </select>`;
+    }else if(type==="textarea"){
+      control=`<textarea name="${key}"></textarea>`;
+    }else{
+      control=`<input name="${key}" type="${type}" ${type==="number"?'step="any"':''} ${key==="member_id"?'placeholder="e.g. DSD-00001"':''}>`;
+    }
+
+    return `<div class="field"><label>${label}</label>${control}</div>`;
+  }).join("");
+
+if(
+  ["members","testimonies","appreciations","mission_teams","mission_contacts","expenses"].includes(current)
+){
+  const circuitEl=document.querySelector('#fields select[name="circuit"]');
+  const churchEl=document.querySelector('#fields select[name="church_name"]');
+
+  if(circuitEl&&churchEl){
+    const refreshChurches=()=>{
+      const selected=circuitEl.value;
+      const choices=selected==="Diocesan"
+        ? [{church_name:"Diocesan Office",circuit:"Diocesan"}]
+        : churchOptions.filter(x=>x.circuit===selected);
+
+      churchEl.innerHTML=choices.map(x=>
+        `<option value="${esc(x.church_name)}">${esc(x.church_name)}</option>`
+      ).join("");
+    };
+
+    circuitEl.addEventListener("change",refreshChurches);
+    refreshChurches();
+  }
+}
+
+if(current==="church_accounts"){
+  const levelEl=document.querySelector('#fields select[name="account_level"]');
+  const circuitEl=document.querySelector('#fields select[name="circuit"]');
+  const churchEl=document.querySelector('#fields select[name="church_name"]');
+
+  if(levelEl&&circuitEl&&churchEl){
+    const refreshChurches=()=>{
+      const choices=churchOptions.filter(x=>x.circuit===circuitEl.value);
+
+      churchEl.innerHTML=
+        '<option value="">Select Local Church</option>'+
+        choices.map(x=>
+          `<option value="${esc(x.church_name)}">${esc(x.church_name)}</option>`
+        ).join("");
+    };
+
+    const syncLevel=()=>{
+      const level=levelEl.value;
+
+      circuitEl.disabled=(level==="Diocese");
+
+      if(level==="Diocese"){
+        circuitEl.value="Diocesan";
+      }else if(circuitEl.value==="Diocesan"){
+        circuitEl.value="";
+      }
+
+      churchEl.disabled=(level!=="Local Church");
+      refreshChurches();
+
+      if(level!=="Local Church"){
+        churchEl.value="";
+      }
+    };
+
+    levelEl.addEventListener("change",syncLevel);
+    circuitEl.addEventListener("change",refreshChurches);
+    syncLevel();
+  }
+}
+
+if(current==="members"){
   const ca=document.querySelector('#fields select[name="conference_awardee"]');
   const cn=document.querySelector('#fields input[name="conference_award"]');
   const cy=document.querySelector('#fields input[name="conference_award_year"]');
