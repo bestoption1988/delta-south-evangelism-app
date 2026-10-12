@@ -1,0 +1,632 @@
+/* PREMIUM HOMEPAGE ENHANCEMENT — MCN DELTA SOUTH DIOCESE */
+:root {
+  --mcn-burgundy: #761b32;
+  --mcn-deep: #451020;
+  --mcn-gold: #d9ad58;
+  --mcn-cream: #fffaf2;
+  --mcn-ink: #222b3a;
+  --mcn-muted: #687386;
+  --mcn-white: #fff;
+  --mcn-shadow: 0 15px 40px rgba(42, 20, 29, .09);
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 90px;
+}
+
+body {
+  color: var(--mcn-ink);
+  background: #fffdf9;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  line-height: 1.7;
+}
+
+a {
+  transition: color .25s ease, background .25s ease,
+              transform .25s ease, box-shadow .25s ease;
+}
+
+.topbar {
+  background: var(--mcn-deep);
+  color: #fff;
+  padding: 9px 5%;
+  font-size: 13px;
+}
+
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 13px 5%;
+  background: rgba(255,255,255,.97);
+  border-bottom: 1px solid #eee5e4;
+  box-shadow: 0 5px 22px rgba(32,20,25,.06);
+  backdrop-filter: blur(14px);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--mcn-deep);
+  font-weight: 800;
+}
+
+.official-church-logo {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+#navLinks {
+  align-items: center;
+  gap: 5px;
+}
+
+#navLinks a {
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: #343443;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+#navLinks a:hover,
+#navLinks a:focus-visible {
+  color: var(--mcn-burgundy);
+  background: #f8edf0;
+}
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(65px, 9vw, 125px) 6%;
+  color: white;
+  background:
+    radial-gradient(ellipse at 90% 10%, rgba(217,173,88,.24), transparent 35%),
+    linear-gradient(125deg, #35101e 0%, #761b32 53%, #982f43 100%);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 360px;
+  height: 360px;
+  right: -120px;
+  bottom: -190px;
+  border: 1px solid rgba(255,255,255,.18);
+  border-radius: 50%;
+  box-shadow: 0 0 0 35px rgba(255,255,255,.035),
+              0 0 0 75px rgba(255,255,255,.025);
+}
+
+.hero-content {
+  width: min(100%, 1100px);
+  margin: auto;
+}
+
+.eyebrow {
+  display: inline-block;
+  padding: 7px 14px;
+  border: 1px solid rgba(255,255,255,.3);
+  border-radius: 40px;
+  color: #ffe4a9;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.hero h1 {
+  max-width: 850px;
+  margin: 22px 0 18px;
+  font-size: clamp(36px, 6.2vw, 70px);
+  line-height: 1.08;
+  letter-spacing: -1.8px;
+  font-weight: 850;
+}
+
+.hero p {
+  max-width: 690px;
+  color: rgba(255,255,255,.87);
+  font-size: clamp(16px, 2vw, 20px);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 13px;
+  margin-top: 30px;
+}
+
+.button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 46px;
+  padding: 12px 21px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 750;
+  text-decoration: none;
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 22px rgba(0,0,0,.14);
+}
+
+.gold-button {
+  color: #2e1a0b;
+  background: linear-gradient(135deg, #f1d18a, #d9ad58);
+}
+
+.red {
+  color: #fff;
+  background: var(--mcn-burgundy);
+}
+
+.blue-button {
+  color: #fff;
+  background: #254f83;
+}
+
+.outline {
+  color: inherit;
+  border: 1px solid currentColor;
+  background: transparent;
+}
+
+section {
+  scroll-margin-top: 90px;
+}
+
+#about,
+#diocese,
+#leadership,
+#churches,
+#ministries,
+#events,
+#resources,
+#online,
+#contact {
+  padding: clamp(45px, 7vw, 85px) 5%;
+}
+
+.section-heading,
+.leadership-heading {
+  max-width: 760px;
+  margin: 0 auto 35px;
+  text-align: center;
+}
+
+.section-title {
+  color: var(--mcn-deep);
+  font-size: clamp(26px, 4vw, 42px);
+  line-height: 1.2;
+  letter-spacing: -.8px;
+  font-weight: 850;
+}
+
+.caption {
+  color: var(--mcn-muted);
+  font-size: 15px;
+}
+
+.feature-grid,
+.leadership-grid,
+.church-grid,
+.media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 23px;
+}
+
+.feature-card,
+.leader-card,
+.church-card,
+.media-card,
+.quick-card,
+.live-panel,
+.feature-card.vision,
+.feature-card.announcements {
+  min-width: 0;
+  border: 1px solid #eee6e3;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: var(--mcn-shadow);
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+
+.feature-card,
+.media-card,
+.quick-card {
+  padding: 25px;
+}
+
+.feature-card:hover,
+.leader-card:hover,
+.church-card:hover,
+.media-card:hover,
+.quick-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 45px rgba(42,20,29,.13);
+}
+
+.feature-card h3,
+.media-card h3,
+.church-card h3 {
+  color: var(--mcn-deep);
+  line-height: 1.35;
+}
+
+.icon {
+  display: inline-grid;
+  width: 49px;
+  height: 49px;
+  place-items: center;
+  margin-bottom: 12px;
+  border-radius: 13px;
+  background: #f8e9ed;
+  color: var(--mcn-burgundy);
+}
+
+.vision-row,
+.bottom-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 25px;
+}
+
+.mission-list {
+  padding-left: 22px;
+}
+
+.mission-list li {
+  margin: 10px 0;
+}
+
+.leader-card {
+  overflow: hidden;
+  text-align: center;
+}
+
+.leader-photo {
+  display: block;
+  width: 100%;
+  height: 255px;
+  object-fit: cover;
+  object-position: center top;
+  background: #f5e9e7;
+}
+
+.leader-info {
+  padding: 20px;
+}
+
+.leader-info h3 {
+  margin: 0 0 5px;
+  color: var(--mcn-deep);
+}
+
+.leader-info p {
+  color: var(--mcn-muted);
+  font-size: 14px;
+}
+
+.church-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.church-card {
+  padding: 24px;
+}
+
+.church-mark {
+  color: var(--mcn-burgundy);
+}
+
+.circuit-group {
+  margin: 20px 0;
+  padding: 20px;
+  border-left: 4px solid var(--mcn-gold);
+  border-radius: 0 12px 12px 0;
+  background: var(--mcn-cream);
+}
+
+.quick-links {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.quick-card {
+  color: var(--mcn-deep);
+  text-align: center;
+  text-decoration: none;
+  font-weight: 750;
+}
+
+.announcement,
+.notice {
+  padding: 15px 19px;
+  border-left: 4px solid var(--mcn-gold);
+  border-radius: 8px;
+  background: #fff5df;
+  color: #513a1d;
+}
+
+.live-panel {
+  overflow: hidden;
+  padding: clamp(18px, 4vw, 35px);
+  background: linear-gradient(135deg, #28101b, #51192c);
+  color: #fff;
+}
+
+.live-panel h2,
+.live-panel h3 {
+  color: #fff;
+}
+
+.live-screen {
+  overflow: hidden;
+  border-radius: 13px;
+}
+
+.youtube-player {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 13px;
+  background: #090b13;
+}
+
+.youtube-player iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.stream-not-configured {
+  padding: 20px;
+  border-radius: 10px;
+  background: rgba(255,255,255,.09);
+  color: #fff;
+}
+
+.sermon-entry,
+.event-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  margin: 12px 0;
+  padding: 18px;
+  border: 1px solid #eee6e3;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.sermon-art {
+  display: grid;
+  flex-shrink: 0;
+  width: 55px;
+  height: 55px;
+  place-items: center;
+  border-radius: 12px;
+  background: #f8e9ed;
+  color: var(--mcn-burgundy);
+}
+
+.date {
+  color: var(--mcn-burgundy);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.contact-section,
+.contact {
+  background: #f8f1ec;
+}
+
+.contact-details {
+  display: grid;
+  gap: 10px;
+}
+
+.resource-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+footer {
+  padding: 38px 5%;
+  color: rgba(255,255,255,.84);
+  background: #2d111c;
+}
+
+footer a {
+  color: #f1d18a;
+}
+
+.footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.footer-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.copyright {
+  margin-top: 25px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(255,255,255,.15);
+  font-size: 12px;
+}
+
+.quote,
+.verse {
+  color: var(--mcn-burgundy);
+  font-style: italic;
+}
+
+.live-label {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 30px;
+  background: #fbe8e8;
+  color: #9b1c31;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 1px;
+}
+
+#menuToggle {
+  border: 1px solid #eadde0;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  color: var(--mcn-deep);
+  cursor: pointer;
+}
+
+a:focus-visible,
+button:focus-visible {
+  outline: 3px solid #d9ad58;
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .feature-grid,
+  .leadership-grid,
+  .media-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quick-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .navbar {
+    flex-wrap: wrap;
+  }
+
+  #navLinks {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 600px) {
+  .topbar {
+    padding: 9px 4%;
+    text-align: center;
+  }
+
+  .navbar {
+    gap: 10px;
+    padding: 10px 4%;
+  }
+
+  .brand {
+    font-size: 13px;
+  }
+
+  .official-church-logo {
+    width: 46px;
+    height: 46px;
+  }
+
+  #navLinks {
+    gap: 3px;
+  }
+
+  #navLinks a {
+    padding: 8px 9px;
+    font-size: 12px;
+  }
+
+  .hero {
+    padding: 65px 6%;
+  }
+
+  .hero h1 {
+    letter-spacing: -.7px;
+  }
+
+  .hero-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .hero-actions .button {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .feature-grid,
+  .leadership-grid,
+  .media-grid,
+  .church-grid,
+  .vision-row,
+  .bottom-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .quick-links {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .feature-card,
+  .media-card,
+  .church-card {
+    padding: 20px;
+  }
+
+  .leader-photo {
+    height: 290px;
+  }
+
+  #about,
+  #diocese,
+  #leadership,
+  #churches,
+  #ministries,
+  #events,
+  #resources,
+  #online,
+  #contact {
+    padding: 45px 5%;
+  }
+
+  .footer-brand {
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
+}
