@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prayer Requests | Diocesan Administration</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f2f5fa;color:#17233b;margin:0}
+header{background:#08245b;color:white;padding:20px}
+main{max-width:1100px;margin:25px auto;padding:15px}
+.card{background:white;padding:18px;margin:15px 0;border-radius:10px;box-shadow:0 3px 12px #0001}
+.meta{color:#596579;font-size:14px;line-height:1.8}
+.message{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.6}
+.badge{display:inline-block;background:#edf3ff;padding:6px 10px;border-radius:15px}
+a{color:#08245b}
+</style>
+</head>
+<body>
+<header>
+<h1>Prayer Request Management</h1>
+<p>METHODIST CHURCH NIGERIA — DELTA SOUTH DIOCESE</p>
+</header>
+<main>
+<p><a href="/">← Public Homepage</a></p>
+<h2>Submitted Prayer Requests</h2>
+{% if prayer_requests %}
+{% for item in prayer_requests %}
+<article class="card">
+<h3>{{ item.full_name|e }}</h3>
+<div class="meta">
+Submitted: {{ item.created_at|e }}<br>
+Phone: {{ item.phone|e or "Not provided" }}<br>
+Email: {{ item.email|e or "Not provided" }}<br>
+Status: <span class="badge">{{ item.status|e }}</span>
+</div>
+<p class="message">{{ item.request_text|e }}</p>
+</article>
+{% endfor %}
+{% else %}
+<p class="card">No prayer requests have been submitted yet.</p>
+{% endif %}
+</main>
+</body>
+</html>

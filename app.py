@@ -2239,6 +2239,17 @@ def public_prayer_request():
     return render_template("public_prayer_request.html", error="", success="")
 
 
+@app.get("/admin/prayer-requests")
+@page_login_required
+def admin_prayer_requests():
+    user = current_user()
+    allowed = {"Admin", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary"}
+    if not user or user["role"] not in allowed:
+        return "Authorized diocesan access required.", 403
+    requests = db().execute("SELECT id, full_name, phone, email, request_text, status, created_at FROM prayer_requests ORDER BY id DESC").fetchall()
+    return render_template("admin_prayer_requests.html", prayer_requests=requests)
+
+
 @app.get("/giving")
 def public_giving_page():
     accounts = db().execute("SELECT id, account_level, circuit, church_name, account_name, bank_name, account_number FROM church_accounts WHERE active=1 ORDER BY account_level, circuit, church_name").fetchall()
