@@ -13,6 +13,13 @@ label{display:block;margin:12px 0 5px;font-weight:bold}
 input,select,textarea{box-sizing:border-box;width:100%;padding:10px;border:1px solid #ccd5e1;border-radius:6px}
 textarea{min-height:90px}
 button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;border:0;border-radius:6px;text-decoration:none;margin-top:12px}
+
+.leadership-photo-editor{margin:12px 0;padding:14px;border:2px solid #123d70;border-radius:12px;background:#f8fbff}
+.leadership-photo-editor[hidden]{display:none!important}
+.leadership-crop-canvas{display:block;width:100%;max-width:320px;height:auto;aspect-ratio:1;margin:12px auto;border:2px solid #123d70;border-radius:8px;touch-action:none}
+.leadership-crop-zoom{display:block;width:100%;margin:10px 0}
+.home-link{font-weight:bold}
+
 </style>
 </head>
 <body>
@@ -21,7 +28,7 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 <p>Delta South Diocese — Leadership Management</p>
 </header>
 <main>
-<p><a href="/">View Public Homepage</a></p>
+<p><a class="home-link" href="/">🏠 Home — Public Homepage</a></p>
 {% if message %}<p>{{ message }}</p>{% endif %}
 {% if error %}<p>{{ error }}</p>{% endif %}
 
@@ -47,7 +54,15 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 <label>Biography</label>
 <textarea name="biography" maxlength="2500"></textarea>
 <label>Profile photo</label>
-<input type="file" name="photo" accept=".png,.jpg,.jpeg,.webp">
+<input type="file" name="photo" accept="image/png,image/jpeg,image/webp" class="leadership-photo-input">
+<div class="leadership-photo-editor" hidden>
+  <strong>Crop profile photo</strong>
+  <canvas class="leadership-crop-canvas" width="320" height="320"></canvas>
+  <label>Zoom</label><input type="range" min="1" max="3" step="0.05" value="1" class="leadership-crop-zoom">
+  <button type="button" class="leadership-crop-apply">Apply Crop</button>
+  <button type="button" class="leadership-crop-cancel">Cancel</button>
+  <p>Drag the photo to reposition it before applying the crop.</p>
+</div>
 <label>Display order</label>
 <input type="number" name="display_order" value="1" min="1" max="99">
 <label><input style="width:auto" type="checkbox" name="active" value="1" checked> Display publicly</label>
@@ -69,7 +84,15 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 <label>Biography</label>
 <textarea name="biography" maxlength="2500">{{ p.biography or '' }}</textarea>
 <label>Replace photo</label>
-<input type="file" name="photo" accept=".png,.jpg,.jpeg,.webp">
+<input type="file" name="photo" accept="image/png,image/jpeg,image/webp" class="leadership-photo-input">
+<div class="leadership-photo-editor" hidden>
+  <strong>Crop profile photo</strong>
+  <canvas class="leadership-crop-canvas" width="320" height="320"></canvas>
+  <label>Zoom</label><input type="range" min="1" max="3" step="0.05" value="1" class="leadership-crop-zoom">
+  <button type="button" class="leadership-crop-apply">Apply Crop</button>
+  <button type="button" class="leadership-crop-cancel">Cancel</button>
+  <p>Drag the photo to reposition it before applying the crop.</p>
+</div>
 <label>Display order</label>
 <input type="number" name="display_order" value="{{ p.display_order or 1 }}" min="1" max="99">
 <label><input style="width:auto" type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %}> Display publicly</label>
@@ -79,5 +102,61 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 {% endfor %}
 </section>
 </main>
+
+<script>
+document.querySelectorAll(".leadership-photo-input").forEach(function(input){
+  const editor = input.nextElementSibling;
+  const canvas = editor.querySelector(".leadership-crop-canvas");
+  const ctx = canvas.getContext("2d");
+  const zoom = editor.querySelector(".leadership-crop-zoom");
+  const apply = editor.querySelector(".leadership-crop-apply");
+  const cancel = editor.querySelector(".leadership-crop-cancel");
+  const form = input.closest("form");
+  let img = null, base = 1, scale = 1, x = 0, y = 0, drag = null, cropped = null;
+
+  function draw(){
+    if(!img) return;
+    const w=img.naturalWidth*base*scale, h=img.naturalHeight*base*scale;
+    x=Math.min(0,Math.max(320-w,x)); y=Math.min(0,Math.max(320-h,y));
+    ctx.clearRect(0,0,320,320); ctx.drawImage(img,x,y,w,h);
+  }
+  input.addEventListener("change",function(){
+    const file=input.files && input.files[0]; if(!file) return;
+    if(!file.type.startsWith("image/")){alert("Choose an image file.");input.value="";return;}
+    const url=URL.createObjectURL(file); img=new Image();
+    img.onload=function(){
+      base=Math.max(320/img.naturalWidth,320/img.naturalHeight);
+      scale=1; x=(320-img.naturalWidth*base)/2; y=(320-img.naturalHeight*base)/2;
+      zoom.value="1"; cropped=null; editor.hidden=false; draw(); URL.revokeObjectURL(url);
+    };
+    img.onerror=function(){URL.revokeObjectURL(url);alert("Could not open that image.");};
+    img.src=url;
+  });
+  zoom.addEventListener("input",function(){scale=Number(this.value)||1;draw();});
+  canvas.addEventListener("pointerdown",function(e){drag={x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);});
+  canvas.addEventListener("pointermove",function(e){
+    if(!drag||!img)return;const r=canvas.getBoundingClientRect(),f=320/r.width;
+    x+=(e.clientX-drag.x)*f;y+=(e.clientY-drag.y)*f;drag={x:e.clientX,y:e.clientY};draw();
+  });
+  canvas.addEventListener("pointerup",function(){drag=null;});
+  canvas.addEventListener("pointercancel",function(){drag=null;});
+  apply.addEventListener("click",function(){
+    if(!img)return;
+    canvas.toBlob(function(blob){
+      if(!blob){alert("Unable to crop this image.");return;}
+      cropped=new File([blob],"leadership-cropped.jpg",{type:"image/jpeg"});
+      const dt=new DataTransfer();dt.items.add(cropped);input.files=dt.files;
+      editor.hidden=true;img=null;
+    },"image/jpeg",0.92);
+  });
+  cancel.addEventListener("click",function(){editor.hidden=true;img=null;cropped=null;input.value="";});
+  form.addEventListener("submit",function(e){
+    if(!input.files || !input.files.length)return;
+    if(editor.hidden)return;
+    e.preventDefault();alert("Please press Apply Crop before saving the profile photo.");
+  });
+});
+</script>
+
 </body>
 </html>

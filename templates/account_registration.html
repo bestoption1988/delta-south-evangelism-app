@@ -99,23 +99,27 @@
       <label>
         Password
         <input
+          id="account-password"
           name="password"
           type="password"
           autocomplete="new-password"
           minlength="8"
           required
         >
+        <button type="button" class="password-toggle" onclick="togglePasswordField('account-password', this)" aria-pressed="false">Show password</button>
       </label>
 
       <label>
         Confirm Password
         <input
+          id="account-confirm-password"
           name="confirm_password"
           type="password"
           autocomplete="new-password"
           minlength="8"
           required
         >
+        <button type="button" class="password-toggle" onclick="togglePasswordField('account-confirm-password', this)" aria-pressed="false">Show password</button>
       </label>
 
       <button class="primary auth-button" type="submit">
@@ -124,7 +128,8 @@
 
     </form>
 
-    <p class="auth-note">
+    <p class="auth-note"><a href="{{ url_for('public_home') }}">🏠 Home</a></p>
+      <p class="auth-note">
       Your account request will be reviewed by an administrator before access is granted.
     </p>
 
@@ -135,5 +140,15 @@
   </section>
 </main>
 
+<script>
+function togglePasswordField(id, button) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    const showing = input.type === "password";
+    input.type = showing ? "text" : "password";
+    button.textContent = showing ? "Hide password" : "Show password";
+    button.setAttribute("aria-pressed", String(showing));
+}
+</script>
 </body>
 </html>
