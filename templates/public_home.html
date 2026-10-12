@@ -165,8 +165,8 @@
 <section class="watch-section" id="watch">
   <div class="section-title"><h2>WATCH & LISTEN</h2><p>Live streaming, sermons, teachings and more</p></div>
   <div class="media-grid">
-    <a href="#online" class="media-card"><span>▶</span><b>Live Service</b><small>Join Us in Worship</small></a>
-    <a href="#resources" class="media-card"><span>🎙</span><b>Recent Sermons</b><small>Watch & Listen</small></a>
+    <a href="/live" class="media-card"><span>▶</span><b>Live Service</b><small>Join Us in Worship</small></a>
+    <a href="#sermon-content" class="media-card"><span>🎙</span><b>Recent Sermons</b><small>Watch & Listen</small></a>
     <a href="#resources" class="media-card"><span>📖</span><b>Bible Teachings</b><small>Grow in the Word</small></a>
     <a href="#resources" class="media-card"><span>🎤</span><b>Special Programmes</b><small>Watch on Demand</small></a>
     <a href="#resources" class="media-card"><span>♫</span><b>Choir & Music</b><small>Inspiration Through Music</small></a>
@@ -176,7 +176,7 @@
 
 <section class="bottom-grid" id="resources">
   <article class="feature-card">
-    <div class="section-heading"><h2>▦ Upcoming Events</h2><a href="#contact">View Events</a></div>
+    <div class="section-heading"><h2>▦ Upcoming Events</h2><a href="#events">View Events</a></div>
     {% for event in homepage_events %}
     <div class="event-row">
       <span class="date">{{ event.event_date or "TBA" }}</span>
@@ -190,7 +190,7 @@
   </article>
 
   <article class="feature-card">
-    <div class="section-heading"><h2>▶ Featured Sermon</h2><a href="#watch">View All</a></div>
+    <div class="section-heading"><h2 id="sermon-content">▶ Featured Sermon</h2><a href="#watch">View All</a></div>
     {% for sermon in homepage_sermons[:3] %}
     <div class="sermon-entry">
       <div class="sermon-art">✝</div>
