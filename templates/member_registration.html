@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#064e3b">
-<title>MCN Delta South Diocese — Member Registration</title>
+<title>{{ "New Convert Registration" if request.args.get("type") == "new-convert" else "MCN Delta South Diocese — Member Registration" }}</title>
 
 <style>
 *{box-sizing:border-box}
@@ -423,7 +423,7 @@ textarea{
 <header class="header">
   <h1>METHODIST CHURCH NIGERIA</h1>
   <h2>DELTA SOUTH DIOCESE</h2>
-  <p>Online Membership Registration</p>
+  <p>{{ "Welcome! Register as a New Convert" if request.args.get("type") == "new-convert" else "Online Membership Registration" }}</p>
 
   <div class="header-actions">
     <a class="login-link" href="/">🏠 Home</a>
@@ -436,7 +436,7 @@ textarea{
 
 <div class="card">
 
-  <h2>Member Registration Form</h2>
+  <h2>{{ "New Convert Registration Form" if request.args.get("type") == "new-convert" else "Member Registration Form" }}</h2>
 
   <div class="intro">
     Please provide accurate information. Your registration will remain
