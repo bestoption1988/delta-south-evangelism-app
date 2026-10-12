@@ -370,6 +370,51 @@ textarea{
     grid-template-columns:1fr;
   }
 }
+
+/* Passport crop editor visibility and mobile layout */
+#passportCropEditor[hidden] { display: none !important; }
+#passportCropEditor:not([hidden]) {
+  display: block !important;
+  visibility: visible !important;
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 380px;
+  margin: 18px auto;
+  padding: 16px;
+  box-sizing: border-box;
+  border: 2px solid #064e3b;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #18352a;
+}
+#passportCropCanvas {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  margin: 12px auto;
+  border: 2px solid #064e3b;
+  border-radius: 8px;
+  touch-action: none;
+}
+#passportCropZoom {
+  display: block;
+  width: 100%;
+  margin: 12px 0;
+}
+#passportCropEditor button {
+  min-height: 42px;
+  margin: 5px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: #064e3b;
+  color: white;
+  font-weight: bold;
+}
+
 </style>
 </head>
 
@@ -381,6 +426,7 @@ textarea{
   <p>Online Membership Registration</p>
 
   <div class="header-actions">
+    <a class="login-link" href="/">🏠 Home</a>
     <a class="login-link" href="/login">🔐 Login</a>
     <a class="help-link" href="#help-center">❓ Help Center / Member Care</a>
   </div>
@@ -763,6 +809,15 @@ textarea{
           Remove Photo
         </button>
 
+        <div id="passportCropEditor" hidden>
+          <h4>Adjust Passport Photo</h4>
+          <canvas id="passportCropCanvas" width="320" height="320"></canvas>
+          <label for="passportCropZoom">Zoom</label>
+          <input id="passportCropZoom" type="range" min="1" max="3" step="0.05" value="1">
+          <button type="button" id="applyPassportCrop">Apply Crop</button>
+          <button type="button" id="cancelPassportCrop">Cancel</button>
+        </div>
+
         <div class="help-text">
           JPG, PNG and WebP images are accepted.
         </div>
@@ -1118,6 +1173,89 @@ circuit.addEventListener("change", function(){
    PHOTO
 ------------------------------------------------------- */
 
+
+let cropImage = null;
+let cropScale = 1;
+let cropX = 0;
+let cropY = 0;
+let cropBase = 1;
+const cropEditor = document.getElementById("passportCropEditor");
+const cropCanvas = document.getElementById("passportCropCanvas");
+const cropCtx = cropCanvas.getContext("2d");
+const cropZoom = document.getElementById("passportCropZoom");
+
+function drawPassportCrop(){
+  if(!cropImage) return;
+  const w = cropImage.naturalWidth * cropBase * cropScale;
+  const h = cropImage.naturalHeight * cropBase * cropScale;
+  cropX = Math.min(0, Math.max(320-w, cropX));
+  cropY = Math.min(0, Math.max(320-h, cropY));
+  cropCtx.clearRect(0,0,320,320);
+  cropCtx.drawImage(cropImage,cropX,cropY,w,h);
+}
+function openPassportCrop(file){
+  const img = new Image();
+  const url = URL.createObjectURL(file);
+  img.onload = function(){
+    cropImage = img;
+    cropBase = Math.max(320/img.naturalWidth,320/img.naturalHeight);
+    cropScale = 1;
+    cropX = (320-img.naturalWidth*cropBase)/2;
+    cropY = (320-img.naturalHeight*cropBase)/2;
+    cropZoom.value = "1";
+    cropEditor.hidden = false;
+    drawPassportCrop();
+    URL.revokeObjectURL(url);
+  };
+  img.onerror = function(){
+    URL.revokeObjectURL(url);
+    showMessage("error","Unable to open this photo.");
+  };
+  img.src = url;
+}
+cropZoom.addEventListener("input",function(){
+  cropScale = Number(this.value)||1;
+  drawPassportCrop();
+});
+let cropDrag = null;
+cropCanvas.addEventListener("pointerdown",function(e){
+  cropDrag={x:e.clientX,y:e.clientY};
+  cropCanvas.setPointerCapture(e.pointerId);
+});
+cropCanvas.addEventListener("pointermove",function(e){
+  if(!cropDrag||!cropImage) return;
+  const r=cropCanvas.getBoundingClientRect(), f=320/r.width;
+  cropX+=(e.clientX-cropDrag.x)*f;
+  cropY+=(e.clientY-cropDrag.y)*f;
+  cropDrag={x:e.clientX,y:e.clientY};
+  drawPassportCrop();
+});
+cropCanvas.addEventListener("pointerup",function(){cropDrag=null;});
+cropCanvas.addEventListener("pointercancel",function(){cropDrag=null;});
+document.getElementById("applyPassportCrop").addEventListener("click",function(){
+  if(!cropImage) return;
+  cropCanvas.toBlob(function(blob){
+    if(!blob){showMessage("error","Unable to crop this photo.");return;}
+    selectedPhoto=new File([blob],"passport-cropped.jpg",{type:"image/jpeg"});
+    photoPreview.src=URL.createObjectURL(selectedPhoto);
+    photoPreview.style.display="block";
+    photoEmpty.style.display="none";
+    cropEditor.hidden=true;
+    cropImage=null;
+    clearMessage();
+  },"image/jpeg",0.92);
+});
+document.getElementById("cancelPassportCrop").addEventListener("click",function(){
+  cropEditor.hidden=true;
+  cropImage=null;
+  selectedPhoto=null;
+  photoPreview.removeAttribute("src");
+  photoPreview.style.display="none";
+  photoEmpty.style.display="block";
+  cameraInput.value="";
+  fileInput.value="";
+});
+
 function selectPhoto(file){
 
   if(!file){
@@ -1161,6 +1299,7 @@ function selectPhoto(file){
   }
 
   selectedPhoto = file;
+  openPassportCrop(file);
 
   const reader = new FileReader();
 
