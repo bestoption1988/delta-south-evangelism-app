@@ -214,8 +214,8 @@
   <article class="feature-card">
     <div class="section-heading"><h2>Quick Links</h2></div>
     <div class="resource-links">
-      <a href="#online">♡<small>Online Giving</small></a>
-      <a href="#contact">🙏<small>Prayer Request</small></a>
+      <a href="/giving">♡<small>Online Giving</small></a>
+      <a href="/prayer-request">🙏<small>Prayer Request</small></a>
       <a href="#churches">⌖<small>Church Locator</small></a>
       <a href="#contact">✉<small>Contact Us</small></a>
     </div>
@@ -230,12 +230,12 @@
   <div class="church-list">
     {% for circuit, churches in homepage_churches|groupby('circuit') %}
     <div class="circuit-group">
-      <h3>{{ circuit }} Circuit</h3>
+      <h3>{{ circuit }}</h3>
       <div class="church-grid">
         {% for church in churches %}
         <article class="church-card">
           <h4>{{ church.church_name }}</h4>
-          <p>{{ church.circuit }} Circuit</p>
+          <p>{{ church.circuit }}</p>
           {% if church.contact_person %}
           <p>Contact: {{ church.contact_person }}</p>
           {% endif %}

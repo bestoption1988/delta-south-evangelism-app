@@ -33,3 +33,6 @@ financial_report_route.txt
 
 # User-uploaded files
 static/uploads/
+.env
+.env.*
+!.env.example

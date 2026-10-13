@@ -61,8 +61,8 @@ hr{margin:22px 0;border:0;border-top:1px solid #ddd}
 <form method="post">
 <input type="hidden" name="kind" value="toggle_sermon">
 <input type="hidden" name="id" value="{{ x.id }}">
-<input type="hidden" name="active" value="{{ 0 if x.active else 1 }}">
-<button type="submit">{{ 'Hide' if x.active else 'Publish' }}</button>
+<input type="hidden" name="active" value="{{ 0 if x.published else 1 }}">
+<button type="submit">{{ 'Hide' if x.published else 'Publish' }}</button>
 </form>
 <form method="post" onsubmit="return confirm('Delete this sermon permanently?')">
 <input type="hidden" name="kind" value="delete_sermon">
@@ -80,8 +80,8 @@ hr{margin:22px 0;border:0;border-top:1px solid #ddd}
 <form method="post">
 <input type="hidden" name="kind" value="toggle_event">
 <input type="hidden" name="id" value="{{ x.id }}">
-<input type="hidden" name="active" value="{{ 0 if x.active else 1 }}">
-<button type="submit">{{ 'Hide' if x.active else 'Publish' }}</button>
+<input type="hidden" name="active" value="{{ 0 if x.published else 1 }}">
+<button type="submit">{{ 'Hide' if x.published else 'Publish' }}</button>
 </form>
 <form method="post" onsubmit="return confirm('Delete this event permanently?')">
 <input type="hidden" name="kind" value="delete_event">

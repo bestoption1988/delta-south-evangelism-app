@@ -2188,7 +2188,7 @@ def admin_homepage_media():
             elif kind in ("toggle_sermon", "toggle_event"):
                 table = "homepage_sermons" if kind == "toggle_sermon" else "homepage_events"
                 db().execute(
-                    f"UPDATE {table} SET active=? WHERE id=?",
+                    f"UPDATE {table} SET published=? WHERE id=?",
                     (1 if request.form.get("active") == "1" else 0,
                      request.form.get("id", type=int))
                 )
