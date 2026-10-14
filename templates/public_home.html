@@ -167,9 +167,9 @@
   <div class="media-grid">
     <a href="/live" class="media-card"><span>▶</span><b>Live Service</b><small>Join Us in Worship</small></a>
     <a href="/media-library" class="media-card"><span>🎙</span><b>Recent Sermons</b><small>Watch & Listen</small></a>
-    <a href="#resources" class="media-card"><span>📖</span><b>Bible Teachings</b><small>Grow in the Word</small></a>
-    <a href="#resources" class="media-card"><span>🎤</span><b>Special Programmes</b><small>Watch on Demand</small></a>
-    <a href="#resources" class="media-card"><span>♫</span><b>Choir & Music</b><small>Inspiration Through Music</small></a>
+    <a href="/media-library?type=document" class="media-card"><span>📖</span><b>Bible Teachings</b><small>Grow in the Word</small></a>
+    <a href="/media-library?type=video" class="media-card"><span>🎤</span><b>Special Programmes</b><small>Watch on Demand</small></a>
+    <a href="/media-library?type=audio" class="media-card"><span>♫</span><b>Choir & Music</b><small>Inspiration Through Music</small></a>
     <a href="#resources" class="media-card"><span>♡</span><b>Testimonies</b><small>Be Encouraged</small></a>
   </div>
 </section>
@@ -221,6 +221,29 @@
       <a href="#contact">✉<small>Contact Us</small></a>
     </div>
   </article>
+</section>
+
+
+<section class="feature-card" id="published-media-preview">
+  <div class="section-heading">
+    <h2>📚 From Our Media Library</h2>
+    <a href="/media-library">View All Media →</a>
+  </div>
+  {% for item in homepage_media_items %}
+  <article class="sermon-entry">
+    <h3>{{ item.title }}</h3>
+    {% if item.description %}<p>{{ item.description }}</p>{% endif %}
+    {% if item.media_type == 'audio' and item.signed_url %}
+      <audio controls preload="none" style="width:100%" src="{{ item.signed_url }}"></audio>
+    {% elif item.media_type == 'video' and item.signed_url %}
+      <video controls playsinline preload="metadata" style="width:100%;max-height:320px" src="{{ item.signed_url }}"></video>
+    {% elif item.signed_url %}
+      <a class="button blue-button" href="{{ item.signed_url }}" target="_blank" rel="noopener">Open Document</a>
+    {% endif %}
+  </article>
+  {% else %}
+  <p>Church messages, music and documents will appear here when published.</p>
+  {% endfor %}
 </section>
 
 <section class="church-finder feature-card" id="churches">

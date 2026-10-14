@@ -52,6 +52,24 @@ hr{margin:22px 0;border:0;border-top:1px solid #ddd}
 </form>
 </section>
 
+
+<section class="card" id="church-media-library">
+<h2>Church Media Library</h2>
+<p>Upload documents, audio recordings and videos. Files remain unpublished until you publish them.</p>
+<p><a href="/admin/media-library">Open full Media Library Management</a></p>
+<form method="post" action="/admin/media-library" enctype="multipart/form-data">
+<label>Media title</label>
+<input name="title" maxlength="180" required>
+<label>Description</label>
+<textarea name="description" maxlength="2000"></textarea>
+<label>Select file (maximum 50 MB)</label>
+<input type="file" name="file"
+accept=".pdf,.docx,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.webm,.mov" required>
+<button class="save" type="submit">Upload Media</button>
+</form>
+<p>After uploading, use the full Media Library Management page above to publish, unpublish or delete the item.</p>
+</section>
+
 <section class="card">
 <h2>Existing Sermons</h2>
 {% for x in sermons %}

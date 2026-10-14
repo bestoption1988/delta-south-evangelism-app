@@ -2302,13 +2302,38 @@ def public_home():
     churches = db().execute(
         "SELECT * FROM churches ORDER BY circuit,church_name"
     ).fetchall()
+
+    # Published media comes from the persistent Supabase catalogue.
+    homepage_media_items = []
+    try:
+        media_rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
+                "published": "eq.true",
+                "order": "created_at.desc",
+                "limit": "6",
+            },
+        )
+        for media_row in media_rows:
+            item = dict(media_row)
+            item["original_name"] = item.get("storage_path", "").rsplit("/", 1)[-1]
+            try:
+                item["signed_url"] = _ml_signed(item["storage_path"])
+            except Exception:
+                item["signed_url"] = ""
+            homepage_media_items.append(item)
+    except Exception:
+        app.logger.exception("Homepage Supabase media preview could not be loaded")
+
     return render_template(
         "public_home.html", leadership_profiles=profiles,
         leadership_titles=LEADERSHIP_TITLES,
         homepage_content=homepage_content,
         homepage_sermons=sermons,
         homepage_events=events,
-        homepage_churches=churches
+        homepage_churches=churches,
+        homepage_media_items=homepage_media_items
     )
 
 
@@ -8666,86 +8691,327 @@ def member_appointment_options():
 
 
 
-# --- Supabase private media library ---
+# --- Supabase persistent media catalogue ---
 import os as _ml_os
 import uuid as _ml_uuid
 from urllib.parse import quote as _ml_quote
+
 _ML_BUCKET = "church-media"
 _ML_MAX = 50 * 1024 * 1024
-_ML_TYPES = {".pdf":("application/pdf","document"), ".docx":("application/vnd.openxmlformats-officedocument.wordprocessingml.document","document"), ".mp3":("audio/mpeg","audio"), ".wav":("audio/wav","audio"), ".ogg":("audio/ogg","audio"), ".m4a":("audio/mp4","audio"), ".aac":("audio/aac","audio"), ".mp4":("video/mp4","video"), ".webm":("video/webm","video"), ".mov":("video/quicktime","video")}
-def _ml_conn():
-    conn=db()
-    conn.execute("CREATE TABLE IF NOT EXISTS homepage_media_library (id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,description TEXT DEFAULT '',original_name TEXT NOT NULL,storage_path TEXT NOT NULL UNIQUE,mime_type TEXT NOT NULL,media_type TEXT NOT NULL,published INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,created_by TEXT DEFAULT '')")
-    conn.commit(); return conn
+_ML_TABLE = "church_media_library"
+
+_ML_TYPES = {
+    ".pdf": ("application/pdf", "document"),
+    ".docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "document"),
+    ".mp3": ("audio/mpeg", "audio"),
+    ".wav": ("audio/wav", "audio"),
+    ".ogg": ("audio/ogg", "audio"),
+    ".m4a": ("audio/mp4", "audio"),
+    ".aac": ("audio/aac", "audio"),
+    ".mp4": ("video/mp4", "video"),
+    ".webm": ("video/webm", "video"),
+    ".mov": ("video/quicktime", "video"),
+}
+
+
 def _ml_credentials():
-    base=(_ml_os.environ.get('SUPABASE_URL') or '').strip().rstrip('/'); key=(_ml_os.environ.get('SUPABASE_SECRET_KEY') or '').strip()
-    if not base or not key: raise RuntimeError('Server is missing SUPABASE_URL or SUPABASE_SECRET_KEY.')
-    return base,key
+    base = (_ml_os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+    key = (_ml_os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
+    if not base or not key:
+        raise RuntimeError(
+            "Server is missing SUPABASE_URL or SUPABASE_SECRET_KEY."
+        )
+    return base, key
+
+
+def _ml_supabase_request(method, params=None, payload=None, prefer=None):
+    """Use the server-side Supabase key; never expose it to the browser."""
+    import requests as _requests
+
+    base, key = _ml_credentials()
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "apikey": key,
+        "Accept": "application/json",
+    }
+    if payload is not None:
+        headers["Content-Type"] = "application/json"
+    if prefer:
+        headers["Prefer"] = prefer
+
+    response = _requests.request(
+        method,
+        f"{base}/rest/v1/{_ML_TABLE}",
+        headers=headers,
+        params=params or {},
+        json=payload,
+        timeout=30,
+    )
+    if not response.ok:
+        # Avoid logging request headers or secrets.
+        raise RuntimeError(
+            f"Supabase catalogue request failed (HTTP {response.status_code})."
+        )
+    if not response.content:
+        return []
+    result = response.json()
+    return result if isinstance(result, list) else []
+
+
 def _ml_signed(path):
     import requests as _requests
-    base,key=_ml_credentials(); url=f"{base}/storage/v1/object/sign/{_ML_BUCKET}/{_ml_quote(path,safe='/')}"
-    r=_requests.post(url,headers={'Authorization':f'Bearer {key}','apikey':key,'Content-Type':'application/json'},json={'expiresIn':3600},timeout=20)
-    if not r.ok: raise RuntimeError(f'Signed URL request failed (HTTP {r.status_code}).')
-    signed=r.json().get('signedURL') or r.json().get('signedUrl')
-    if not signed: raise RuntimeError('Supabase returned no signed URL.')
-    return base+(signed if signed.startswith('/storage/v1/') else '/storage/v1'+signed) if signed.startswith('/') else signed
-@app.route('/media-library')
-def media_library_public():
-    conn=_ml_conn()
+
+    base, key = _ml_credentials()
+    url = (
+        f"{base}/storage/v1/object/sign/{_ML_BUCKET}/"
+        f"{_ml_quote(path, safe='/')}"
+    )
+    response = _requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
+            "Content-Type": "application/json",
+        },
+        json={"expiresIn": 3600},
+        timeout=20,
+    )
+    if not response.ok:
+        raise RuntimeError(
+            f"Signed URL request failed (HTTP {response.status_code})."
+        )
+    signed = response.json().get("signedURL") or response.json().get("signedUrl")
+    if not signed:
+        raise RuntimeError("Supabase returned no signed URL.")
+    if signed.startswith("/"):
+        return base + (
+            signed if signed.startswith("/storage/v1/")
+            else "/storage/v1" + signed
+        )
+    return signed
+
+
+def _ml_storage_request(method, path, data=None, content_type=None):
+    import requests as _requests
+
+    base, key = _ml_credentials()
+    url = (
+        f"{base}/storage/v1/object/{_ML_BUCKET}/"
+        f"{_ml_quote(path, safe='/')}"
+    )
+    headers = {"Authorization": f"Bearer {key}", "apikey": key}
+    if content_type:
+        headers["Content-Type"] = content_type
+    if method == "POST":
+        headers["x-upsert"] = "false"
+
+    response = _requests.request(
+        method, url, headers=headers, data=data, timeout=120
+    )
+    return response
+
+
+def _ml_prepare_item(row):
+    item = dict(row)
+    item["original_name"] = item.get("storage_path", "").rsplit("/", 1)[-1]
+    item["published"] = bool(item.get("published", False))
     try:
-        rows=conn.execute('SELECT id,title,description,original_name,storage_path,media_type FROM homepage_media_library WHERE published=1 ORDER BY created_at DESC,id DESC').fetchall(); items=[]
-        for row in rows:
-            item=dict(row)
-            try: item['signed_url']=_ml_signed(item['storage_path'])
-            except Exception: item['signed_url']=''
-            items.append(item)
-        return render_template('media_library.html',items=items)
-    finally: conn.close()
-@app.route('/admin/media-library',methods=['GET','POST'])
+        item["signed_url"] = _ml_signed(item["storage_path"])
+    except Exception:
+        item["signed_url"] = ""
+    return item
+
+
+@app.route("/media-library")
+def media_library_public():
+    category = (request.args.get("type") or "").strip().lower()
+    if category not in {"document", "audio", "video"}:
+        category = ""
+
+    params = {
+        "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
+        "published": "eq.true",
+        "order": "created_at.desc",
+    }
+    if category:
+        params["media_type"] = f"eq.{category}"
+
+    try:
+        rows = _ml_supabase_request("GET", params=params)
+        items = [_ml_prepare_item(row) for row in rows]
+        return render_template(
+            "media_library.html", items=items, selected_type=category
+        )
+    except Exception:
+        app.logger.exception("Public Supabase media catalogue could not be loaded")
+        return render_template(
+            "media_library.html", items=[], selected_type=category
+        )
+
+
+@app.route("/admin/media-library", methods=["GET", "POST"])
 @page_login_required
 def media_library_admin():
-    user=current_user()
-    if not user or user['role']!='Admin': return 'Administrator access required.',403
-    request.max_content_length=_ML_MAX+1024*1024; conn=_ml_conn(); message=''; error=''
+    user = current_user()
+    if not user or user["role"] != "Admin":
+        return "Administrator access required.", 403
+
+    request.max_content_length = _ML_MAX + 1024 * 1024
+    message = ""
+    error = ""
+
     try:
-        if request.method=='POST':
-            action=request.form.get('action','upload'); media_id=request.form.get('media_id',type=int)
-            if action=='toggle':
-                conn.execute('UPDATE homepage_media_library SET published=1-published WHERE id=?',(media_id,)); conn.commit(); message='Publication status updated.'
-            elif action=='delete':
-                row=conn.execute('SELECT storage_path FROM homepage_media_library WHERE id=?',(media_id,)).fetchone()
-                if row:
-                    import requests as _requests
-                    base,key=_ml_credentials(); url=f"{base}/storage/v1/object/{_ML_BUCKET}/{_ml_quote(row['storage_path'],safe='/')}"
-                    r=_requests.delete(url,headers={'Authorization':f'Bearer {key}','apikey':key},timeout=30)
-                    if r.ok or r.status_code==404:
-                        conn.execute('DELETE FROM homepage_media_library WHERE id=?',(media_id,)); conn.commit(); message='Media deleted.'
-                    else: error=f'Storage delete failed (HTTP {r.status_code}).'
-            else:
-                f=request.files.get('file'); title=(request.form.get('title') or '').strip(); desc=(request.form.get('description') or '').strip()
-                if not f or not f.filename: error='Choose a file.'
-                elif not title: error='Enter a title.'
+        if request.method == "POST":
+            action = request.form.get("action", "upload")
+            media_id = (request.form.get("media_id") or "").strip()
+
+            if action == "toggle":
+                if not media_id:
+                    error = "Missing media record."
                 else:
-                    name=f.filename.split('/')[-1].split(chr(92))[-1]; ext=('.'+name.rsplit('.',1)[-1].lower()) if '.' in name else ''; spec=_ML_TYPES.get(ext)
-                    if not spec: error='Allowed: PDF, DOCX, MP3, WAV, OGG, M4A, AAC, MP4, WEBM, MOV.'
+                    found = _ml_supabase_request(
+                        "GET",
+                        params={
+                            "select": "id,published",
+                            "id": f"eq.{media_id}",
+                            "limit": "1",
+                        },
+                    )
+                    if not found:
+                        error = "Media record not found."
                     else:
-                        data=f.stream.read(_ML_MAX+1)
-                        if not data: error='The file is empty.'
-                        elif len(data)>_ML_MAX: error='Maximum file size is 50 MB.'
+                        _ml_supabase_request(
+                            "PATCH",
+                            params={"id": f"eq.{media_id}"},
+                            payload={"published": not bool(found[0].get("published"))},
+                            prefer="return=minimal",
+                        )
+                        message = "Publication status updated."
+
+            elif action == "delete":
+                found = _ml_supabase_request(
+                    "GET",
+                    params={
+                        "select": "id,storage_path",
+                        "id": f"eq.{media_id}",
+                        "limit": "1",
+                    },
+                ) if media_id else []
+
+                if not found:
+                    error = "Media record not found."
+                else:
+                    storage_path = found[0]["storage_path"]
+                    response = _ml_storage_request("DELETE", storage_path)
+                    if response.ok or response.status_code == 404:
+                        _ml_supabase_request(
+                            "DELETE",
+                            params={"id": f"eq.{media_id}"},
+                            prefer="return=minimal",
+                        )
+                        message = "Media deleted."
+                    else:
+                        error = (
+                            "Storage delete failed "
+                            f"(HTTP {response.status_code})."
+                        )
+
+            else:
+                uploaded_file = request.files.get("file")
+                title = (request.form.get("title") or "").strip()
+                description = (request.form.get("description") or "").strip()
+
+                if not uploaded_file or not uploaded_file.filename:
+                    error = "Choose a file."
+                elif not title:
+                    error = "Enter a title."
+                else:
+                    name = uploaded_file.filename.split("/")[-1].split(chr(92))[-1]
+                    ext = ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
+                    spec = _ML_TYPES.get(ext)
+
+                    if not spec:
+                        error = "Allowed: PDF, DOCX, MP3, WAV, OGG, M4A, AAC, MP4, WEBM, MOV."
+                    else:
+                        data = uploaded_file.stream.read(_ML_MAX + 1)
+                        if not data:
+                            error = "The file is empty."
+                        elif len(data) > _ML_MAX:
+                            error = "Maximum file size is 50 MB."
                         else:
-                            checks={'.pdf':data.startswith(b'%PDF-'),'.docx':data.startswith(b'PK'),'.mp3':data.startswith(b'ID3') or data.startswith(bytes([255,251])) or data.startswith(bytes([255,243])) or data.startswith(bytes([255,242])),'.wav':data.startswith(b'RIFF') and data[8:12]==b'WAVE','.ogg':data.startswith(b'OggS'),'.m4a':len(data)>12 and data[4:8]==b'ftyp','.mp4':len(data)>12 and data[4:8]==b'ftyp','.mov':len(data)>12 and data[4:8]==b'ftyp','.aac':data.startswith(bytes([255,241])) or data.startswith(bytes([255,249])),'.webm':data.startswith(bytes([26,69,223,163]))}
-                            if not checks.get(ext,False): error='File content does not match its extension.'
+                            checks = {
+                                ".pdf": data.startswith(b"%PDF-"),
+                                ".docx": data.startswith(b"PK"),
+                                ".mp3": data.startswith(b"ID3") or data.startswith(bytes([255, 251])) or data.startswith(bytes([255, 243])) or data.startswith(bytes([255, 242])),
+                                ".wav": data.startswith(b"RIFF") and data[8:12] == b"WAVE",
+                                ".ogg": data.startswith(b"OggS"),
+                                ".m4a": len(data) > 12 and data[4:8] == b"ftyp",
+                                ".mp4": len(data) > 12 and data[4:8] == b"ftyp",
+                                ".mov": len(data) > 12 and data[4:8] == b"ftyp",
+                                ".aac": data.startswith(bytes([255, 241])) or data.startswith(bytes([255, 249])),
+                                ".webm": data.startswith(bytes([26, 69, 223, 163])),
+                            }
+                            if not checks.get(ext, False):
+                                error = "File content does not match its extension."
                             else:
+                                storage_path = f"library/{_ml_uuid.uuid4().hex}{ext}"
                                 try:
-                                    import requests as _requests
-                                    base,key=_ml_credentials(); path=f'library/{_ml_uuid.uuid4().hex}{ext}'; url=f"{base}/storage/v1/object/{_ML_BUCKET}/{_ml_quote(path,safe='/')}"
-                                    r=_requests.post(url,headers={'Authorization':f'Bearer {key}','apikey':key,'Content-Type':spec[0],'x-upsert':'false'},data=data,timeout=120)
-                                    if not r.ok: raise RuntimeError(f'Supabase upload failed (HTTP {r.status_code}).')
-                                    conn.execute('INSERT INTO homepage_media_library(title,description,original_name,storage_path,mime_type,media_type,published,created_by) VALUES(?,?,?,?,?,?,0,?)',(title,desc,name,path,spec[0],spec[1],str(user['id']))); conn.commit(); message='Upload complete. Publish it below when ready.'
-                                except Exception as e: error=str(e)
-        rows=conn.execute('SELECT id,title,description,original_name,media_type,published,created_at FROM homepage_media_library ORDER BY created_at DESC,id DESC').fetchall()
-        return render_template('media_library_admin.html',items=[dict(x) for x in rows],message=message,error=error)
-    finally: conn.close()
+                                    response = _ml_storage_request(
+                                        "POST", storage_path, data, spec[0]
+                                    )
+                                    if not response.ok:
+                                        raise RuntimeError(
+                                            "Supabase upload failed "
+                                            f"(HTTP {response.status_code})."
+                                        )
+
+                                    _ml_supabase_request(
+                                        "POST",
+                                        payload={
+                                            "title": title,
+                                            "description": description,
+                                            "storage_path": storage_path,
+                                            "mime_type": spec[0],
+                                            "media_type": spec[1],
+                                            "published": False,
+                                            "created_by": str(user["id"]),
+                                        },
+                                        prefer="return=minimal",
+                                    )
+                                    message = "Upload complete. Publish it below when ready."
+                                except Exception as exc:
+                                    # Do not delete the uploaded object automatically:
+                                    # preserve it for safe recovery if metadata insert fails.
+                                    error = str(exc)
+
+        rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
+                "order": "created_at.desc",
+            },
+        )
+        items = []
+        for row in rows:
+            item = dict(row)
+            item["original_name"] = item.get("storage_path", "").rsplit("/", 1)[-1]
+            item["published"] = bool(item.get("published", False))
+            items.append(item)
+
+    except Exception:
+        app.logger.exception("Administrator Supabase media operation failed")
+        if not error:
+            error = "The media catalogue could not be reached. Please try again."
+
+        # Keep the page usable if the catalogue is temporarily unavailable.
+        items = []
+
+    return render_template(
+        "media_library_admin.html",
+        items=items,
+        message=message,
+        error=error,
+    )
 # --- End media library ---
 
 if __name__ == "__main__":
