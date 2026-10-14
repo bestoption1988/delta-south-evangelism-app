@@ -8,6 +8,38 @@ from openpyxl import load_workbook, Workbook
 import qrcode
 from qrcode.image.svg import SvgPathImage
 from werkzeug.security import generate_password_hash, check_password_hash
+from database_connection import connect_database, database_backend
+
+def database_error_types():
+    """Return database exception classes supported by the selected backend."""
+    errors = [sqlite3.Error, sqlite3.IntegrityError]
+
+    if database_backend() == "postgres":
+        try:
+            import pg8000.dbapi
+            errors.extend([
+                pg8000.dbapi.DatabaseError,
+                pg8000.dbapi.IntegrityError,
+            ])
+        except (ImportError, AttributeError):
+            pass
+
+    return tuple(dict.fromkeys(errors))
+
+
+def database_integrity_error_types():
+    """Return integrity-constraint exception classes for the selected backend."""
+    errors = [sqlite3.IntegrityError]
+
+    if database_backend() == "postgres":
+        try:
+            import pg8000.dbapi
+            errors.append(pg8000.dbapi.IntegrityError)
+        except (ImportError, AttributeError):
+            pass
+
+    return tuple(dict.fromkeys(errors))
+
 
 LEADERSHIP_TITLES = ['Prelate', 'Archbishop', 'Bishop, Delta South Diocese', 'Evangelism Minister', 'Lay President', 'Men Fellowship President', 'Women Fellowship President', 'Youth Fellowship President']
 
@@ -83,8 +115,8 @@ def validate_user_assignment(role, circuit, church_name):
             """
             SELECT 1
             FROM churches
-            WHERE circuit COLLATE NOCASE = ?
-              AND church_name COLLATE NOCASE = ?
+            WHERE LOWER(circuit) = LOWER(?)
+              AND LOWER(church_name) = LOWER(?)
             LIMIT 1
             """,
             (circuit, church_name)
@@ -109,9 +141,7 @@ ALL_TABLES = {"churches", "commitments", "income", "expenses", "equipment", "tru
 
 def db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys=ON")
+        g.db = connect_database(DB_PATH)
     return g.db
 
 
@@ -122,10 +152,35 @@ def close_db(exc):
         conn.close()
 
 
+def table_column_names(conn, table):
+    """Return column names for SQLite or the selected PostgreSQL schema."""
+    if not isinstance(table, str) or not table.replace("_", "").isalnum():
+        raise ValueError("Invalid table name")
+
+    if database_backend() == "postgres":
+        from postgres_adapter import postgres_table_columns, postgres_config
+        schema = postgres_config().get("startup_params", {}).get(
+            "search_path", {}
+        )
+        if isinstance(schema, dict):
+            schema = schema.get("search_path", "public")
+        if not isinstance(schema, str):
+            schema = "public"
+        return set(postgres_table_columns(conn, schema, table))
+
+    return {
+        row[1]
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+
+
 def ensure_column(conn, table, column, definition):
-    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    """Add a missing column using the selected database backend."""
+    cols = table_column_names(conn, table)
     if column not in cols:
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        conn.execute(
+            f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+        )
 
 
 def init_db():
@@ -3001,7 +3056,10 @@ def api_customer_care_message(rid):
 @app.post("/api/customer-care/<int:rid>/attachment")
 @login_required
 def api_customer_care_attachment(rid):
-    ensure_member_care_attachment_schema()
+    # Schema migration uses a direct SQLite connection.
+    # PostgreSQL already has the required attachment columns.
+    if database_backend() == "sqlite":
+        ensure_member_care_attachment_schema()
 
     u = current_user()
     scope, params = customer_care_scope(u)
@@ -3177,7 +3235,7 @@ def api_customer_care_officers():
             FROM users
             WHERE COALESCE(active, 1)=1
               AND role != 'Member'
-            ORDER BY username COLLATE NOCASE
+            ORDER BY LOWER(username)
         """).fetchall()
 
         officers = [
@@ -4084,7 +4142,20 @@ def api_conference_status(rid):
 @login_required
 def api_me():
     u = current_user()
-    return jsonify(dict(u))
+
+    # Never expose password hashes or other internal credential fields.
+    safe_fields = (
+        "id",
+        "username",
+        "role",
+        "circuit",
+        "church_name",
+        "active",
+        "must_change_password",
+        "created_at",
+        "member_id",
+    )
+    return jsonify({key: u[key] for key in safe_fields if key in u.keys()})
 
 
 def get_connection_url():
@@ -5299,13 +5370,13 @@ def review_member_registration(rid):
             })
         )
 
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Could not complete registration approval: " + str(e)
         }), 400
 
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Database error while reviewing registration: " + str(e)
@@ -5464,12 +5535,12 @@ def public_member_registration():
             )
         )
         db().commit()
-    except sqlite3.IntegrityError:
+    except database_integrity_error_types():
         db().rollback()
         return jsonify({
             "error": "Could not create the registration. Please try again."
         }), 400
-    except sqlite3.Error:
+    except database_error_types():
         db().rollback()
         return jsonify({
             "error": "Database error while submitting registration."
@@ -5594,10 +5665,10 @@ def create_row(table):
     try:
         cur = db().execute(sql, [data.get(c) for c in cols])
         db().commit()
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         db().rollback()
         return jsonify({"error":"Could not save record: " + str(e)}),400
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         db().rollback()
         return jsonify({"error":"Database error while saving: " + str(e)}),500
     # A logging failure must never turn a successful registration into a
@@ -5744,10 +5815,10 @@ def convert_planting_prospect(rid):
             "planting_year": planting_year
         }), 201
 
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         conn.rollback()
         return jsonify({"error": "Could not convert prospect: " + str(e)}), 400
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({"error": "Database error during conversion: " + str(e)}), 500
 
@@ -5781,7 +5852,7 @@ def upgrade_church_to_circuit(rid):
         conn.commit()
         audit("UPGRADE_TO_CIRCUIT", "churches", rid, json.dumps({"church_name": church["church_name"], "new_circuit": circuit_name}, ensure_ascii=False))
         return jsonify({"ok": True, "circuit_name": circuit_name, "church_id": rid})
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         conn.rollback()
         return jsonify({"error": "Could not create the new circuit: " + str(e)}), 400
 
@@ -5867,10 +5938,10 @@ def update_row(table, rid):
             audit("UPDATE", table, rid, json.dumps({k:data.get(k) for k in cols}, ensure_ascii=False))
         except Exception:
             pass
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         db().rollback()
         return jsonify({"error":"Could not update record: " + str(e)}),400
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         db().rollback()
         return jsonify({"error":"Database error while updating: " + str(e)}),500
     updated = db().execute(f"SELECT * FROM {table} WHERE id=?", (rid,)).fetchone()
@@ -6058,7 +6129,7 @@ def approve_account_request(rid):
             "message": "Account approved successfully."
         }), 201
 
-    except sqlite3.IntegrityError:
+    except database_integrity_error_types():
         db().rollback()
         return jsonify({
             "error": "Unable to create the account because the username already exists."
@@ -6244,7 +6315,7 @@ def create_user():
         }))
         return jsonify({"id": cur.lastrowid, "ok": True}), 201
 
-    except sqlite3.IntegrityError:
+    except database_integrity_error_types():
         conn.rollback()
         return jsonify({"error": "That username or membership link already exists."}), 400
 
@@ -6476,6 +6547,12 @@ def security_allowed(roles={"Admin"}):
     return u and u["role"] in roles
 
 def make_backup(kind="Manual"):
+    if database_backend() != "sqlite":
+        raise RuntimeError(
+            "SQLite file backups are disabled for PostgreSQL. "
+            "Use a PostgreSQL-compatible backup process."
+        )
+
     u=current_user()
     os.makedirs(BACKUP_DIR, exist_ok=True)
     stamp=datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -6523,7 +6600,21 @@ def backup_history():
 def security_status():
     u=current_user()
     if u["role"] not in {"Admin","Auditor"}: return jsonify({"error":"Administrator or Auditor access required."}),403
-    integrity=db().execute("PRAGMA integrity_check").fetchone()[0]
+    if database_backend() == "sqlite":
+        integrity = db().execute(
+            "PRAGMA integrity_check"
+        ).fetchone()[0]
+    else:
+        try:
+            from postgres_adapter import postgres_health_check
+            health = postgres_health_check(db())
+            integrity = (
+                "ok" if health.get("database")
+                else "error: PostgreSQL health check failed"
+            )
+        except Exception as exc:
+            integrity = f"error: {exc}"
+
     users=db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
     inactive=db().execute("SELECT COUNT(*) FROM users WHERE active=0").fetchone()[0]
     forced=db().execute("SELECT COUNT(*) FROM users WHERE must_change_password=1").fetchone()[0]
@@ -6549,6 +6640,15 @@ def toggle_user(uid):
 @login_required
 def restore_backup(bid):
     if not security_allowed(): return jsonify({"error":"Administrator access required."}),403
+
+    if database_backend() != "sqlite":
+        return jsonify({
+            "error": (
+                "SQLite backup restoration is disabled for PostgreSQL. "
+                "Use a verified PostgreSQL-compatible recovery procedure."
+            )
+        }), 409
+
     rec=db().execute("SELECT * FROM backup_history WHERE id=?",(bid,)).fetchone()
     if not rec: return jsonify({"error":"Backup not found."}),404
     path=os.path.join(BACKUP_DIR,rec["filename"])
@@ -6580,7 +6680,23 @@ def system_health():
         return jsonify({"error":"Administrator or Auditor access required."}),403
     conn = db()
     required_tables = sorted(ALL_TABLES | {"circuits", "users", "audit_log", "backup_history"})
-    existing = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if database_backend() == "postgres":
+        from postgres_adapter import postgres_table_exists, postgres_config
+        pg_config = postgres_config()
+        pg_schema = pg_config.get("startup_params", {}).get("search_path", "public")
+        if isinstance(pg_schema, dict):
+            pg_schema = pg_schema.get("search_path", "public")
+        existing = {
+            table for table in required_tables
+            if postgres_table_exists(conn, pg_schema, table)
+        }
+    else:
+        existing = {
+            r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+
     table_checks = [{"table": t, "ok": t in existing} for t in required_tables]
     missing_tables = [x["table"] for x in table_checks if not x["ok"]]
     schema_issues=[]
@@ -6602,14 +6718,22 @@ def system_health():
     for table, cols in expected.items():
         if table not in existing:
             continue
-        have={r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        have = table_column_names(conn, table)
         for col in cols:
             if col not in have:
                 schema_issues.append(f"{table}.{col}")
-    try:
-        integrity=conn.execute("PRAGMA integrity_check").fetchone()[0]
-    except Exception as exc:
-        integrity=f"error: {exc}"
+    if database_backend() == "postgres":
+        try:
+            from postgres_adapter import postgres_health_check
+            pg_health = postgres_health_check(conn)
+            integrity = "ok" if pg_health.get("database") else "error: PostgreSQL health check failed"
+        except Exception as exc:
+            integrity = f"error: {exc}"
+    else:
+        try:
+            integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        except Exception as exc:
+            integrity = f"error: {exc}"
     counts={}
     for table in ["members","churches","circuits","church_plants","outreach","mission_contacts","report_periods","circuit_reports","action_points","meetings","diocesan_reviews","notifications","audit_log","backup_history"]:
         if table in existing:
@@ -6690,7 +6814,7 @@ def system_data_quality_safe_cleanup():
         "action_points":["action_item","responsible_person","priority","status","completion_notes"],
     }
     for table, cols in text_fields.items():
-        existing={r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        existing=set(table_column_names(conn, table))
         for col in cols:
             if col in existing:
                 cur=conn.execute(f"UPDATE {table} SET {col}=TRIM({col}) WHERE {col} IS NOT NULL AND {col}<>TRIM({col})")
@@ -6724,7 +6848,12 @@ def system_workflow_check():
         ("Reporting / accountability","circuit_reports","SELECT COUNT(*) FROM circuit_reports"),
         ("Security audit trail","audit_log","SELECT COUNT(*) FROM audit_log"),
         ("Backup history","backup_history","SELECT COUNT(*) FROM backup_history")]
-    existing={r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    existing = {
+        table for table in {
+            item[1] for item in required
+        }
+        if table_column_names(conn, table)
+    }
     for label,table,sql in required:
         if table not in existing:
             results.append({"workflow":label,"status":"Missing","detail":f"Table {table} is missing"})
@@ -6743,7 +6872,7 @@ def system_info():
         "application":"Methodist Church Nigeria, Delta South Diocese: Department of Evangelism Mission System",
         "version":APP_VERSION,
         "stage":APP_STAGE,
-        "database":"SQLite",
+        "database":database_backend().upper(),
         "python":"Flask application",
         "circuits":["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"],
         "local_church_target":17,
@@ -6760,31 +6889,89 @@ def deployment_check():
         return jsonify({"error":"Administrator or Auditor access required."}),403
     conn=db(); checks=[]
     def add(name, ok, detail): checks.append({"name":name,"ok":bool(ok),"detail":detail})
-    add("Database file", os.path.isfile(DB_PATH), DB_PATH)
-    add("Database writable", os.access(DB_PATH, os.W_OK), "Application can write to the active database." if os.path.isfile(DB_PATH) else "Database file not found yet.")
+    if database_backend() == "sqlite":
+        add("Database file", os.path.isfile(DB_PATH), DB_PATH)
+        add(
+            "Database writable",
+            os.path.isfile(DB_PATH) and os.access(DB_PATH, os.W_OK),
+            "Application can write to the active SQLite database."
+            if os.path.isfile(DB_PATH)
+            else "Database file not found yet."
+        )
+    else:
+        try:
+            from postgres_adapter import postgres_health_check
+            health = postgres_health_check(conn)
+            connected = bool(health and health.get("database"))
+            detail = (
+                f"Connected to PostgreSQL database: {health['database']}."
+                if connected
+                else "PostgreSQL health check did not confirm a database connection."
+            )
+        except Exception as exc:
+            connected = False
+            detail = f"PostgreSQL connection check failed: {exc}"
+        add("PostgreSQL connection", connected, detail)
+
     add("Backup folder", os.path.isdir(BACKUP_DIR), BACKUP_DIR)
-    latest=conn.execute("SELECT created_at,created_by,filename,size_bytes,sha256,status FROM backup_history ORDER BY id DESC LIMIT 1").fetchone()
-    backup_ok=False
-    backup_detail="No verified backup has been recorded."
+
+    latest = conn.execute(
+        "SELECT created_at,created_by,filename,size_bytes,sha256,status "
+        "FROM backup_history ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+
+    backup_ok = False
+    backup_detail = "No verified backup has been recorded."
+
     if latest:
-        path=os.path.join(BACKUP_DIR,latest["filename"])
-        if os.path.isfile(path):
-            try:
-                digest=hashlib.sha256(open(path,"rb").read()).hexdigest()
-                backup_ok=(digest==latest["sha256"] and latest["status"]=="Ready")
-                backup_detail=f"{latest['filename']} · {'verified' if backup_ok else 'hash/status mismatch'}"
-            except Exception as exc:
-                backup_detail=f"Backup verification error: {exc}"
+        if database_backend() == "sqlite":
+            backup_path = os.path.join(BACKUP_DIR, latest["filename"])
+            if os.path.isfile(backup_path):
+                try:
+                    with open(backup_path, "rb") as backup_file:
+                        digest = hashlib.sha256(backup_file.read()).hexdigest()
+                    backup_ok = (
+                        digest == latest["sha256"]
+                        and latest["status"] == "Ready"
+                    )
+                    backup_detail = (
+                        f"{latest['filename']} · "
+                        f"{'verified' if backup_ok else 'hash/status mismatch'}"
+                    )
+                except Exception as exc:
+                    backup_detail = f"Backup verification error: {exc}"
+            else:
+                backup_detail = "Latest backup record exists but the file is missing."
         else:
-            backup_detail="Latest backup record exists but the file is missing."
+            backup_detail = (
+                "A backup-history record exists. PostgreSQL backup verification "
+                "must be performed using a PostgreSQL-compatible backup process."
+            )
+
     add("Latest backup verified", backup_ok, backup_detail)
     role_count=conn.execute("SELECT COUNT(DISTINCT role) FROM users WHERE active=1").fetchone()[0]
     add("Active user access", role_count>0, f"{role_count} active role type(s) in use.")
     church_count=conn.execute("SELECT COUNT(*) FROM churches").fetchone()[0]
     circuit_count=conn.execute("SELECT COUNT(*) FROM circuits").fetchone()[0]
     add("Diocesan baseline", church_count==17 and circuit_count==4, f"{church_count} local-church records · {circuit_count} circuit records.")
-    integrity=conn.execute("PRAGMA integrity_check").fetchone()[0]
-    add("SQLite integrity", integrity=="ok", integrity)
+    if database_backend() == "sqlite":
+        integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        add("SQLite integrity", integrity == "ok", integrity)
+    else:
+        try:
+            from postgres_adapter import postgres_health_check
+            health = postgres_health_check(conn)
+            integrity_ok = bool(health and health.get("database"))
+            add(
+                "PostgreSQL database health",
+                integrity_ok,
+                "PostgreSQL health check passed."
+                if integrity_ok
+                else "PostgreSQL health check did not confirm database health."
+            )
+        except Exception as exc:
+            add("PostgreSQL database health", False, str(exc))
+
     return jsonify({"ok":all(x["ok"] for x in checks),"checks":checks,"version":APP_VERSION,"stage":APP_STAGE,"generated_at":datetime.now().isoformat(timespec="seconds")})
 
 @app.get("/manifest.json")
@@ -6794,41 +6981,84 @@ def manifest():
 
 
 def build_table_map():
-    """Build and refresh the table/column map after the database schema is initialized."""
+    """Build the table/column map for the selected database backend."""
     global TABLES
 
     conn = db()
     names = set(ALL_TABLES)
-    names.update({"circuits", "users", "audit_log", "backup_history"})
+    names.update({
+        "circuits", "users", "audit_log", "backup_history",
+        "church_media_library", "conference_presence",
+        "payment_settings", "payment_transactions",
+    })
 
     table_map = {}
 
     for name in sorted(names):
         try:
-            cols = [
-                row[1]
-                for row in conn.execute(
-                    f"PRAGMA table_info({name})"
-                ).fetchall()
-            ]
-
+            cols = sorted(
+                table_column_names(conn, name),
+                key=lambda column: column
+            )
             if cols:
                 table_map[name] = cols
-
-        except sqlite3.Error:
-            continue
+        except Exception as exc:
+            # An absent optional table should not prevent application startup.
+            # Do not silently hide unexpected PostgreSQL failures.
+            if database_backend() == "postgres":
+                message = str(exc).lower()
+                if any(term in message for term in (
+                    "does not exist", "undefined table",
+                    "undefinedcolumn"
+                )):
+                    continue
+                raise
+            if isinstance(exc, sqlite3.Error):
+                continue
+            raise
 
     TABLES = table_map
     return TABLES
 
+def validate_postgres_startup_schema():
+    """Validate the existing PostgreSQL schema without running SQLite migrations."""
+    required_tables = set(ALL_TABLES)
+    required_tables.update({
+        "circuits",
+        "users",
+        "audit_log",
+        "backup_history",
+    })
+
+    conn = db()
+    missing_tables = []
+
+    for table in sorted(required_tables):
+        columns = table_column_names(conn, table)
+        if not columns:
+            missing_tables.append(table)
+
+    if missing_tables:
+        raise RuntimeError(
+            "PostgreSQL startup blocked: required tables are missing from "
+            f"the configured schema: {', '.join(missing_tables)}. "
+            "No tables were created or modified."
+        )
+
+    return build_table_map()
+
+
 with app.app_context():
-    init_db()
-    ensure_runtime_schema()
-    ensure_member_passport_photo_schema()
-    ensure_member_care_attachment_schema()
-    ensure_member_care_case_assignment_schema()
-    ensure_member_care_timeline_schema()
-    TABLES = build_table_map()
+    if database_backend() == "postgres":
+        TABLES = validate_postgres_startup_schema()
+    else:
+        init_db()
+        ensure_runtime_schema()
+        ensure_member_passport_photo_schema()
+        ensure_member_care_attachment_schema()
+        ensure_member_care_case_assignment_schema()
+        ensure_member_care_timeline_schema()
+        TABLES = build_table_map()
 @app.post("/api/payment/settings")
 @login_required
 def api_payment_settings_save():
@@ -8465,7 +8695,7 @@ def create_member_appointment(member_id):
             "message": "Church office appointment added successfully."
         }), 201
 
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Could not create appointment: " + str(e)
@@ -8594,7 +8824,7 @@ def update_member_appointment(appointment_id):
             "message": "Church office appointment updated successfully."
         })
 
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Could not update appointment: " + str(e)
@@ -8669,7 +8899,7 @@ def terminate_member_appointment(appointment_id):
             "message": "Church office appointment terminated. Membership remains active."
         })
 
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Could not terminate appointment: " + str(e)

@@ -229,7 +229,83 @@ class PostgreSQLCursor:
 
         return "".join(result)
 
+    @staticmethod
+    def _split_sql_statements(script):
+        """Split ordinary SQL on semicolons outside quoted strings."""
+        statements = []
+        start = 0
+        quote = None
+        i = 0
+
+        while i < len(script):
+            char = script[i]
+
+            if quote:
+                if char == quote:
+                    if i + 1 < len(script) and script[i + 1] == quote:
+                        i += 2
+                        continue
+                    quote = None
+            elif char in ("'", '"'):
+                quote = char
+            elif char == ";":
+                statement = script[start:i].strip()
+                if statement:
+                    statements.append(statement)
+                start = i + 1
+
+            i += 1
+
+        if quote:
+            raise ValueError("Unterminated quoted string in SQL script.")
+
+        tail = script[start:].strip()
+        if tail:
+            statements.append(tail)
+
+        return statements
+
+    @staticmethod
+    def _translate_sql(sql):
+        """Translate a small, explicit subset of SQLite SQL to PostgreSQL."""
+        statement = sql.strip()
+
+        # PostgreSQL uses ON CONFLICT DO NOTHING instead of INSERT OR IGNORE.
+        match = re.match(r"^INSERT\s+OR\s+IGNORE\s+INTO\b", statement, re.I)
+        if match:
+            statement = re.sub(
+                r"^INSERT\s+OR\s+IGNORE\s+INTO\b",
+                "INSERT INTO",
+                statement,
+                count=1,
+                flags=re.I,
+            )
+            if not re.search(r"\bON\s+CONFLICT\b", statement, re.I):
+                statement += " ON CONFLICT DO NOTHING"
+
+        # Do not silently discard SQLite's case-insensitive collation.
+        # Call sites must use an explicit PostgreSQL-compatible expression.
+        if re.search(r"\bCOLLATE\s+NOCASE\b", statement, re.I):
+            raise NotImplementedError(
+                "COLLATE NOCASE requires an explicit case-insensitive SQL translation."
+            )
+
+        # Do not silently pass SQLite-only AUTOINCREMENT syntax to PostgreSQL.
+        if re.search(r"\bAUTOINCREMENT\b", statement, re.I):
+            raise NotImplementedError(
+                "SQLite AUTOINCREMENT needs an explicit PostgreSQL schema migration."
+            )
+
+        return statement
+
+    def executescript(self, script):
+        """Execute simple SQL statements individually; caller manages commit."""
+        for statement in self._split_sql_statements(script):
+            self.execute(self._translate_sql(statement))
+        return self
+
     def execute(self, sql, args=None):
+        sql = self._translate_sql(sql)
         params = () if args is None else args
         statement = sql.strip().rstrip(";")
         self._lastrowid = None
