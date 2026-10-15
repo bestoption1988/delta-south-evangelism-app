@@ -5241,7 +5241,7 @@ def review_member_registration(rid):
                 "created_at"
             ]
 
-            conn.execute("""
+            member_cur = conn.execute("""
                 INSERT INTO members(
                     member_id,
                     role_position,
@@ -5290,6 +5290,12 @@ def review_member_registration(rid):
                 now
             ))
 
+            approved_member_db_id = member_cur.lastrowid
+            if approved_member_db_id is None:
+                raise RuntimeError(
+                    "Member was inserted but its numeric database ID was not returned."
+                )
+
             cur = conn.execute("""
                 INSERT INTO users(
                     username,
@@ -5310,7 +5316,7 @@ def review_member_registration(rid):
                 circuit,
                 church_name,
                 now,
-                approved_member_id
+                approved_member_db_id
             ))
 
             approved_user_id = cur.lastrowid
