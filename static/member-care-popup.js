@@ -1960,11 +1960,95 @@ async function markMemberCareRead(threadId) {
 
 })();
 
+
+/* =========================================================
+   MEMBER CARE - ONLINE PRESENCE HEARTBEAT
+   ========================================================= */
+(function () {
+  "use strict";
+
+  let presenceTimer = null;
+  let presenceBusy = false;
+
+  async function sendPresenceHeartbeat() {
+    if (presenceBusy || document.hidden) return;
+
+    presenceBusy = true;
+    try {
+      const response = await fetch("/api/customer-care/presence", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: "{}",
+        cache: "no-store"
+      });
+
+      if (response.status === 401 || response.status === 403) {
+        if (presenceTimer) clearInterval(presenceTimer);
+        presenceTimer = null;
+      }
+    } catch (_) {
+      // A temporary network failure should not interrupt Member Care.
+    } finally {
+      presenceBusy = false;
+    }
+  }
+
+  function startPresenceHeartbeat() {
+    if (presenceTimer) return;
+
+    sendPresenceHeartbeat();
+    presenceTimer = setInterval(sendPresenceHeartbeat, 20000);
+  }
+
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) sendPresenceHeartbeat();
+  });
+
+  window.addEventListener("online", sendPresenceHeartbeat);
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startPresenceHeartbeat);
+  } else {
+    startPresenceHeartbeat();
+  }
+
+  window.dsMemberCarePresenceHeartbeat = sendPresenceHeartbeat;
+})();
+
 /* =========================================================
    MEMBER CARE - TWO-WAY LIVE TYPING
    ========================================================= */
 
 (function () {
+
+  function ensureRemoteTypingElement() {
+    let el = document.getElementById("dsCareRemoteTyping");
+    const composer = document.querySelector(
+      "#dsMemberCarePopup .ds-care-composer"
+    );
+    if (!el && composer) {
+      el = document.createElement("div");
+      el.id = "dsCareRemoteTyping";
+      el.className = "ds-care-typing";
+      el.textContent = "Support is typing…";
+      composer.parentNode.insertBefore(el, composer);
+    }
+    return el;
+  }
+
+  function showRemoteTyping(label) {
+    const el = ensureRemoteTypingElement();
+    if (!el) return;
+    el.textContent = label || "Support is typing…";
+    el.classList.add("show");
+  }
+
+  function hideRemoteTyping() {
+    const el = document.getElementById("dsCareRemoteTyping");
+    if (el) el.classList.remove("show");
+  }
+
 
   let typingSendTimer = null;
   let typingPollTimer = null;
@@ -2042,13 +2126,13 @@ async function markMemberCareRead(threadId) {
             : "Support is typing";
 
         if (typeof window.showMemberCareTyping === "function") {
-          window.showMemberCareTyping(label);
+          showRemoteTyping(label);
         }
 
       } else {
 
         if (typeof window.hideMemberCareTyping === "function") {
-          window.hideMemberCareTyping();
+          hideRemoteTyping();
         }
       }
 
@@ -2124,8 +2208,11 @@ async function markMemberCareRead(threadId) {
   // Expose a safe way for the existing popup to update
   // its current conversation.
   window.setMemberCareTypingThread = function (thread) {
-    window.memberCareCurrentThread = thread;
+    clearTimeout(typingSendTimer);
+    if (typingActive) sendTypingStatus(false);
     typingActive = false;
+    hideRemoteTyping();
+    window.memberCareCurrentThread = thread || null;
   };
 
   if (document.readyState === "loading") {

@@ -46,9 +46,11 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 <h3>Add Leadership Profile</h3>
 <form method="post" enctype="multipart/form-data">
 <label>Position</label>
-<select name="title" required>
-{% for title in titles %}<option>{{ title }}</option>{% endfor %}
-</select>
+<input name="title" list="leadership-office-options"
+       maxlength="160" placeholder="Select or type a new office" required>
+<datalist id="leadership-office-options">
+{% for title in titles %}<option value="{{ title }}">{% endfor %}
+</datalist>
 <label>Full name</label>
 <input name="full_name" maxlength="160">
 <label>Biography</label>
@@ -78,7 +80,11 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 <form method="post" enctype="multipart/form-data">
 <input type="hidden" name="id" value="{{ p.id }}">
 <label>Position</label>
-<select name="title">{% for title in titles %}<option {% if p.title==title %}selected{% endif %}>{{ title }}</option>{% endfor %}</select>
+<input name="title" list="leadership-office-options"
+       value="{{ p.title }}" maxlength="160" required>
+<datalist id="leadership-office-options">
+{% for title in titles %}<option value="{{ title }}">{% endfor %}
+</datalist>
 <label>Full name</label>
 <input name="full_name" value="{{ p.full_name or '' }}" maxlength="160">
 <label>Biography</label>

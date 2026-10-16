@@ -184,6 +184,34 @@ def ensure_column(conn, table, column, definition):
 
 
 def init_db():
+    # Persistent Member Care presence and typing tables for SQLite.
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS customer_care_presence (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT NOT NULL DEFAULT '',
+            role TEXT NOT NULL DEFAULT '',
+            last_seen TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS customer_care_typing (
+            thread_id TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            username TEXT NOT NULL DEFAULT '',
+            role TEXT NOT NULL DEFAULT '',
+            last_seen TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (thread_id, user_id)
+        )
+    """)
+    db().execute("""
+        CREATE INDEX IF NOT EXISTS idx_customer_care_presence_last_seen
+        ON customer_care_presence (last_seen)
+    """)
+    db().execute("""
+        CREATE INDEX IF NOT EXISTS idx_customer_care_typing_last_seen
+        ON customer_care_typing (last_seen)
+    """)
+
     db().execute("CREATE TABLE IF NOT EXISTS prayer_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT NOT NULL, phone TEXT DEFAULT '', email TEXT DEFAULT '', request_text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'New', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
     db().commit()
 
@@ -2122,8 +2150,10 @@ def admin_leadership():
                 bio = request.form.get("biography", "").strip()
                 order = request.form.get("display_order", type=int) or 1
                 active = int(request.form.get("active") == "1")
-                if title not in LEADERSHIP_TITLES:
-                    raise ValueError("Choose a valid leadership position.")
+                if not title:
+                    raise ValueError("Enter or select a leadership position.")
+                if len(title) > 160:
+                    raise ValueError("Leadership position must not exceed 160 characters.")
                 if len(name) > 160 or len(bio) > 2500:
                     raise ValueError("Name or biography is too long.")
 
@@ -2711,9 +2741,12 @@ def api_customer_care_create():
         return jsonify({"error": "Message is required"}), 400
 
     member_id = ""
-
-    if u["role"] == "Member":
-        member_id = str(u["member_id"] or "")
+    if u["role"] == "Member" and u["member_id"]:
+        member_row = db().execute(
+            "SELECT member_id FROM members WHERE id=?",
+            (u["member_id"],)
+        ).fetchone()
+        member_id = str(member_row["member_id"] or "") if member_row else ""
 
     now = datetime.now().isoformat(timespec="seconds")
     thread_id = "MC-" + datetime.now().strftime("%Y%m%d%H%M%S%f")
@@ -2790,6 +2823,80 @@ def api_customer_care_create():
         "status": "Open"
     }), 201
 
+
+
+
+@app.post("/api/customer-care/presence")
+@login_required
+def api_customer_care_presence_update():
+    """Refresh the current authenticated user's Member Care presence."""
+    u = current_user()
+    conn = db()
+    now = datetime.now().isoformat(timespec="seconds")
+
+    conn.execute("""
+        INSERT INTO customer_care_presence
+            (user_id, username, role, last_seen)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            username=excluded.username,
+            role=excluded.role,
+            last_seen=excluded.last_seen
+    """, (u["id"], u["username"], u["role"], now))
+
+    conn.commit()
+    return jsonify({"ok": True, "last_seen": now})
+
+
+@app.get("/api/customer-care/presence")
+@login_required
+def api_customer_care_presence_list():
+    """List online participants related to conversations visible to the user."""
+    u = current_user()
+    conn = db()
+    scope, params = customer_care_scope(u)
+
+    # Apply the same conversation scope used by the existing Member Care API.
+    visible_threads = conn.execute(f"""
+        SELECT t.user_id, t.assigned_user_id
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE {scope}
+    """, params).fetchall()
+
+    relevant_ids = {int(u["id"])}
+
+    for thread in visible_threads:
+        owner_id = thread["user_id"]
+        assigned_id = thread["assigned_user_id"]
+
+        if owner_id is not None:
+            relevant_ids.add(int(owner_id))
+        if assigned_id is not None:
+            relevant_ids.add(int(assigned_id))
+
+    cutoff = (
+        datetime.now() - timedelta(seconds=60)
+    ).isoformat(timespec="seconds")
+
+    # Parameterized query: never interpolate user IDs into SQL.
+    placeholders = ",".join("?" for _ in relevant_ids)
+
+    online = conn.execute(
+        f"""
+        SELECT user_id, username, role, last_seen
+        FROM customer_care_presence
+        WHERE last_seen >= ?
+          AND user_id IN ({placeholders})
+        ORDER BY username
+        """,
+        [cutoff] + sorted(relevant_ids)
+    ).fetchall()
+
+    return jsonify({
+        "ok": True,
+        "online": [dict(row) for row in online]
+    })
 
 
 @app.get("/api/customer-care/unread-count")
@@ -2874,8 +2981,9 @@ def api_customer_care_detail(rid):
 def api_customer_care_typing_status(rid):
     u = current_user()
     scope, params = customer_care_scope(u)
+    conn = db()
 
-    thread = db().execute(f"""
+    thread = conn.execute(f"""
         SELECT t.*
         FROM customer_care_threads t
         LEFT JOIN users m ON t.user_id = m.id
@@ -2888,26 +2996,33 @@ def api_customer_care_typing_status(rid):
             "error": "Conversation not found"
         }), 404
 
-    status = MEMBER_CARE_TYPING.get(thread["thread_id"])
+    now = datetime.now().isoformat(timespec="seconds")
+    cutoff = (datetime.now() - timedelta(seconds=5)).isoformat(
+        timespec="seconds"
+    )
+    thread_id = thread["thread_id"]
 
-    # Typing status expires after 4 seconds.
-    if status:
-        if time.time() - float(status.get("time", 0)) > 4:
-            MEMBER_CARE_TYPING.pop(
-                thread["thread_id"],
-                None
-            )
-            status = None
+    # Remove expired typing indicators.
+    conn.execute(
+        "DELETE FROM customer_care_typing WHERE last_seen < ?",
+        (cutoff,)
+    )
 
-    # Never report the current user's own typing status.
-    if status and status.get("user_id") == u["id"]:
-        status = None
+    status = conn.execute("""
+        SELECT user_id, username, role
+        FROM customer_care_typing
+        WHERE thread_id=? AND user_id<>? AND last_seen>=?
+        ORDER BY last_seen DESC
+        LIMIT 1
+    """, (thread_id, u["id"], cutoff)).fetchone()
+
+    conn.commit()
 
     return jsonify({
         "ok": True,
         "typing": bool(status),
-        "username": status.get("username") if status else "",
-        "role": status.get("role") if status else ""
+        "username": status["username"] if status else "",
+        "role": status["role"] if status else ""
     })
 
 
@@ -2916,8 +3031,9 @@ def api_customer_care_typing_status(rid):
 def api_customer_care_typing(rid):
     u = current_user()
     scope, params = customer_care_scope(u)
+    conn = db()
 
-    thread = db().execute(f"""
+    thread = conn.execute(f"""
         SELECT t.*
         FROM customer_care_threads t
         LEFT JOIN users m ON t.user_id = m.id
@@ -2931,24 +3047,35 @@ def api_customer_care_typing(rid):
         }), 404
 
     data = request.get_json(silent=True) or {}
-    typing = bool(data.get("typing", False))
-
-    key = thread["thread_id"]
+    typing = data.get("typing", False) is True
+    thread_id = thread["thread_id"]
 
     if typing:
-        MEMBER_CARE_TYPING[key] = {
-            "user_id": u["id"],
-            "username": u["username"],
-            "role": u["role"],
-            "time": time.time()
-        }
+        now = datetime.now().isoformat(timespec="seconds")
+        conn.execute("""
+            INSERT INTO customer_care_typing
+                (thread_id, user_id, username, role, last_seen)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(thread_id, user_id) DO UPDATE SET
+                username=excluded.username,
+                role=excluded.role,
+                last_seen=excluded.last_seen
+        """, (
+            thread_id,
+            u["id"],
+            u["username"],
+            u["role"],
+            now
+        ))
     else:
-        current = MEMBER_CARE_TYPING.get(key)
+        conn.execute("""
+            DELETE FROM customer_care_typing
+            WHERE thread_id=? AND user_id=?
+        """, (thread_id, u["id"]))
 
-        if current and current.get("user_id") == u["id"]:
-            MEMBER_CARE_TYPING.pop(key, None)
-
+    conn.commit()
     return jsonify({"ok": True})
+
 
 @app.post("/api/customer-care/<int:rid>/read")
 @login_required
@@ -6408,12 +6535,35 @@ def update_user(uid):
 @login_required
 def delete_user(uid):
     u = current_user()
-    if u["role"] != "Admin": return jsonify({"error":"Administrator access required."}),403
-    if uid == u["id"]: return jsonify({"error":"You cannot delete your own account."}),400
-    target = db().execute("SELECT id,username FROM users WHERE id=?",(uid,)).fetchone()
-    if not target: return jsonify({"error":"User not found"}),404
-    db().execute("DELETE FROM users WHERE id=?",(uid,)); db().commit(); audit("DELETE","users",uid,"User removed")
-    return jsonify({"ok":True})
+    if u["role"] != "Admin":
+        return jsonify({"error": "Administrator access required."}), 403
+    if uid == u["id"]:
+        return jsonify({"error": "You cannot delete your own account."}), 400
+
+    conn = db()
+    target = conn.execute(
+        "SELECT id, username FROM users WHERE id=?", (uid,)
+    ).fetchone()
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    try:
+        conn.execute("BEGIN")
+        # Remove dependent reset tokens before deleting the user.
+        conn.execute(
+            "DELETE FROM password_reset_tokens WHERE user_id=?", (uid,)
+        )
+        conn.execute("DELETE FROM users WHERE id=?", (uid,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Failed to delete user %s", uid)
+        return jsonify({
+            "error": "The user could not be deleted. No changes were committed."
+        }), 500
+
+    audit("DELETE", "users", uid, "User removed")
+    return jsonify({"ok": True})
 
 
 @app.get("/api/audit")
