@@ -920,23 +920,27 @@
 (function () {
   const css = `
   #dsMemberCareOverlay {
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 12px !important;
-    background: rgba(15, 23, 42, .58) !important;
-    backdrop-filter: blur(3px);
+    align-items: flex-end !important;
+    justify-content: flex-end !important;
+    padding: 0 18px 92px 18px !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    pointer-events: none !important;
   }
 
   #dsMemberCarePopup {
-    width: min(720px, 100%) !important;
-    height: min(760px, calc(100vh - 24px)) !important;
-    max-height: calc(100vh - 24px) !important;
-    border-radius: 20px !important;
+    width: min(390px, calc(100vw - 36px)) !important;
+    height: min(620px, calc(100dvh - 120px)) !important;
+    min-height: 260px !important;
+    max-height: calc(100dvh - 105px) !important;
+    margin: 0 !important;
+    border-radius: 18px !important;
     overflow: hidden !important;
     display: flex !important;
     flex-direction: column !important;
     background: #fff !important;
-    box-shadow: 0 24px 70px rgba(0,0,0,.28) !important;
+    box-shadow: 0 12px 42px rgba(0,0,0,.24) !important;
+    pointer-events: auto !important;
   }
 
   #dsMemberCarePopup .ds-care-header {
@@ -1062,19 +1066,31 @@
 
   @media (max-width: 600px) {
     #dsMemberCareOverlay {
-      padding: 0 !important;
-      align-items: stretch !important;
+      align-items: flex-end !important;
+      justify-content: flex-end !important;
+      padding: 0 10px 82px 10px !important;
     }
 
     #dsMemberCarePopup {
-      width: 100% !important;
-      height: 100dvh !important;
-      max-height: 100dvh !important;
-      border-radius: 0 !important;
+      width: min(390px, calc(100vw - 20px)) !important;
+      height: min(68dvh, 560px) !important;
+      min-height: 220px !important;
+      max-height: calc(100dvh - 105px) !important;
+      border-radius: 18px !important;
     }
 
-    #dsMemberCarePopup .ds-care-conversation {
-      padding: 14px 11px 20px !important;
+    #dsMemberCarePopup .ds-care-conversation,
+    #dsCareList {
+      flex: 1 1 auto !important;
+      min-height: 0 !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    #dsMemberCarePopup .ds-care-composer {
+      flex-shrink: 0 !important;
+      padding-bottom: calc(10px + env(safe-area-inset-bottom)) !important;
     }
 
     .ds-care-message {
@@ -1082,24 +1098,35 @@
     }
 
     .ds-care-attachment img {
-      width: min(300px, 100%) !important;
-      max-height: 240px !important;
-    }
-
-    #dsMemberCarePopup .ds-care-composer {
-      padding-left: 9px !important;
-      padding-right: 9px !important;
+      width: min(280px, 100%) !important;
+      max-height: 220px !important;
     }
   }
-  `;
 
+  @media (max-width: 600px) and (orientation: landscape) {
+    #dsMemberCareOverlay {
+      padding: 0 10px 58px 10px !important;
+    }
+
+    #dsMemberCarePopup {
+      width: min(440px, calc(100vw - 20px)) !important;
+      height: calc(100dvh - 78px) !important;
+      min-height: 160px !important;
+      max-height: calc(100dvh - 78px) !important;
+    }
+  }
+
+  @media (min-width: 601px) {
+    #dsMemberCareOverlay {
+      padding: 0 24px 96px 24px !important;
+    }
+  }
+`;
   const style = document.createElement("style");
-  style.id = "dsMemberCareProfessionalUI";
+  style.id = "dsMemberCareProfessionalStyle";
   style.textContent = css;
   document.head.appendChild(style);
 })();
-
-
 /* =========================================================
    MEMBER CARE - READ MESSAGE HANDLER
    ========================================================= */
