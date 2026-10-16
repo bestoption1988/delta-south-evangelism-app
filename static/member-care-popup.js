@@ -880,6 +880,23 @@
     }
   }
 
+  // Public bridge used by the existing member dashboard.
+  // Reuse the existing popup and conversation functions.
+  window.ensureMemberCarePopup = function () {
+    injectStyle();
+    ensureUI();
+    return true;
+  };
+
+  window.openMemberCarePopup = async function (id) {
+    window.ensureMemberCarePopup();
+    openPopup();
+
+    if (id !== undefined && id !== null && id !== "") {
+      await openConversation(id);
+    }
+  };
+
   function start() {
     injectStyle();
     ensureUI();
