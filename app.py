@@ -1,5 +1,6 @@
 import time
 import os, sqlite3, json, io, socket, secrets, shutil, hashlib
+import urllib.request, urllib.error
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, render_template, send_file, g, Response, session, redirect, url_for
@@ -956,7 +957,11 @@ def ensure_runtime_schema():
         'category': "TEXT DEFAULT 'General Assistance'",
         'priority': "TEXT DEFAULT 'Normal'",
         'resolution_note': "TEXT DEFAULT ''",
-        'resolved_at': "TEXT DEFAULT ''"
+        'resolved_at': "TEXT DEFAULT ''",
+        'guest_token_hash': "TEXT DEFAULT ''",
+        'guest_circuit': "TEXT DEFAULT ''",
+        'guest_church': "TEXT DEFAULT ''",
+        'care_mode': "TEXT DEFAULT 'member'"
       }
     }
     for table, cols in migrations.items():
@@ -1748,7 +1753,7 @@ def page_login_required(fn):
 
 @app.before_request
 def protect_app():
-    public = {"public_home", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public"}
+    public = {"public_home", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if is_setup_needed():
@@ -2613,31 +2618,15 @@ def add_customer_care_timeline(thread_id, action, details="", user=None,
 def customer_care_scope(u):
     """Return the Customer Care SQL scope allowed for the current user."""
     role = str(u["role"] or "").strip()
-
     if role == "Member":
         return "t.user_id=?", [u["id"]]
-
     if role == "Local Church Evangelism Officer":
-        return "m.circuit=? AND m.church_name=?", [
-            u["circuit"], u["church_name"]
-        ]
-
+        return ("((m.circuit=? AND m.church_name=?) OR (COALESCE(t.guest_token_hash,'')<>'' AND t.guest_circuit=? AND t.guest_church=?))",
+                [u["circuit"],u["church_name"],u["circuit"],u["church_name"]])
     if role == "Circuit Coordinator":
-        return "m.circuit=?", [u["circuit"]]
-
-    # Full Member Care access for diocesan/admin/customer-care officers.
-    if role in {
-        "Admin",
-        "Officer",
-        "Bishop / Diocesan Executive",
-        "Evangelism Minister",
-        "Planting Officer",
-        "Diocesan Secretary",
-        "Finance Officer",
-        "Auditor"
-    }:
+        return ("(m.circuit=? OR (COALESCE(t.guest_token_hash,'')<>'' AND t.guest_circuit=?))",[u["circuit"],u["circuit"]])
+    if role in {"Admin","Officer","Bishop / Diocesan Executive","Evangelism Minister","Planting Officer","Diocesan Secretary","Finance Officer","Auditor"}:
         return "1=1", []
-
     return "1=0", []
 
 
@@ -2671,6 +2660,80 @@ def ensure_member_care_attachment_schema():
     finally:
         conn.close()
 
+
+
+def _public_guest_thread(thread_id):
+    auth=request.headers.get("Authorization","")
+    token=auth[7:].strip() if auth.startswith("Bearer ") else ""
+    if not token or len(token)>256: return None
+    digest=hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return db().execute("SELECT * FROM customer_care_threads WHERE thread_id=? AND guest_token_hash=?",(thread_id,digest)).fetchone()
+
+@app.get("/api/public/member-care/options")
+def public_member_care_options():
+    return jsonify({"churches":rows("SELECT DISTINCT circuit,church_name FROM churches WHERE COALESCE(circuit,'')<>'' AND COALESCE(church_name,'')<>'' ORDER BY circuit,church_name")})
+
+@app.post("/api/public/member-care")
+def public_member_care_create():
+    d=request.get_json(silent=True) or {}
+    name=str(d.get("customer_name") or "").strip()[:120]; phone=str(d.get("phone") or "").strip()[:50]
+    email=str(d.get("email") or "").strip()[:180]; subject=str(d.get("subject") or "Public Member Care request").strip()[:180]
+    msg=str(d.get("message") or "").strip(); circuit=str(d.get("circuit") or "").strip()[:120]
+    church=str(d.get("church_name") or "").strip()[:180]
+    if str(d.get("website") or "").strip(): return jsonify({"error":"Unable to process request."}),400
+    if not name or not msg or not circuit or not church: return jsonify({"error":"Name, message, circuit and church are required."}),400
+    if len(msg)>4000: return jsonify({"error":"Message must be under 4,000 characters."}),400
+    if not db().execute("SELECT 1 FROM churches WHERE circuit=? AND church_name=? LIMIT 1",(circuit,church)).fetchone():
+        return jsonify({"error":"Choose a valid circuit and church."}),400
+    token=secrets.token_urlsafe(32); digest=hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now=datetime.now().isoformat(timespec="seconds"); tid="MC-"+datetime.now().strftime("%Y%m%d%H%M%S%f")
+    cur=db().execute("INSERT INTO customer_care_threads (thread_id,customer_name,phone,email,subject,status,assigned_to,created_at,updated_at,user_id,member_id,category,priority,guest_token_hash,guest_circuit,guest_church,care_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      (tid,name,phone,email,subject,"Open","",now,now,None,"","General Assistance","Normal",digest,circuit,church,"guest"))
+    db().execute("INSERT INTO customer_care_messages(thread_id,sender_name,sender_role,message,created_at) VALUES(?,?,?,?,?)",(tid,name,"Guest",msg,now))
+    db().commit()
+    return jsonify({"ok":True,"id":cur.lastrowid,"thread_id":tid,"token":token,"status":"Open"}),201
+
+@app.get("/api/public/member-care/<thread_id>")
+def public_member_care_detail(thread_id):
+    t=_public_guest_thread(thread_id)
+    if not t: return jsonify({"error":"Private conversation verification failed."}),401
+    msgs=rows("SELECT id,sender_name,sender_role,message,created_at FROM customer_care_messages WHERE thread_id=? ORDER BY id ASC",(thread_id,))
+    return jsonify({"thread":{"id":t["id"],"thread_id":t["thread_id"],"customer_name":t["customer_name"],"subject":t["subject"],"status":t["status"]},"messages":msgs})
+
+@app.post("/api/public/member-care/<thread_id>/message")
+def public_member_care_message(thread_id):
+    t=_public_guest_thread(thread_id)
+    if not t: return jsonify({"error":"Private conversation verification failed."}),401
+    d=request.get_json(silent=True) or {}; msg=str(d.get("message") or "").strip()
+    if not msg: return jsonify({"error":"Message is required."}),400
+    if len(msg)>4000: return jsonify({"error":"Message must be under 4,000 characters."}),400
+    now=datetime.now().isoformat(timespec="seconds")
+    db().execute("INSERT INTO customer_care_messages(thread_id,sender_name,sender_role,message,created_at) VALUES(?,?,?,?,?)",(thread_id,t["customer_name"],"Guest",msg,now))
+    db().execute("UPDATE customer_care_threads SET updated_at=?,status='Open' WHERE id=?",(now,t["id"]))
+    db().commit(); return jsonify({"ok":True})
+
+@app.post("/api/public/member-care/ai")
+def public_member_care_ai():
+    d=request.get_json(silent=True) or {}; msg=str(d.get("message") or "").strip()
+    if not msg: return jsonify({"error":"Please enter a message."}),400
+    key=os.environ.get("OPENAI_API_KEY","").strip()
+    if os.environ.get("AI_PROVIDER","openai").strip().lower()!="openai" or not key:
+        return jsonify({"error":"AI is not configured yet. Choose an officer or configure OPENAI_API_KEY on staging."}),503
+    history=d.get("history") if isinstance(d.get("history"),list) else []; safe=[]
+    for x in history[-8:]:
+        if isinstance(x,dict) and x.get("role") in ("user","assistant") and str(x.get("content") or "").strip():
+            safe.append({"role":x["role"],"content":str(x["content"])[:3000]})
+    payload={"model":os.environ.get("OPENAI_MODEL","gpt-4o-mini"),"messages":[{"role":"system","content":"You are the public Member Care AI assistant for Methodist Church Nigeria, Delta South Diocese. Be respectful and concise. Never claim to access private records, approve registrations or confirm payments. Never request passwords, PINs or bank details. Direct personal-record requests to a church officer."}]+safe+[{"role":"user","content":msg[:3000]}]}
+    endpoint=os.environ.get("OPENAI_BASE_URL","https://api.openai.com/v1/chat/completions").strip()
+    if not endpoint.startswith("https://"): return jsonify({"error":"AI endpoint must use HTTPS."}),503
+    req=urllib.request.Request(endpoint,data=json.dumps(payload).encode(),headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"},method="POST")
+    try:
+        with urllib.request.urlopen(req,timeout=22) as response: result=json.loads(response.read().decode())
+        answer=str(result.get("choices",[{}])[0].get("message",{}).get("content") or "").strip()
+        return jsonify({"reply":answer}) if answer else (jsonify({"error":"AI returned no answer."}),502)
+    except (urllib.error.URLError,urllib.error.HTTPError,TimeoutError,ValueError,KeyError,IndexError) as exc:
+        app.logger.warning("Public Member Care AI request failed: %s",type(exc).__name__)
+        return jsonify({"error":"AI service unavailable. Please contact an officer."}),502
 
 @app.get("/api/customer-care")
 @login_required

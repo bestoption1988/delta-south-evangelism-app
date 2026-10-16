@@ -302,16 +302,13 @@
 </footer>
 
 <!-- Floating Member Care button: public homepage -->
-<a id="publicMemberCareButton"
-   href="{{ url_for('login') }}"
-   aria-label="Member Care - sign in for secure support"
-   title="Member Care">
-  <span class="public-care-icon" aria-hidden="true">💬</span>
-  <span class="public-care-label">Member Care</span>
-</a>
+<button id="publicMemberCareButton" type="button" aria-label="Open public Member Care chat" aria-controls="publicMemberCarePanel" title="Member Care">
+  <span class="public-care-icon" aria-hidden="true">💬</span><span class="public-care-label">Member Care</span>
+</button>
 
 <style>
   #publicMemberCareButton {
+    appearance: none; cursor: pointer;
     position: fixed;
     right: max(18px, env(safe-area-inset-right));
     bottom: max(20px, env(safe-area-inset-bottom));
@@ -366,6 +363,7 @@
 </style>
 
 
+<script src="{{ url_for('static', filename='public-member-care.js') }}?v=20261016-guest-chat"></script>
 <script>
 const toggle = document.getElementById("menuToggle");
 const links = document.getElementById("navLinks");
