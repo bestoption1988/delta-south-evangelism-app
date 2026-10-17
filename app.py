@@ -42,7 +42,7 @@ def database_integrity_error_types():
     return tuple(dict.fromkeys(errors))
 
 
-LEADERSHIP_TITLES = ['Prelate', 'Archbishop', 'Bishop, Delta South Diocese', 'Evangelism Minister', 'Lay President', 'Men Fellowship President', 'Women Fellowship President', 'Youth Fellowship President']
+LEADERSHIP_TITLES = ['Prelate', 'Archbishop', 'Bishop', 'Synod Secretary', 'Minister of Evangelism', 'Lay President', 'Evangelism Coordinator', 'Men Fellowship President', 'Women Fellowship President', 'Youth Fellowship President']
 
 APP_VERSION = "19.2.1"
 APP_STAGE = "Stage 19.2.1 - API /api/me and Table Map Stability"
@@ -242,6 +242,27 @@ def init_db():
                    SELECT 1 FROM leadership_profiles WHERE title=?
                )""",
             (title, position, title)
+        )
+    db().commit()
+
+    # Keep leadership cards in the official diocesan order.
+    for position, title in enumerate(LEADERSHIP_TITLES, 1):
+        db().execute(
+            "UPDATE leadership_profiles SET display_order=? WHERE title=?",
+            (position, title)
+        )
+    bundled_photos = {
+        "Prelate": "uploads/leadership/prelate.jpg",
+        "Archbishop": "uploads/leadership/archbishop.jpg",
+        "Bishop": "uploads/leadership/bishop.jpg",
+        "Synod Secretary": "uploads/leadership/synod-secretary.jpg",
+        "Minister of Evangelism": "uploads/leadership/minister-of-evangelism.jpg",
+        "Women Fellowship President": "uploads/leadership/women-fellowship-president.jpg",
+    }
+    for title, photo_path in bundled_photos.items():
+        db().execute(
+            "UPDATE leadership_profiles SET photo_path=? WHERE title=?",
+            (photo_path, title)
         )
     db().commit()
 
