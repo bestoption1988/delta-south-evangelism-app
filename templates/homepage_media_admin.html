@@ -41,14 +41,14 @@ hr{margin:22px 0;border:0;border-top:1px solid #ddd}
 </section>
 
 <section class="card">
-<h2>Add Event</h2>
+<h2>Add Latest Announcement</h2>
 <form method="post">
 <input type="hidden" name="kind" value="event">
 <label>Event title</label><input name="title" maxlength="250" required>
 <label>Description</label><textarea name="description" maxlength="3000"></textarea>
 <label>Date</label><input type="date" name="event_date">
 <label>Venue</label><input name="venue" maxlength="300">
-<button class="save" type="submit">Add Event</button>
+<button class="save" type="submit">Add Announcement</button>
 </form>
 </section>
 
@@ -91,7 +91,7 @@ accept=".pdf,.docx,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.webm,.mov" required>
 </section>
 
 <section class="card">
-<h2>Existing Events</h2>
+<h2>Latest Announcements — Edit, Publish/Hide or Delete</h2>
 {% for x in events %}
 <hr><h3>{{ x.title }}</h3>
 <p>{{ x.event_date }} — {{ x.venue }}</p><p>{{ x.description }}</p>

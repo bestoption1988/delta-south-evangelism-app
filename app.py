@@ -700,6 +700,30 @@ def init_db():
       filename TEXT NOT NULL, size_bytes INTEGER DEFAULT 0, sha256 TEXT DEFAULT '',
       backup_type TEXT DEFAULT 'Manual', status TEXT DEFAULT 'Ready');
     """)
+    # Seed familiar sample announcements once into the real editable table.
+    # The marker prevents deleted samples from reappearing after a restart.
+    seed_marker = conn.execute(
+        "SELECT content_value FROM homepage_content WHERE content_key=?",
+        ("sample_announcements_seeded",)
+    ).fetchone()
+    if not seed_marker:
+        existing_announcements = conn.execute("SELECT COUNT(*) AS n FROM homepage_events").fetchone()
+        if int(existing_announcements["n"] or 0) == 0:
+            sample_announcements = [
+                ("Diocesan Harvest Thanksgiving", "Join the Diocese in thanksgiving and praise.", "2026-10-10", "", 1, 1),
+                ("Evangelism Outreach Programme", "Join us in reaching communities across our circuits.", "2026-10-08", "", 2, 1),
+                ("Workers" + chr(39) + " Meeting", "Ministers, stewards and workers are encouraged to participate.", "2026-10-05", "", 3, 1),
+                ("New Member Registration", "Begin your membership registration online.", "2026-10-01", "", 4, 1),
+            ]
+            conn.executemany(
+                "INSERT INTO homepage_events (title,description,event_date,venue,display_order,published) VALUES (?,?,?,?,?,?)",
+                sample_announcements
+            )
+        conn.execute(
+            "INSERT OR IGNORE INTO homepage_content (content_key,content_value) VALUES (?,?)",
+            ("sample_announcements_seeded", "1")
+        )
+        conn.commit()
     # Safe migration for databases created by earlier builds.
     # The app may be upgraded while retaining an existing evangelism.db, so
     # every column introduced by the membership/testimony modules must be
@@ -2321,7 +2345,7 @@ def admin_homepage_media():
         "SELECT * FROM homepage_sermons ORDER BY display_order,id DESC"
     ).fetchall()
     events = db().execute(
-        "SELECT * FROM homepage_events ORDER BY event_date,id DESC"
+        "SELECT * FROM homepage_events ORDER BY event_date DESC,id DESC"
     ).fetchall()
     return render_template(
         "homepage_media_admin.html", sermons=sermons, events=events,
@@ -2402,7 +2426,7 @@ def public_home():
         "SELECT * FROM homepage_sermons WHERE published=1 ORDER BY display_order,id DESC"
     ).fetchall()
     events = db().execute(
-        "SELECT * FROM homepage_events WHERE published=1 ORDER BY event_date,id DESC"
+        "SELECT * FROM homepage_events WHERE published=1 ORDER BY event_date DESC,id DESC"
     ).fetchall()
     churches = db().execute(
         """SELECT * FROM churches
