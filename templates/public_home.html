@@ -250,7 +250,30 @@
   <p>Explore congregations across Effurun, Warri, Sapele and Steel Town circuits.</p>
 
   <div class="church-list">
-    {% for circuit, churches in homepage_churches|groupby('circuit') %}
+    {# Keep the diocese-approved circuit order. #}
+    {% set circuit_order = ['Effurun', 'Warri', 'Sapele', 'Steel Town'] %}
+    {% for circuit_name in circuit_order %}
+      {% set churches = (homepage_churches|selectattr('circuit', 'equalto', circuit_name)|list)
+          + (homepage_churches|selectattr('circuit', 'equalto', circuit_name ~ ' Circuit')|list) %}
+      {% if churches %}
+      <div class="circuit-group">
+        <h3>{{ circuit_name }} Circuit</h3>
+        <div class="church-grid">
+          {% for church in churches %}
+          <article class="church-card">
+            <h4>{{ church.church_name }}</h4>
+            <p>{{ church.circuit }}</p>
+            {% if church.contact_person %}<p>Contact: {{ church.contact_person }}</p>{% endif %}
+            {% if church.phone %}<p>Telephone: <a href="tel:{{ church.phone }}">{{ church.phone }}</a></p>{% endif %}
+          </article>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+    {% set known_circuits = ['Effurun', 'Warri', 'Sapele', 'Steel Town', 'Effurun Circuit', 'Warri Circuit', 'Sapele Circuit', 'Steel Town Circuit'] %}
+    {% set other_churches = homepage_churches|rejectattr('circuit', 'in', known_circuits)|list %}
+    {% for circuit, churches in other_churches|groupby('circuit') %}
     <div class="circuit-group">
       <h3>{{ circuit }}</h3>
       <div class="church-grid">
@@ -258,19 +281,16 @@
         <article class="church-card">
           <h4>{{ church.church_name }}</h4>
           <p>{{ church.circuit }}</p>
-          {% if church.contact_person %}
-          <p>Contact: {{ church.contact_person }}</p>
-          {% endif %}
-          {% if church.phone %}
-          <p>Telephone: <a href="tel:{{ church.phone }}">{{ church.phone }}</a></p>
-          {% endif %}
+          {% if church.contact_person %}<p>Contact: {{ church.contact_person }}</p>{% endif %}
+          {% if church.phone %}<p>Telephone: <a href="tel:{{ church.phone }}">{{ church.phone }}</a></p>{% endif %}
         </article>
         {% endfor %}
       </div>
     </div>
-    {% else %}
-    <p>Church listings are being updated. Please contact the diocesan office for assistance.</p>
     {% endfor %}
+    {% if not homepage_churches %}
+    <p>Church listings are being updated. Please contact the diocesan office for assistance.</p>
+    {% endif %}
   </div>
 
   <a class="button blue-button" href="{{ url_for('public_member_registration_page') }}">Register Your Interest</a>
