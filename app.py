@@ -700,28 +700,32 @@ def init_db():
       filename TEXT NOT NULL, size_bytes INTEGER DEFAULT 0, sha256 TEXT DEFAULT '',
       backup_type TEXT DEFAULT 'Manual', status TEXT DEFAULT 'Ready');
     """)
-    # Seed familiar sample announcements once into the real editable table.
-    # The marker prevents deleted samples from reappearing after a restart.
-    seed_marker = conn.execute(
+    # One-time v2 repair: restore original samples even if another announcement
+    # existed during the first seed attempt. Deleted samples will not return.
+    seed_marker_v2 = conn.execute(
         "SELECT content_value FROM homepage_content WHERE content_key=?",
-        ("sample_announcements_seeded",)
+        ("sample_announcements_seeded_v2",)
     ).fetchone()
-    if not seed_marker:
-        existing_announcements = conn.execute("SELECT COUNT(*) AS n FROM homepage_events").fetchone()
-        if int(existing_announcements["n"] or 0) == 0:
-            sample_announcements = [
-                ("Diocesan Harvest Thanksgiving", "Join the Diocese in thanksgiving and praise.", "2026-10-10", "", 1, 1),
-                ("Evangelism Outreach Programme", "Join us in reaching communities across our circuits.", "2026-10-08", "", 2, 1),
-                ("Workers" + chr(39) + " Meeting", "Ministers, stewards and workers are encouraged to participate.", "2026-10-05", "", 3, 1),
-                ("New Member Registration", "Begin your membership registration online.", "2026-10-01", "", 4, 1),
-            ]
-            conn.executemany(
-                "INSERT INTO homepage_events (title,description,event_date,venue,display_order,published) VALUES (?,?,?,?,?,?)",
-                sample_announcements
-            )
+    if not seed_marker_v2:
+        sample_announcements = [
+            ("Diocesan Harvest Thanksgiving", "Join the Diocese in thanksgiving and praise.", "2026-10-10", "", 1, 1),
+            ("Evangelism Outreach Programme", "Join us in reaching communities across our circuits.", "2026-10-08", "", 2, 1),
+            ("Workers" + chr(39) + " Meeting", "Ministers, stewards and workers are encouraged to participate.", "2026-10-05", "", 3, 1),
+            ("New Member Registration", "Begin your membership registration online.", "2026-10-01", "", 4, 1),
+        ]
+        for sample in sample_announcements:
+            already_exists = conn.execute(
+                "SELECT 1 FROM homepage_events WHERE title=? LIMIT 1",
+                (sample[0],)
+            ).fetchone()
+            if not already_exists:
+                conn.execute(
+                    "INSERT INTO homepage_events (title,description,event_date,venue,display_order,published) VALUES (?,?,?,?,?,?)",
+                    sample
+                )
         conn.execute(
             "INSERT OR IGNORE INTO homepage_content (content_key,content_value) VALUES (?,?)",
-            ("sample_announcements_seeded", "1")
+            ("sample_announcements_seeded_v2", "1")
         )
         conn.commit()
     # Safe migration for databases created by earlier builds.
