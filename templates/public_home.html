@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261010-logo-fix">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261017-staging-fixes">
 </head>
 <body>
 
@@ -130,11 +130,9 @@
 
   <article class="feature-card announcements" id="events">
     <div class="section-heading"><h2>📣 Latest Announcements</h2><a href="#resources">View All →</a></div>
-    <div class="announcement"><span class="date">10<br><small>OCT</small></span><div><b>Diocesan Harvest Thanksgiving</b><p>Join the Diocese in thanksgiving and praise.</p></div></div>
-    <div class="announcement"><span class="date">08<br><small>OCT</small></span><div><b>Evangelism Outreach Programme</b><p>Join us in reaching communities across our circuits.</p></div></div>
-    <div class="announcement"><span class="date">05<br><small>OCT</small></span><div><b>Workers' Meeting</b><p>Ministers, stewards and workers are encouraged to participate.</p></div></div>
-    <div class="announcement"><span class="date">01<br><small>OCT</small></span><div><b>New Member Registration</b><p>Begin your membership registration online.</p></div></div>
-    <p class="notice">Sample announcements are shown here. Replace them with verified diocesan announcements and actual dates.</p>
+    {% for event in homepage_events %}
+    <div class="announcement"><span class="date">{% if event.event_date and event.event_date|length >= 10 %}{{ event.event_date[8:10] }}<br><small>{{ event.event_date[5:7] }}</small>{% else %}NEWS{% endif %}</span><div><b>{{ event.title }}</b>{% if event.description %}<p>{{ event.description }}</p>{% endif %}{% if event.venue %}<p>{{ event.venue }}</p>{% endif %}</div></div>
+    {% else %}<p class="notice">There are no published announcements at the moment. Please check again soon.</p>{% endfor %}
   </article>
 </section>
 

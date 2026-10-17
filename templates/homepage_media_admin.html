@@ -95,6 +95,15 @@ accept=".pdf,.docx,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.webm,.mov" required>
 {% for x in events %}
 <hr><h3>{{ x.title }}</h3>
 <p>{{ x.event_date }} — {{ x.venue }}</p><p>{{ x.description }}</p>
+<form method="post" class="edit-announcement-form">
+<input type="hidden" name="kind" value="edit_event">
+<input type="hidden" name="id" value="{{ x.id }}">
+<label>Edit announcement title</label><input name="title" maxlength="250" value="{{ x.title }}" required>
+<label>Edit description</label><textarea name="description" maxlength="3000">{{ x.description }}</textarea>
+<label>Edit date</label><input type="date" name="event_date" value="{{ x.event_date }}">
+<label>Edit venue</label><input name="venue" maxlength="300" value="{{ x.venue }}">
+<button class="save" type="submit">Save Announcement Changes</button>
+</form>
 <form method="post">
 <input type="hidden" name="kind" value="toggle_event">
 <input type="hidden" name="id" value="{{ x.id }}">

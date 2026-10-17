@@ -2275,6 +2275,21 @@ def admin_homepage_media():
                     )
                 db().commit()
                 message = "Content added successfully."
+            elif kind == "edit_event":
+                event_id = request.form.get("id", type=int)
+                title = request.form.get("title", "").strip()
+                description = request.form.get("description", "").strip()
+                date = request.form.get("event_date", "").strip()
+                venue = request.form.get("venue", "").strip()
+                if (not event_id or not title or len(title) > 250
+                        or len(description) > 3000 or len(venue) > 300):
+                    raise ValueError("Enter a valid announcement title, description and venue.")
+                db().execute(
+                    "UPDATE homepage_events SET title=?,description=?,event_date=?,venue=? WHERE id=?",
+                    (title, description, date, venue, event_id)
+                )
+                db().commit()
+                message = "Announcement updated successfully."
             elif kind in ("toggle_sermon", "toggle_event"):
                 table = "homepage_sermons" if kind == "toggle_sermon" else "homepage_events"
                 db().execute(
@@ -2390,7 +2405,14 @@ def public_home():
         "SELECT * FROM homepage_events WHERE published=1 ORDER BY event_date,id DESC"
     ).fetchall()
     churches = db().execute(
-        "SELECT * FROM churches ORDER BY circuit,church_name"
+        """SELECT * FROM churches
+           ORDER BY CASE lower(trim(circuit))
+             WHEN 'effurun' THEN 1
+             WHEN 'warri' THEN 2
+             WHEN 'sapele' THEN 3
+             WHEN 'steel town' THEN 4
+             ELSE 99
+           END, church_name"""
     ).fetchall()
 
     # Published media comes from the persistent Supabase catalogue.
@@ -4985,86 +5007,192 @@ def generate_member_id(data):
     return f"{prefix}-{n:04d}"
 
 
+
+def _member_photo_storage_credentials():
+    import os
+    base = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+    key = (os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
+    if not base or not key:
+        raise RuntimeError("Missing Supabase Storage server credentials.")
+    return base, key
+
+
+def _member_photo_storage_request(method, object_path, **kwargs):
+    import requests
+    from urllib.parse import quote
+
+    base, key = _member_photo_storage_credentials()
+    url = (
+        f"{base}/storage/v1/object/member-photos/"
+        f"{quote(object_path, safe='/')}"
+    )
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "apikey": key,
+    }
+    headers.update(kwargs.pop("headers", {}))
+    return requests.request(
+        method, url, headers=headers, timeout=60, **kwargs
+    )
+
+
+def _member_photo_storage_delete(object_path):
+    try:
+        response = _member_photo_storage_request("DELETE", object_path)
+        return response.status_code in (200, 204)
+    except Exception:
+        return False
+
+
+def _member_photo_storage_signed_url(object_path):
+    import requests
+    from urllib.parse import quote
+
+    base, key = _member_photo_storage_credentials()
+    url = (
+        f"{base}/storage/v1/object/sign/member-photos/"
+        f"{quote(object_path, safe='/')}"
+    )
+    response = requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
+            "Content-Type": "application/json",
+        },
+        json={"expiresIn": 60},
+        timeout=30,
+    )
+    response.raise_for_status()
+    result = response.json()
+    signed = result.get("signedURL") or result.get("signedUrl")
+    if not signed:
+        raise RuntimeError("Supabase did not return a signed photo URL.")
+    if signed.startswith("http://") or signed.startswith("https://"):
+        return signed
+    if signed.startswith("/storage/v1/"):
+        return base + signed
+    if signed.startswith("/"):
+        return base + "/storage/v1" + signed
+    return base + "/storage/v1/" + signed
+
+
 @app.post("/api/public/member-registration/<int:rid>/photo")
 def upload_member_registration_photo(rid):
-    conn = db()
+    import requests
 
+    conn = db()
     registration = conn.execute(
-        "SELECT registration_id, status FROM member_registrations WHERE id=?",
-        (rid,)
+        "SELECT registration_id, status, passport_photo "
+        "FROM member_registrations WHERE id=?",
+        (rid,),
     ).fetchone()
 
     if not registration:
         return jsonify({"error": "Registration not found."}), 404
-
     if registration["status"] != "Pending":
         return jsonify({
             "error": "Photo can only be uploaded for a pending registration."
         }), 400
 
     photo = request.files.get("photo")
-
     if not photo or not photo.filename:
         return jsonify({"error": "Please select a photo."}), 400
 
     allowed_types = {
         "image/jpeg": ".jpg",
         "image/png": ".png",
-        "image/webp": ".webp"
+        "image/webp": ".webp",
     }
-
-    extension = allowed_types.get((photo.mimetype or "").lower())
-
+    content_type = (photo.mimetype or "").lower()
+    extension = allowed_types.get(content_type)
     if not extension:
         return jsonify({
             "error": "Only JPEG, PNG and WebP images are allowed."
         }), 400
 
+    photo_bytes = photo.stream.read(5 * 1024 * 1024 + 1)
+    if not photo_bytes:
+        return jsonify({"error": "The selected photo is empty."}), 400
+    if len(photo_bytes) > 5 * 1024 * 1024:
+        return jsonify({"error": "Photo size must not exceed 5 MB."}), 413
+
+    import os
+    from datetime import datetime
+
     stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
     safe_name = f"registration_{rid}_{stamp}{extension}"
-    destination = os.path.join(MEMBER_PHOTO_DIR, safe_name)
+    object_path = f"registrations/{safe_name}"
+    uploaded = False
 
     try:
-        photo.save(destination)
-
-        old = conn.execute(
-            "SELECT passport_photo FROM member_registrations WHERE id=?",
-            (rid,)
-        ).fetchone()
-
-        if old and old["passport_photo"]:
-            old_path = os.path.join(
-                MEMBER_PHOTO_DIR,
-                os.path.basename(old["passport_photo"])
+        response = _member_photo_storage_request(
+            "POST",
+            object_path,
+            data=photo_bytes,
+            headers={
+                "Content-Type": content_type,
+                "x-upsert": "false",
+            },
+        )
+        if response.status_code not in (200, 201):
+            app.logger.error(
+                "Member photo upload failed: HTTP %s",
+                response.status_code,
             )
-            if os.path.isfile(old_path):
-                os.remove(old_path)
+            return jsonify({
+                "error": "Unable to store the photo. Please try again."
+            }), 502
+        uploaded = True
 
         conn.execute(
             "UPDATE member_registrations SET passport_photo=? WHERE id=?",
-            (safe_name, rid)
+            (object_path, rid),
         )
         conn.commit()
 
-    except (OSError, sqlite3.Error):
-        conn.rollback()
-        if os.path.isfile(destination):
-            os.remove(destination)
-        return jsonify({"error": "Unable to save the registration photo."}), 500
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        if uploaded:
+            _member_photo_storage_delete(object_path)
+        app.logger.exception("Unable to save member registration photo")
+        return jsonify({
+            "error": "Unable to save the registration photo."
+        }), 500
+
+    # Remove an older remote photo only after the database update succeeds.
+    old_photo = registration["passport_photo"] or ""
+    if old_photo.startswith("registrations/") and old_photo != object_path:
+        _member_photo_storage_delete(old_photo)
+
+    # Clean up any legacy local photo after successful replacement.
+    old_name = os.path.basename(old_photo)
+    if old_name and old_name != safe_name:
+        old_local = os.path.join(MEMBER_PHOTO_DIR, old_name)
+        try:
+            if os.path.isfile(old_local):
+                os.remove(old_local)
+        except OSError:
+            app.logger.warning("Could not remove an old local member photo")
 
     return jsonify({
         "ok": True,
         "registration_id": registration["registration_id"],
-        "photo_uploaded": True
+        "photo_uploaded": True,
     }), 201
-
 
 
 @app.get("/api/member-registration-photo/<path:filename>")
 @login_required
 def view_member_registration_photo(filename):
-    u = current_user()
+    import os
+    import requests
+    from flask import Response
 
+    u = current_user()
     safe_name = os.path.basename(filename)
     if safe_name != filename or not safe_name:
         return jsonify({"error": "Invalid photo filename."}), 400
@@ -5077,7 +5205,7 @@ def view_member_registration_photo(filename):
         "Diocesan Secretary",
         "Circuit Coordinator",
         "Local Church Evangelism Officer",
-        "Auditor"
+        "Auditor",
     }
 
     if u["role"] == "Member":
@@ -5088,7 +5216,7 @@ def view_member_registration_photo(filename):
 
         member = db().execute(
             "SELECT passport_photo FROM members WHERE id=?",
-            (u["member_id"],)
+            (u["member_id"],),
         ).fetchone()
 
         if not member:
@@ -5099,22 +5227,46 @@ def view_member_registration_photo(filename):
             return jsonify({
                 "error": "You are not authorized to view this photo."
             }), 403
-
     elif u["role"] not in allowed_roles:
         return jsonify({
             "error": "You are not authorized to view member photos."
         }), 403
 
-    photo_path = os.path.join(MEMBER_PHOTO_DIR, safe_name)
+    # Preserve compatibility with photos uploaded before this migration.
+    local_path = os.path.join(MEMBER_PHOTO_DIR, safe_name)
+    if os.path.isfile(local_path):
+        return send_file(local_path, conditional=True, max_age=0)
 
-    if not os.path.isfile(photo_path):
-        return jsonify({"error": "Photo not found."}), 404
+    object_path = f"registrations/{safe_name}"
+    try:
+        signed_url = _member_photo_storage_signed_url(object_path)
+        response = requests.get(signed_url, timeout=30)
+        if response.status_code == 404:
+            return jsonify({"error": "Photo not found."}), 404
+        response.raise_for_status()
 
-    return send_file(
-        photo_path,
-        conditional=True,
-        max_age=0
-    )
+        mimetype = response.headers.get(
+            "Content-Type", "application/octet-stream"
+        ).split(";")[0]
+        if mimetype not in ("image/jpeg", "image/png", "image/webp"):
+            return jsonify({"error": "Invalid stored photo type."}), 502
+
+        return Response(
+            response.content,
+            mimetype=mimetype,
+            headers={"Cache-Control": "private, no-store"},
+        )
+    except requests.HTTPError as exc:
+        status = getattr(exc.response, "status_code", 0)
+        if status == 404:
+            return jsonify({"error": "Photo not found."}), 404
+        app.logger.exception("Unable to retrieve member photo from storage")
+        return jsonify({"error": "Unable to retrieve the photo."}), 502
+    except Exception:
+        app.logger.exception("Unable to retrieve member photo from storage")
+        return jsonify({"error": "Unable to retrieve the photo."}), 502
+
+
 
 
 @app.get("/api/membership-statistics")
