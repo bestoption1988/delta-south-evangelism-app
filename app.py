@@ -270,6 +270,62 @@ def init_db():
         )
     db().commit()
 
+    # Populate confirmed leadership details without overwriting
+    # names already entered through the administration interface.
+    public_leadership = {
+        "Prelate": (
+            "His Eminence, Dr. Oliver Ali Aba (JP)",
+            "Prelate of the Methodist Church Nigeria."
+        ),
+        "Archbishop": (
+            "The Most Revd Samuel Nortey",
+            "Archbishop of the Edo-Delta Archdiocese."
+        ),
+        "Bishop": (
+            "The Right Revd Dr. Nosa O. Nosayaba",
+            "Bishop of the Delta South Diocese."
+        ),
+        "Synod Secretary": (
+            "The Very Rev FearGod Chibueze",
+            "Serving as Synod Secretary of the Delta South Diocese."
+        ),
+        "Minister of Evangelism": (
+            "The Revd Christopher Ighoevwogue",
+            "Serving as Minister of Evangelism of the Delta South Diocese."
+        ),
+        "Lay President": (
+            "Sir Engr. Maduabuchi Orji",
+            "Serving as Lay President of the Delta South Diocese."
+        ),
+        "Evangelism Coordinator": (
+            "Sir Engr. Nicolas Akpotowho",
+            "Serving as Evangelism Coordinator of the Delta South Diocese."
+        ),
+        "Men Fellowship President": (
+            "Bro. Stephen Agbai JP",
+            "President of the Men Fellowship."
+        ),
+        "Women Fellowship President": (
+            "Dame Pastor Glory Udauk Nosayaba",
+            "President of the Women Fellowship."
+        ),
+        "Youth Fellowship President": (
+            "To Be Announced",
+            "The Youth Fellowship leadership name will be announced when confirmed."
+        ),
+    }
+
+    for title, (full_name, biography) in public_leadership.items():
+        db().execute(
+            """UPDATE leadership_profiles
+               SET full_name=?, biography=?
+               WHERE title=?
+                 AND (full_name IS NULL OR TRIM(full_name)=''
+                      OR full_name='Profile coming soon')""",
+            (full_name, biography, title)
+        )
+    db().commit()
+
     # Account registration requests: initialize before the Admin
     # account-requests API is used. Existing records are preserved.
     db().execute("""
