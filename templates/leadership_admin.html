@@ -19,6 +19,45 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 .leadership-crop-canvas{display:block;width:100%;max-width:320px;height:auto;aspect-ratio:1;margin:12px auto;border:2px solid #123d70;border-radius:8px;touch-action:none}
 .leadership-crop-zoom{display:block;width:100%;margin:10px 0}
 .home-link{font-weight:bold}
+.current-leadership-photo,
+.leadership-upload-preview{
+  margin:12px 0;
+  padding:12px;
+  border:1px solid #d7e1ec;
+  border-radius:10px;
+  background:#f8fbff;
+}
+.current-leadership-photo img,
+.leadership-preview-image{
+  display:block;
+  width:100%;
+  max-width:240px;
+  max-height:280px;
+  object-fit:contain;
+  object-position:center;
+  margin-top:8px;
+  border-radius:8px;
+  background:#edf2f7;
+}
+.notice{
+  padding:13px 15px;
+  border-radius:8px;
+  margin:12px 0;
+  font-weight:bold;
+  overflow-wrap:anywhere;
+}
+.notice.success{background:#e8f7ee;color:#126b43;border:1px solid #a9dfbd}
+.notice.error{background:#fff0f0;color:#9b1515;border:1px solid #f0b7b7}
+button{cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
+  outline:3px solid #d6a72b;
+  outline-offset:2px;
+}
+@media(max-width:600px){
+  main{padding:10px}
+  .card{padding:14px}
+  button,a{max-width:100%;box-sizing:border-box}
+}
 
 </style>
 </head>
@@ -29,8 +68,8 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 </header>
 <main>
 <p><a class="home-link" href="/">🏠 Home — Public Homepage</a></p>
-{% if message %}<p>{{ message }}</p>{% endif %}
-{% if error %}<p>{{ error }}</p>{% endif %}
+{% if message %}<p class="notice success" role="status">{{ message }}</p>{% endif %}
+{% if error %}<p class="notice error" role="alert">{{ error }}</p>{% endif %}
 
 <section class="card">
 <h3>Upload Official Church Logo</h3>
@@ -89,8 +128,20 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 <input name="full_name" value="{{ p.full_name or '' }}" maxlength="160">
 <label>Biography</label>
 <textarea name="biography" maxlength="2500">{{ p.biography or '' }}</textarea>
+{% if p.photo_path %}
+<div class="current-leadership-photo">
+  <label>Current profile photo</label>
+  <img src="{{ url_for('static', filename=p.photo_path) }}"
+       alt="Current photo of {{ p.full_name or p.title }}"
+       loading="lazy">
+</div>
+{% endif %}
 <label>Replace photo</label>
 <input type="file" name="photo" accept="image/png,image/jpeg,image/webp" class="leadership-photo-input">
+<div class="leadership-upload-preview" hidden>
+  <label>Selected photo preview</label>
+  <img class="leadership-preview-image" alt="Selected leadership photo preview">
+</div>
 <div class="leadership-photo-editor" hidden>
   <strong>Crop profile photo</strong>
   <canvas class="leadership-crop-canvas" width="320" height="320"></canvas>
@@ -111,7 +162,41 @@ button,a{display:inline-block;padding:11px 16px;background:#123d70;color:white;b
 
 <script>
 document.querySelectorAll(".leadership-photo-input").forEach(function(input){
-  const editor = input.nextElementSibling;
+  const previewBox = input.nextElementSibling &&
+    input.nextElementSibling.classList.contains("leadership-upload-preview")
+      ? input.nextElementSibling : null;
+  const previewImage = previewBox
+    ? previewBox.querySelector(".leadership-preview-image") : null;
+  let previewUrl = null;
+
+  if (previewBox && previewImage) {
+    input.addEventListener("change", function(){
+      const file = input.files && input.files[0];
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        previewUrl = null;
+      }
+      if (!file) {
+        previewBox.hidden = true;
+        previewImage.removeAttribute("src");
+        return;
+      }
+      if (!file.type.startsWith("image/")) {
+        alert("Choose an image file.");
+        input.value = "";
+        previewBox.hidden = true;
+        return;
+      }
+      previewUrl = URL.createObjectURL(file);
+      previewImage.src = previewUrl;
+      previewBox.hidden = false;
+    });
+  }
+  const editor = input.parentElement.querySelector(".leadership-photo-editor");
+  if (!editor) {
+    console.error("Leadership photo editor not found for input.", input);
+    return;
+  }
   const canvas = editor.querySelector(".leadership-crop-canvas");
   const ctx = canvas.getContext("2d");
   const zoom = editor.querySelector(".leadership-crop-zoom");
