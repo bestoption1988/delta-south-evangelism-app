@@ -257,7 +257,11 @@ def init_db():
         "Bishop": "uploads/leadership/bishop.jpg",
         "Synod Secretary": "uploads/leadership/synod-secretary.jpg",
         "Minister of Evangelism": "uploads/leadership/minister-of-evangelism.jpg",
+        "Lay President": "uploads/leadership/lay-president.jpg",
+        "Evangelism Coordinator": "uploads/leadership/evangelism-coordinator.jpg",
+        "Men Fellowship President": "uploads/leadership/men-fellowship-president.jpg",
         "Women Fellowship President": "uploads/leadership/women-fellowship-president.jpg",
+        "Youth Fellowship President": "uploads/leadership/youth-fellowship-president.jpg",
     }
     for title, photo_path in bundled_photos.items():
         db().execute(
