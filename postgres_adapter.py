@@ -8,6 +8,7 @@ It does not modify the live SQLite application.
 
 import os
 import re
+from urllib.parse import urlparse, unquote
 import pg8000.dbapi
 
 
@@ -16,7 +17,52 @@ class PostgreSQLAdapterError(RuntimeError):
 
 
 def postgres_config():
-    """Read PostgreSQL settings without hardcoding database credentials."""
+    """Read Naijacloud DATABASE_URL or legacy individual DB settings."""
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+
+    if database_url:
+        parsed = urlparse(database_url)
+        if parsed.scheme not in ("postgres", "postgresql"):
+            raise PostgreSQLAdapterError(
+                "DATABASE_URL must use postgres:// or postgresql://."
+            )
+        if not parsed.hostname or not parsed.path.lstrip("/"):
+            raise PostgreSQLAdapterError(
+                "DATABASE_URL must include a host and database name."
+            )
+
+        try:
+            port = parsed.port or 5432
+        except ValueError as exc:
+            raise PostgreSQLAdapterError(
+                "DATABASE_URL contains an invalid port."
+            ) from exc
+
+        if not 1 <= port <= 65535:
+            raise PostgreSQLAdapterError("DATABASE_URL port is invalid.")
+
+        schema = os.environ.get("POSTGRES_DB_SCHEMA", "public").strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
+            raise PostgreSQLAdapterError(
+                "POSTGRES_DB_SCHEMA must be a simple schema identifier."
+            )
+
+        config = {
+            "host": parsed.hostname,
+            "port": port,
+            "database": unquote(parsed.path.lstrip("/")),
+            "user": unquote(parsed.username or ""),
+            "password": unquote(parsed.password or ""),
+            "timeout": 15,
+            "ssl_context": True,
+            "startup_params": {"search_path": schema},
+        }
+        if not config["user"] or not config["password"]:
+            raise PostgreSQLAdapterError(
+                "DATABASE_URL must include a username and password."
+            )
+        return config
+
     required = (
         "SUPABASE_DB_HOST",
         "SUPABASE_DB_PORT",
@@ -24,11 +70,10 @@ def postgres_config():
         "SUPABASE_DB_USER",
         "SUPABASE_DB_PASSWORD",
     )
-
     missing = [key for key in required if not os.environ.get(key)]
     if missing:
         raise PostgreSQLAdapterError(
-            "Missing PostgreSQL environment variables: "
+            "Set DATABASE_URL or provide legacy variables: "
             + ", ".join(missing)
         )
 
@@ -44,10 +89,13 @@ def postgres_config():
             "SUPABASE_DB_PORT is outside the valid range."
         )
 
-    schema = os.environ.get("SUPABASE_DB_SCHEMA", "public").strip()
+    schema = os.environ.get(
+        "SUPABASE_DB_SCHEMA",
+        os.environ.get("POSTGRES_DB_SCHEMA", "public"),
+    ).strip()
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", schema):
         raise PostgreSQLAdapterError(
-            "SUPABASE_DB_SCHEMA must be a simple PostgreSQL schema identifier."
+            "Database schema must be a simple PostgreSQL identifier."
         )
 
     return {
