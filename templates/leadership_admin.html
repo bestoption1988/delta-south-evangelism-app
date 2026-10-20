@@ -131,9 +131,13 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 {% if p.photo_path %}
 <div class="current-leadership-photo">
   <label>Current profile photo</label>
-  <img src="{{ url_for('static', filename=p.photo_path) }}"
+  {% set photo_file = (p.photo_path or '')|replace('\\\\', '/') %}
+  {% set photo_file = photo_file|replace('static/', '')|replace('/static/', '')|lstrip('/') %}
+  <img src="{{ url_for('static', filename=photo_file) if photo_file else url_for('static', filename='uploads/leadership/' ~ ((p.title or 'leadership')|lower|replace(' ', '-') ~ '.jpg')) }}"
        alt="Current photo of {{ p.full_name or p.title }}"
-       loading="lazy">
+       loading="lazy"
+       onerror="this.onerror=null;this.src=this.dataset.fallback;"
+       data-fallback="{{ url_for('static', filename='uploads/leadership/' ~ (((p.title or 'leadership')|lower|replace(' ', '-')) ~ '.jpg')) }}">
 </div>
 {% endif %}
 <label>Replace photo</label>

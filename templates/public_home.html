@@ -263,6 +263,14 @@
           <article class="church-card">
             <h4>{{ church.church_name }}</h4>
             <p>{{ church.circuit }}</p>
+{% set church_address = church.address|default(church.church_address|default('', true), true) %}
+{% set church_location = church.location|default(church.town|default(church.city|default('', true), true), true) %}
+{% set church_state = church.state|default('Delta State', true) %}
+{% if church_address %}<p><strong>Address:</strong> {{ church_address }}</p>{% endif %}
+{% if church_location or church_state %}<p><strong>Location:</strong> {{ church_location }}{% if church_location and church_state %}, {% endif %}{{ church_state }}</p>{% endif %}
+{% if church_address or church_location %}
+<p><a class="button blue-button" href="https://www.google.com/maps/search/?api=1&amp;query={{ (church.church_name ~ ' ' ~ church_address ~ ' ' ~ church_location ~ ' ' ~ church_state)|urlencode }}" target="_blank" rel="noopener">View on Map</a></p>
+{% endif %}
             {% if church.contact_person %}<p>Contact: {{ church.contact_person }}</p>{% endif %}
             {% if church.phone %}<p>Telephone: <a href="tel:{{ church.phone }}">{{ church.phone }}</a></p>{% endif %}
           </article>
@@ -281,6 +289,14 @@
         <article class="church-card">
           <h4>{{ church.church_name }}</h4>
           <p>{{ church.circuit }}</p>
+{% set church_address = church.address|default(church.church_address|default('', true), true) %}
+{% set church_location = church.location|default(church.town|default(church.city|default('', true), true), true) %}
+{% set church_state = church.state|default('Delta State', true) %}
+{% if church_address %}<p><strong>Address:</strong> {{ church_address }}</p>{% endif %}
+{% if church_location or church_state %}<p><strong>Location:</strong> {{ church_location }}{% if church_location and church_state %}, {% endif %}{{ church_state }}</p>{% endif %}
+{% if church_address or church_location %}
+<p><a class="button blue-button" href="https://www.google.com/maps/search/?api=1&amp;query={{ (church.church_name ~ ' ' ~ church_address ~ ' ' ~ church_location ~ ' ' ~ church_state)|urlencode }}" target="_blank" rel="noopener">View on Map</a></p>
+{% endif %}
           {% if church.contact_person %}<p>Contact: {{ church.contact_person }}</p>{% endif %}
           {% if church.phone %}<p>Telephone: <a href="tel:{{ church.phone }}">{{ church.phone }}</a></p>{% endif %}
         </article>

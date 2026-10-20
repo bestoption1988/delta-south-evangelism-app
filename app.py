@@ -2489,11 +2489,24 @@ def public_giving_page():
 
 @app.get("/live")
 def live_worship_page():
-    """Public diocesan live worship player."""
+    """Public diocesan live worship player with published news ticker."""
     stream_hls_url = os.environ.get("STREAM_HLS_URL", "").strip()
+    latest_news = []
+    try:
+        latest_news = db().execute(
+            """SELECT title, description, event_date, venue
+               FROM homepage_events
+               WHERE published=1
+               ORDER BY event_date DESC, id DESC
+               LIMIT 12"""
+        ).fetchall()
+    except Exception:
+        app.logger.exception("Could not load published homepage events for live ticker")
+
     return render_template(
         "live_stream.html",
-        stream_hls_url=stream_hls_url
+        stream_hls_url=stream_hls_url,
+        latest_news=latest_news
     )
 
 
