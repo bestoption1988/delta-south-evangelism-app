@@ -2228,6 +2228,112 @@ def member_dashboard():
 
 
 
+
+_LEADERSHIP_BUCKET = "leadership-photos"
+
+
+def _leadership_storage_credentials():
+    import os
+    base = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+    key = (os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
+    if not base or not key:
+        raise RuntimeError(
+            "Supabase Storage is not configured. Check SUPABASE_URL "
+            "and SUPABASE_SECRET_KEY in the hosting environment."
+        )
+    return base, key
+
+
+def _leadership_storage_upload(upload):
+    import requests
+    from urllib.parse import quote
+    import mimetypes
+    import secrets
+
+    allowed = {
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "webp": "image/webp",
+    }
+    ext = (upload.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in allowed:
+        raise ValueError("Use PNG, JPG, JPEG or WEBP.")
+
+    base, key = _leadership_storage_credentials()
+    object_path = "profiles/" + secrets.token_hex(16) + "." + ext
+    url = (
+        f"{base}/storage/v1/object/{_LEADERSHIP_BUCKET}/"
+        f"{quote(object_path, safe='/')}"
+    )
+    response = requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
+            "Content-Type": allowed[ext],
+            "x-upsert": "false",
+        },
+        data=upload.stream,
+        timeout=60,
+    )
+    if response.status_code not in (200, 201):
+        app.logger.error(
+            "Leadership photo upload failed: HTTP %s",
+            response.status_code,
+        )
+        if response.status_code in (400, 404):
+            raise ValueError(
+                "Supabase could not accept the photo. Confirm that the "
+                "leadership-photos bucket exists and is public."
+            )
+        raise RuntimeError("Supabase photo upload failed.")
+
+    return (
+        f"{base}/storage/v1/object/public/{_LEADERSHIP_BUCKET}/"
+        f"{quote(object_path, safe='/')}"
+    )
+
+
+def _leadership_storage_delete(photo_url):
+    """Delete only objects belonging to this app's dedicated photo bucket."""
+    import os
+    from urllib.parse import urlparse, unquote
+    import requests
+
+    if not photo_url or not isinstance(photo_url, str):
+        return False
+
+    try:
+        base, key = _leadership_storage_credentials()
+        photo = urlparse(photo_url)
+        expected = urlparse(base)
+
+        # Never delete arbitrary URLs or files from other Supabase buckets.
+        prefix = f"/storage/v1/object/public/{_LEADERSHIP_BUCKET}/"
+        if (
+            photo.scheme != "https"
+            or photo.netloc != expected.netloc
+            or not photo.path.startswith(prefix)
+        ):
+            return False
+
+        object_path = unquote(photo.path[len(prefix):])
+        if not object_path.startswith("profiles/") or ".." in object_path.split("/"):
+            return False
+
+        response = requests.delete(
+            f"{base}/storage/v1/object/{_LEADERSHIP_BUCKET}/"
+            f"{__import__('urllib.parse', fromlist=['quote']).quote(object_path, safe='/')}",
+            headers={"Authorization": f"Bearer {key}", "apikey": key},
+            timeout=30,
+        )
+        return response.status_code in (200, 204)
+    except Exception:
+        app.logger.exception("Could not delete leadership photo from storage")
+        return False
+
+
 @app.route("/admin/leadership", methods=["GET", "POST"])
 @page_login_required
 def admin_leadership():
@@ -2237,16 +2343,56 @@ def admin_leadership():
 
     message = ""
     error = ""
+
     if request.method == "POST":
+        uploaded_photo_url = None
+        old_photo_url = None
+        profile_commit_succeeded = False
         try:
             action = request.form.get("action", "save")
-            if action == "delete":
+            pid = request.form.get("id", type=int)
+
+            if action == "delete_permanently":
+                if not pid:
+                    raise ValueError("Select a valid leadership profile.")
+
+                row = db().execute(
+                    "SELECT photo_path FROM leadership_profiles WHERE id=?",
+                    (pid,),
+                ).fetchone()
+                if not row:
+                    raise ValueError("The leadership profile was not found.")
+
+                old_photo_url = row["photo_path"] or ""
+                db().execute(
+                    "DELETE FROM leadership_profiles WHERE id=?",
+                    (pid,),
+                )
+                db().commit()
+
+                photo_removed = True
+                if old_photo_url.startswith("https://"):
+                    photo_removed = _leadership_storage_delete(old_photo_url)
+
+                if old_photo_url.startswith("https://") and not photo_removed:
+                    message = (
+                        "Profile deleted from the database, but its photo "
+                        "could not be removed from Supabase Storage. "
+                        "Check the server logs."
+                    )
+                else:
+                    message = "Leadership profile permanently deleted."
+
+            elif action == "delete":
+                if not pid:
+                    raise ValueError("Select a valid leadership profile.")
                 db().execute(
                     "UPDATE leadership_profiles SET active=0 WHERE id=?",
-                    (request.form.get("id", type=int),)
+                    (pid,),
                 )
                 db().commit()
                 message = "Profile hidden."
+
             elif action == "logo":
                 f = request.files.get("logo")
                 if not f or not f.filename:
@@ -2258,12 +2404,14 @@ def admin_leadership():
                 os.makedirs(folder, exist_ok=True)
                 f.save(os.path.join(folder, "mcn-logo.png"))
                 message = "Logo uploaded."
+
             else:
                 title = request.form.get("title", "").strip()
                 name = request.form.get("full_name", "").strip()
                 bio = request.form.get("biography", "").strip()
                 order = request.form.get("display_order", type=int) or 1
                 active = int(request.form.get("active") == "1")
+
                 if not title:
                     raise ValueError("Enter or select a leadership position.")
                 if len(title) > 160:
@@ -2271,54 +2419,106 @@ def admin_leadership():
                 if len(name) > 160 or len(bio) > 2500:
                     raise ValueError("Name or biography is too long.")
 
-                photo_path = None
                 f = request.files.get("photo")
                 if f and f.filename:
-                    ext = f.filename.rsplit(".", 1)[-1].lower()
-                    if ext not in {"png", "jpg", "jpeg", "webp"}:
-                        raise ValueError("Use PNG, JPG, JPEG or WEBP.")
-                    folder = os.path.join(ROOT, "static", "uploads", "leadership")
-                    os.makedirs(folder, exist_ok=True)
-                    filename = secrets.token_hex(8) + "." + ext
-                    f.save(os.path.join(folder, filename))
-                    photo_path = "uploads/leadership/" + filename
+                    uploaded_photo_url = _leadership_storage_upload(f)
 
-                pid = request.form.get("id", type=int)
                 if pid:
-                    db().execute(
-                        """UPDATE leadership_profiles SET title=?,full_name=?,
-                           biography=?,display_order=?,active=?,updated_at=CURRENT_TIMESTAMP,
-                           updated_by=? WHERE id=?""",
-                        (title,name,bio,order,active,user["id"],pid)
-                    )
-                    if photo_path:
+                    existing = db().execute(
+                        "SELECT photo_path FROM leadership_profiles WHERE id=?",
+                        (pid,),
+                    ).fetchone()
+                    if not existing:
+                        raise ValueError("The leadership profile was not found.")
+
+                    old_photo_url = existing["photo_path"] or ""
+                    if uploaded_photo_url:
                         db().execute(
-                            "UPDATE leadership_profiles SET photo_path=? WHERE id=?",
-                            (photo_path,pid)
+                            """UPDATE leadership_profiles
+                               SET title=?, full_name=?, biography=?, photo_path=?,
+                                   display_order=?, active=?,
+                                   updated_at=CURRENT_TIMESTAMP, updated_by=?
+                               WHERE id=?""",
+                            (
+                                title, name, bio, uploaded_photo_url,
+                                order, active, user["id"], pid,
+                            ),
                         )
+                    else:
+                        db().execute(
+                            """UPDATE leadership_profiles
+                               SET title=?, full_name=?, biography=?,
+                                   display_order=?, active=?,
+                                   updated_at=CURRENT_TIMESTAMP, updated_by=?
+                               WHERE id=?""",
+                            (title, name, bio, order, active, user["id"], pid),
+                        )
+                    db().commit()
+                    profile_commit_succeeded = True
                     message = "Profile updated."
                 else:
                     db().execute(
                         """INSERT INTO leadership_profiles
-                           (title,full_name,biography,photo_path,display_order,active,updated_by)
-                           VALUES (?,?,?,?,?,?,?)""",
-                        (title,name,bio,photo_path or "",order,active,user["id"])
+                           (title, full_name, biography, photo_path,
+                            display_order, active, updated_by)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            title, name, bio, uploaded_photo_url or "",
+                            order, active, user["id"],
+                        ),
                     )
+                    db().commit()
+                    profile_commit_succeeded = True
                     message = "Profile added."
-                db().commit()
-        except ValueError as e:
-            error = str(e)
+
+                # Clean up the old image only after the database commit succeeds.
+                if (
+                    uploaded_photo_url
+                    and old_photo_url
+                    and old_photo_url != uploaded_photo_url
+                    and old_photo_url.startswith("https://")
+                ):
+                    _leadership_storage_delete(old_photo_url)
+
+        except ValueError as exc:
+            try:
+                db().rollback()
+            except Exception:
+                pass
+
+            if uploaded_photo_url and not profile_commit_succeeded:
+                if not _leadership_storage_delete(uploaded_photo_url):
+                    app.logger.warning(
+                        "Could not clean up an uploaded leadership photo "
+                        "after a failed save."
+                    )
+            error = str(exc)
         except Exception:
-            db().rollback()
+            try:
+                db().rollback()
+            except Exception:
+                pass
+
+            if uploaded_photo_url and not profile_commit_succeeded:
+                if not _leadership_storage_delete(uploaded_photo_url):
+                    app.logger.warning(
+                        "Could not clean up an uploaded leadership photo "
+                        "after a failed save."
+                    )
+
             app.logger.exception("Leadership update failed")
-            error = "Unable to save changes."
+            error = "Unable to save changes. Check the server logs and Supabase Storage configuration."
 
     profiles = db().execute(
-        "SELECT * FROM leadership_profiles ORDER BY display_order,title"
+        "SELECT * FROM leadership_profiles ORDER BY display_order, title"
     ).fetchall()
+
     return render_template(
-        "leadership_admin.html", profiles=profiles,
-        titles=LEADERSHIP_TITLES, message=message, error=error
+        "leadership_admin.html",
+        profiles=profiles,
+        titles=LEADERSHIP_TITLES,
+        message=message,
+        error=error,
     )
 
 

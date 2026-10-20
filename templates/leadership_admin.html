@@ -131,13 +131,23 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 {% if p.photo_path %}
 <div class="current-leadership-photo">
   <label>Current profile photo</label>
+  {% if p.photo_path.startswith('https://') or p.photo_path.startswith('http://') %}
+  <img src="{{ p.photo_path }}"
+       alt="Current photo of {{ p.full_name or p.title }}"
+       loading="lazy">
+  {% else %}
   {% set photo_file = (p.photo_path or '')|replace('\\\\', '/') %}
-  {% set photo_file = photo_file|replace('static/', '')|replace('/static/', '')|replace('/', '') %}
-  <img src="{{ url_for('static', filename=photo_file) if photo_file else url_for('static', filename='uploads/leadership/' ~ ((p.title or 'leadership')|lower|replace(' ', '-') ~ '.jpg')) }}"
+  {% if photo_file.startswith('static/') %}
+    {% set photo_file = photo_file[7:] %}
+  {% elif photo_file.startswith('/static/') %}
+    {% set photo_file = photo_file[8:] %}
+  {% endif %}
+  <img src="{{ url_for('static', filename=photo_file) }}"
        alt="Current photo of {{ p.full_name or p.title }}"
        loading="lazy"
        onerror="this.onerror=null;this.src=this.dataset.fallback;"
        data-fallback="{{ url_for('static', filename='uploads/leadership/' ~ (((p.title or 'leadership')|lower|replace(' ', '-')) ~ '.jpg')) }}">
+  {% endif %}
 </div>
 {% endif %}
 <label>Replace photo</label>
@@ -159,6 +169,9 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible{
 <label><input style="width:auto" type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %}> Display publicly</label>
 <button type="submit" name="action" value="save">Save Changes</button>
 <button type="submit" name="action" value="delete">Hide Profile</button>
+<button type="submit" name="action" value="delete_permanently"
+        onclick="return confirm('Permanently delete this leadership profile? This cannot be undone.');"
+        style="background:#a61b1b;color:white;">Delete Profile Permanently</button>
 </form>
 {% endfor %}
 </section>

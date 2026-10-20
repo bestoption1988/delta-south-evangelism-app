@@ -146,7 +146,8 @@
 {% for profile in leadership_profiles %}
 <article class="leader-card">
 {% if profile.photo_path %}
-<img class="leader-photo" src="{{ url_for('static', filename=profile.photo_path) }}" alt="{{ profile.title }}" onerror="this.onerror=null;this.src='/static/uploads/leadership/{{ profile.title|lower|replace(' ', '-') }}.jpg';">
+{% set leader_photo = profile.photo_path %}
+<img class="leader-photo" src="{{ leader_photo if leader_photo.startswith('https://') or leader_photo.startswith('http://') else url_for('static', filename=leader_photo) }}" alt="{{ profile.title }}" loading="lazy" onerror="this.onerror=null;this.src='/static/uploads/leadership/{{ profile.title|lower|replace(' ', '-') }}.jpg';">
 {% else %}
 <div class="leader-photo leader-placeholder">✝</div>
 {% endif %}
