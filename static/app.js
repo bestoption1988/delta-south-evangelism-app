@@ -5399,98 +5399,77 @@ document.addEventListener("DOMContentLoaded", function () {
 (function () {
   function installDesktopMenuFix() {
     const nav = document.getElementById("nav");
-    const oldToggle = document.getElementById("menuToggle");
+    const toggle = document.getElementById("menuToggle");
     const panel = document.getElementById("menuPanel");
-    const wrapper = oldToggle
-      ? oldToggle.closest(".nav-dropdown")
-      : null;
+    const wrapper = toggle ? toggle.closest(".nav-dropdown") : null;
 
-    if (!nav || !oldToggle || !panel || !wrapper) return;
-
+    if (!nav || !toggle || !panel || !wrapper) return;
     if (window.innerWidth <= 700) return;
 
-    /* Restore the original dashboard menu button. */
-    oldToggle.style.removeProperty("display");
-    oldToggle.style.removeProperty("visibility");
-    oldToggle.style.removeProperty("opacity");
-
-    oldToggle.style.setProperty("display", "flex", "important");
-    oldToggle.style.setProperty("visibility", "visible", "important");
-    oldToggle.style.setProperty("opacity", "1", "important");
+    toggle.style.setProperty("display", "flex", "important");
+    toggle.style.setProperty("visibility", "visible", "important");
+    toggle.style.setProperty("opacity", "1", "important");
 
     wrapper.style.setProperty("display", "block", "important");
     wrapper.style.setProperty("position", "relative", "important");
     wrapper.style.setProperty("width", "min(360px, 100%)", "important");
-
-    /* Keep the menu closed initially, but allow the existing menu
-       button to open and close it on desktop. */
-    panel.style.removeProperty("display");
-    panel.style.removeProperty("position");
-    panel.style.removeProperty("width");
-    panel.style.removeProperty("max-height");
-    panel.style.removeProperty("overflow-y");
+    wrapper.style.setProperty("overflow", "visible", "important");
 
     panel.style.setProperty("position", "absolute", "important");
     panel.style.setProperty("top", "calc(100% + 6px)", "important");
     panel.style.setProperty("left", "0", "important");
     panel.style.setProperty("right", "auto", "important");
-    panel.style.setProperty(
-      "width",
-      "min(360px, calc(100vw - 32px))",
-      "important"
-    );
+    panel.style.setProperty("width", "min(360px, calc(100vw - 32px))", "important");
     panel.style.setProperty("max-height", "70vh", "important");
     panel.style.setProperty("overflow-y", "auto", "important");
     panel.style.setProperty("z-index", "10000", "important");
 
-    if (oldToggle.dataset.desktopMenuFix === "1") return;
-    oldToggle.dataset.desktopMenuFix = "1";
+    if (toggle.dataset.desktopMenuFix === "1") return;
+    toggle.dataset.desktopMenuFix = "1";
 
-    oldToggle.addEventListener("click", function (event) {
+    /* Replace the original handler's toggle behaviour with one
+       consistent open/close action. */
+    toggle.addEventListener("click", function (event) {
       if (window.innerWidth <= 700) return;
 
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
 
       const opening = !panel.classList.contains("open");
-
       panel.classList.toggle("open", opening);
-      oldToggle.setAttribute("aria-expanded", String(opening));
+      panel.style.setProperty(
+        "display",
+        opening ? "flex" : "none",
+        "important"
+      );
 
       if (opening) {
-        panel.style.setProperty("display", "flex", "important");
         panel.style.setProperty("flex-direction", "column", "important");
-      } else {
-        panel.style.setProperty("display", "none", "important");
       }
-    });
+
+      toggle.setAttribute("aria-expanded", String(opening));
+    }, true);
 
     document.addEventListener("click", function (event) {
       if (
         window.innerWidth > 700 &&
-        !wrapper.contains(event.target) &&
-        !panel.contains(event.target)
+        !wrapper.contains(event.target)
       ) {
         panel.classList.remove("open");
         panel.style.setProperty("display", "none", "important");
-        oldToggle.setAttribute("aria-expanded", "false");
+        toggle.setAttribute("aria-expanded", "false");
       }
     });
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener(
-      "DOMContentLoaded",
-      installDesktopMenuFix
-    );
+    document.addEventListener("DOMContentLoaded", installDesktopMenuFix);
   } else {
     installDesktopMenuFix();
   }
 
   window.addEventListener("resize", function () {
-    if (window.innerWidth > 700) {
-      installDesktopMenuFix();
-    }
+    if (window.innerWidth > 700) installDesktopMenuFix();
   });
 })();
 /* END MCN DESKTOP MENU JAVASCRIPT FIX */
