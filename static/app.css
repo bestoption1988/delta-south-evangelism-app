@@ -3011,3 +3011,116 @@ html,body{
   .conference-video-card.is-floating{width:min(54vw,230px)!important;right:8px!important;bottom:12px!important}
   .conference-video-tools button{width:32px;height:31px;min-width:32px}
 }
+
+
+/* MCN DESKTOP NAVIGATION LAYOUT FIX */
+@media (min-width: 701px) {
+  #nav {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    overflow: visible !important;
+    min-width: 0;
+  }
+
+  #nav .nav-dropdown {
+    position: relative !important;
+    display: block !important;
+    width: auto !important;
+    max-width: min(360px, 100%) !important;
+    flex: 0 1 320px !important;
+  }
+
+  #nav #menuToggle {
+    display: flex !important;
+    width: 100% !important;
+    min-height: 42px;
+  }
+
+  #nav #menuPanel {
+    position: absolute !important;
+    top: calc(100% + 6px) !important;
+    left: 0 !important;
+    right: auto !important;
+    width: min(360px, calc(100vw - 32px)) !important;
+    max-width: calc(100vw - 32px) !important;
+    max-height: min(70vh, 560px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    z-index: 2000 !important;
+  }
+
+  #nav #menuPanel button[data-page],
+  #nav #menuPanel button[onclick] {
+    width: 100%;
+    min-height: 40px;
+    white-space: normal !important;
+    text-align: left;
+  }
+
+  #nav .mobile-nav-toggle-final {
+    display: none !important;
+  }
+}
+/* END MCN DESKTOP NAVIGATION LAYOUT FIX */
+
+
+/* MCN DESKTOP NAVIGATION VISIBILITY FIX */
+@media (min-width: 701px) {
+  #nav .nav-dropdown {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    flex: 0 1 360px !important;
+    width: min(360px, 100%) !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  #nav #menuToggle {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    width: 100% !important;
+    min-height: 48px !important;
+    cursor: pointer !important;
+  }
+
+  #nav .mobile-nav-toggle-final {
+    display: none !important;
+  }
+
+  #nav #menuPanel {
+    display: none;
+    position: absolute !important;
+    top: calc(100% + 6px) !important;
+    left: 0 !important;
+    right: auto !important;
+    width: min(360px, calc(100vw - 32px)) !important;
+    max-width: calc(100vw - 32px) !important;
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    z-index: 10000 !important;
+    background: #ffffff !important;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18) !important;
+  }
+
+  #nav #menuPanel.open {
+    display: flex !important;
+    flex-direction: column !important;
+    visibility: visible !important;
+  }
+
+  #nav #menuPanel button {
+    width: 100% !important;
+    min-height: 42px !important;
+    white-space: normal !important;
+    text-align: left !important;
+  }
+}
+/* END MCN DESKTOP NAVIGATION VISIBILITY FIX */
