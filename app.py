@@ -1080,7 +1080,8 @@ def ensure_runtime_schema():
         'guest_token_hash': "TEXT DEFAULT ''",
         'guest_circuit': "TEXT DEFAULT ''",
         'guest_church': "TEXT DEFAULT ''",
-        'care_mode': "TEXT DEFAULT 'member'"
+        'care_mode': "TEXT DEFAULT 'member'",
+        'address': "TEXT DEFAULT ''"
       }
     }
     for table, cols in migrations.items():
@@ -3031,6 +3032,7 @@ def public_member_care_options():
 def public_member_care_create():
     d=request.get_json(silent=True) or {}
     name=str(d.get("customer_name") or "").strip()[:120]; phone=str(d.get("phone") or "").strip()[:50]
+    address=str(d.get("address") or "").strip()[:300]
     email=str(d.get("email") or "").strip()[:180]; subject=str(d.get("subject") or "Public Member Care request").strip()[:180]
     msg=str(d.get("message") or "").strip(); circuit=str(d.get("circuit") or "").strip()[:120]
     church=str(d.get("church_name") or "").strip()[:180]
@@ -3041,8 +3043,8 @@ def public_member_care_create():
         return jsonify({"error":"Choose a valid circuit and church."}),400
     token=secrets.token_urlsafe(32); digest=hashlib.sha256(token.encode("utf-8")).hexdigest()
     now=datetime.now().isoformat(timespec="seconds"); tid="MC-"+datetime.now().strftime("%Y%m%d%H%M%S%f")
-    cur=db().execute("INSERT INTO customer_care_threads (thread_id,customer_name,phone,email,subject,status,assigned_to,created_at,updated_at,user_id,member_id,category,priority,guest_token_hash,guest_circuit,guest_church,care_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-      (tid,name,phone,email,subject,"Open","",now,now,None,"","General Assistance","Normal",digest,circuit,church,"guest"))
+    cur=db().execute("INSERT INTO customer_care_threads (thread_id,customer_name,phone,email,address,subject,status,assigned_to,created_at,updated_at,user_id,member_id,category,priority,guest_token_hash,guest_circuit,guest_church,care_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      (tid,name,phone,email,address,subject,"Open","",now,now,None,"","General Assistance","Normal",digest,circuit,church,"guest"))
     db().execute("INSERT INTO customer_care_messages(thread_id,sender_name,sender_role,message,created_at) VALUES(?,?,?,?,?)",(tid,name,"Guest",msg,now))
     db().commit()
     return jsonify({"ok":True,"id":cur.lastrowid,"thread_id":tid,"token":token,"status":"Open"}),201
