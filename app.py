@@ -2722,6 +2722,28 @@ def live_worship_page():
 
 
 @app.get("/")
+def _daily_scripture_and_hymn():
+    # Load the supplied verse/hymn collection using Nigeria's calendar date.
+    source = Path(ROOT) / "data" / "scripture_hymns.json"
+    try:
+        with source.open("r", encoding="utf-8") as handle:
+            collection = json.load(handle)
+        verses = collection.get("verses") or []
+        hymns = collection.get("hymns") or []
+        try:
+            from zoneinfo import ZoneInfo
+            today = datetime.now(ZoneInfo("Africa/Lagos")).date()
+        except Exception:
+            today = datetime.now().date()
+        day_index = today.timetuple().tm_yday - 1
+        verse = verses[day_index % len(verses)] if verses else {}
+        hymn = hymns[day_index % len(hymns)] if hymns else {}
+        return {"date": today.isoformat(), "verse": verse, "hymn": hymn}
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        app.logger.exception("Daily Scripture and Hymn collection could not be loaded")
+        return {"date": datetime.now().date().isoformat(), "verse": {}, "hymn": {}}
+
+
 def public_home():
     """Public diocesan homepage; no login required."""
     profiles = db().execute(
@@ -2747,6 +2769,8 @@ def public_home():
              ELSE 99
            END, church_name"""
     ).fetchall()
+
+    daily_devotion = _daily_scripture_and_hymn()
 
     # Published media comes from the persistent Supabase catalogue.
     homepage_media_items = []
@@ -2778,7 +2802,8 @@ def public_home():
         homepage_sermons=sermons,
         homepage_events=events,
         homepage_churches=churches,
-        homepage_media_items=homepage_media_items
+        homepage_media_items=homepage_media_items,
+        daily_devotion=daily_devotion
     )
 
 

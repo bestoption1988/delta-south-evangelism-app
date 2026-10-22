@@ -43,6 +43,31 @@
 }
 </style>
 
+
+<style>
+.daily-devotion{padding:22px clamp(14px,4vw,48px);background:linear-gradient(135deg,#f7f9fd,#e8edf7);border-bottom:1px solid #dce3ef}
+.daily-devotion-heading{text-align:center;margin:0 auto 15px}
+.daily-devotion-heading .eyebrow{margin-bottom:4px}
+.daily-devotion-heading h2{margin:0;color:#071b50;font-family:Georgia,serif;font-size:clamp(22px,3vw,30px)}
+.daily-devotion-heading>p:last-child{margin:4px 0;color:#657087;font-size:13px}
+.daily-devotion-grid{max-width:1200px;margin:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.daily-devotion-card{min-width:0;background:white;border:1px solid #d9e1ef;border-left:5px solid #e51c35;border-radius:12px;box-shadow:0 5px 18px #071b5010;overflow:hidden}
+.daily-devotion-card:nth-child(2){border-left-color:#c89a19}
+.daily-devotion-card summary{cursor:pointer;list-style:none;padding:17px;display:flex;flex-direction:column;gap:7px}
+.daily-devotion-card summary::-webkit-details-marker{display:none}
+.daily-devotion-card summary:focus-visible{outline:3px solid #e3ae00;outline-offset:-3px}
+.daily-devotion-type{font-size:11px;font-weight:800;letter-spacing:1px;color:#12377b}
+.daily-devotion-card summary strong{font-size:19px;color:#071b50}
+.daily-devotion-card summary q{font-family:Georgia,serif;font-size:16px;line-height:1.55;color:#25314a}
+.daily-devotion-tap{font-size:12px;font-weight:700;color:#4036c9;margin-top:3px}
+.daily-devotion-full{padding:0 17px 18px;border-top:1px solid #e7ebf3;color:#25314a}
+.daily-devotion-full h3{color:#071b50;margin:14px 0 8px}
+.daily-devotion-full>p{line-height:1.8;white-space:pre-line}
+.daily-hymn-lyrics{white-space:pre-wrap;line-height:1.75;font-family:Georgia,serif}
+.daily-hymn-author{font-size:13px;color:#657087}
+@media(max-width:650px){.daily-devotion{padding:17px 12px}.daily-devotion-grid{grid-template-columns:1fr;gap:10px}.daily-devotion-card summary{padding:14px}.daily-devotion-card summary q{font-size:15px}.daily-devotion-full{padding:0 14px 15px}}
+</style>
+
 </head>
 <body>
 
@@ -64,6 +89,44 @@
     <a class="member-btn" href="{{ url_for('login') }}">♙ Member Portal / Login</a>
   </div>
 </div>
+
+{% set day_verse = daily_devotion.get("verse", {}) %}
+{% set day_hymn = daily_devotion.get("hymn", {}) %}
+<section id="daily-devotion" class="daily-devotion" aria-label="Scripture and Hymn of the Day">
+  <div class="daily-devotion-heading">
+    <p class="eyebrow">DAILY SPIRITUAL NOURISHMENT · {{ daily_devotion.get("date", "") }}</p>
+    <h2>Scripture &amp; Hymn of the Day</h2>
+    <p>Tap either quotation to open the complete reading.</p>
+  </div>
+  <div class="daily-devotion-grid">
+    <details class="daily-devotion-card">
+      <summary>
+        <span class="daily-devotion-type">📖 SCRIPTURE OF THE DAY</span>
+        <strong>{{ day_verse.get("reference", "Scripture") }}</strong>
+        <q>{{ day_verse.get("text", "The daily Scripture will appear here.")|truncate(190, True, "…") }}</q>
+        <span class="daily-devotion-tap">Tap to read the full verse ↓</span>
+      </summary>
+      <div class="daily-devotion-full">
+        <h3>{{ day_verse.get("reference", "Scripture of the Day") }}</h3>
+        <p>{{ day_verse.get("text", "") }}</p>
+      </div>
+    </details>
+    <details class="daily-devotion-card">
+      <summary>
+        <span class="daily-devotion-type">🎵 HYMN OF THE DAY</span>
+        <strong>{{ day_hymn.get("title", "Hymn") }}</strong>
+        <q>{{ day_hymn.get("lyrics", "The daily hymn will appear here.")|truncate(190, True, "…") }}</q>
+        <span class="daily-devotion-tap">Tap to read the full hymn ↓</span>
+      </summary>
+      <div class="daily-devotion-full">
+        <h3>{{ day_hymn.get("title", "Hymn of the Day") }}</h3>
+        {% if day_hymn.get("meter") %}<p><b>Meter:</b> {{ day_hymn.get("meter") }}</p>{% endif %}
+        <div class="daily-hymn-lyrics">{{ day_hymn.get("lyrics", "") }}</div>
+        {% if day_hymn.get("author") %}<p class="daily-hymn-author"><b>Author:</b> {{ day_hymn.get("author") }}</p>{% endif %}
+      </div>
+    </details>
+  </div>
+</section>
 
 <nav class="navbar">
   <button id="menuToggle" aria-label="Open navigation" aria-expanded="false">☰ Menu</button>
