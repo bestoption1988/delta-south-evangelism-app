@@ -236,8 +236,26 @@
       <audio controls preload="none" style="width:100%" src="{{ item.signed_url }}"></audio>
     {% elif item.media_type == 'video' and item.signed_url %}
       <video controls playsinline preload="metadata" style="width:100%;max-height:320px" src="{{ item.signed_url }}"></video>
-    {% elif item.signed_url %}
-      <a class="button blue-button" href="{{ item.signed_url }}" target="_blank" rel="noopener">Open Document</a>
+    {% elif item.media_type == 'document' %}
+      {% if item.mime_type and item.mime_type.startswith('image/') %}
+        <a href="{{ url_for('media_document_view', media_id=item.id) }}" aria-label="View {{ item.title }}">
+          <img src="{{ url_for('media_document_view', media_id=item.id) }}"
+               alt="{{ item.title }}" loading="lazy"
+               style="display:block;width:100%;max-height:260px;object-fit:contain;border-radius:8px">
+        </a>
+      {% elif item.mime_type == 'application/pdf' %}
+        <iframe title="{{ item.title }}"
+                src="{{ url_for('media_document_view', media_id=item.id) }}"
+                loading="lazy" style="width:100%;height:260px;border:1px solid #ddd;border-radius:8px"></iframe>
+      {% else %}
+        <div class="document-thumbnail" aria-hidden="true">📄</div>
+      {% endif %}
+      <div class="document-actions">
+        <a class="button blue-button"
+           href="{{ url_for('media_document_view', media_id=item.id) }}">View Document</a>
+        <a class="button blue-button"
+           href="{{ url_for('media_document_download', media_id=item.id) }}">Download Document</a>
+      </div>
     {% endif %}
   </article>
   {% else %}

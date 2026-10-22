@@ -9636,6 +9636,12 @@ _ML_TABLE = "church_media_library"
 _ML_TYPES = {
     ".pdf": ("application/pdf", "document"),
     ".docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "document"),
+    ".doc": ("application/msword", "document"),
+    ".jpg": ("image/jpeg", "document"),
+    ".jpeg": ("image/jpeg", "document"),
+    ".png": ("image/png", "document"),
+    ".gif": ("image/gif", "document"),
+    ".webp": ("image/webp", "document"),
     ".mp3": ("audio/mpeg", "audio"),
     ".wav": ("audio/wav", "audio"),
     ".ogg": ("audio/ogg", "audio"),
@@ -9755,6 +9761,177 @@ def _ml_prepare_item(row):
     return item
 
 
+
+def _ml_public_document(media_id):
+    """Find a published document by catalogue ID."""
+    rows = _ml_supabase_request(
+        "GET",
+        params={
+            "select": "id,title,description,storage_path,mime_type,media_type,published",
+            "id": f"eq.{media_id}",
+            "published": "eq.true",
+            "media_type": "eq.document",
+            "limit": "1",
+        },
+    )
+    return rows[0] if rows else None
+
+
+def _ml_document_bytes(row):
+    """Read a document from private Supabase Storage with a strict size limit."""
+    import requests as _requests
+    from flask import abort
+
+    base, key = _ml_credentials()
+    path = _ml_quote(row["storage_path"], safe="/")
+    url = f"{base}/storage/v1/object/{_ML_BUCKET}/{path}"
+
+    response = None
+    try:
+        response = _requests.get(
+            url,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "apikey": key,
+            },
+            timeout=60,
+            stream=True,
+        )
+
+        if response.status_code == 404:
+            abort(404)
+
+        if not response.ok:
+            raise RuntimeError(
+                f"Supabase document retrieval failed "
+                f"(HTTP {response.status_code})."
+            )
+
+        content_length = response.headers.get("Content-Length")
+        if content_length:
+            try:
+                if int(content_length) > _ML_MAX:
+                    abort(413)
+            except ValueError:
+                pass
+
+        chunks = []
+        total = 0
+
+        for chunk in response.iter_content(chunk_size=64 * 1024):
+            if not chunk:
+                continue
+
+            total += len(chunk)
+            if total > _ML_MAX:
+                abort(413)
+
+            chunks.append(chunk)
+
+        return b"".join(chunks)
+
+    finally:
+        if response is not None:
+            response.close()
+
+@app.get("/media-library/document/<int:media_id>/view")
+def media_document_view(media_id):
+    """Render PDFs and images inline without exposing a Supabase URL."""
+    from flask import abort, send_file
+    from werkzeug.exceptions import HTTPException
+    from markupsafe import escape
+
+    try:
+        row = _ml_public_document(media_id)
+        if not row:
+            abort(404)
+
+        mime = (row.get("mime_type") or "").lower()
+        filename = row.get("storage_path", "").rsplit("/", 1)[-1]
+        ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+        # Browsers cannot reliably render Word files natively.
+        # Keep the visitor on our website and offer a download.
+        if ext in {".doc", ".docx"}:
+            title = escape(row.get("title") or filename)
+            description = escape(row.get("description") or "")
+            download_url = url_for(
+                "media_document_download", media_id=media_id
+            )
+            html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>
+body{{font:16px system-ui;max-width:760px;margin:40px auto;padding:20px;
+color:#17342a;background:#f4f8f6}}
+article{{background:white;padding:28px;border-radius:14px}}
+a{{display:inline-block;padding:12px 18px;background:#125d43;
+color:white;border-radius:8px;text-decoration:none}}
+</style></head><body><article>
+<p>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE</p>
+<h1>{title}</h1><p>{description}</p>
+<p>Browser preview is not available for this Word document.</p>
+<p><a href="{download_url}">Download Document</a></p>
+<p><a href="/media-library">Back to Media Library</a></p>
+</article></body></html>"""
+            return Response(
+                html,
+                mimetype="text/html",
+                headers={"X-Content-Type-Options": "nosniff"},
+            )
+
+        if mime != "application/pdf" and not mime.startswith("image/"):
+            abort(415)
+
+        data = _ml_document_bytes(row)
+        response = send_file(
+            io.BytesIO(data),
+            mimetype=mime,
+            as_attachment=False,
+            download_name=filename,
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        app.logger.exception("Document preview failed for catalogue ID %s", media_id)
+        return "Document preview is temporarily unavailable.", 503
+
+
+@app.get("/media-library/document/<int:media_id>/download")
+def media_document_download(media_id):
+    """Download a published document through the application."""
+    from flask import abort, send_file
+    from werkzeug.exceptions import HTTPException
+
+    try:
+        row = _ml_public_document(media_id)
+        if not row:
+            abort(404)
+
+        filename = row.get("storage_path", "").rsplit("/", 1)[-1]
+        mime = row.get("mime_type") or "application/octet-stream"
+        data = _ml_document_bytes(row)
+
+        response = send_file(
+            io.BytesIO(data),
+            mimetype=mime,
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        app.logger.exception("Document download failed for catalogue ID %s", media_id)
+        return "Document download is temporarily unavailable.", 503
+
+
 @app.route("/media-library")
 def media_library_public():
     category = (request.args.get("type") or "").strip().lower()
@@ -9864,7 +10041,7 @@ def media_library_admin():
                     spec = _ML_TYPES.get(ext)
 
                     if not spec:
-                        error = "Allowed: PDF, DOCX, MP3, WAV, OGG, M4A, AAC, MP4, WEBM, MOV."
+                        error = "Allowed: PDF, DOC, DOCX, JPG, JPEG, PNG, GIF, WEBP, MP3, WAV, OGG, M4A, AAC, MP4, WEBM, MOV."
                     else:
                         data = uploaded_file.stream.read(_ML_MAX + 1)
                         if not data:
@@ -9875,6 +10052,12 @@ def media_library_admin():
                             checks = {
                                 ".pdf": data.startswith(b"%PDF-"),
                                 ".docx": data.startswith(b"PK"),
+                                ".doc": data.startswith(bytes.fromhex("D0CF11E0A1B11AE1")),
+                                ".jpg": data.startswith(bytes.fromhex("FFD8FF")),
+                                ".jpeg": data.startswith(bytes.fromhex("FFD8FF")),
+                                ".png": data.startswith(bytes.fromhex("89504E470D0A1A0A")),
+                                ".gif": data.startswith((b"GIF87a", b"GIF89a")),
+                                ".webp": len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP",
                                 ".mp3": data.startswith(b"ID3") or data.startswith(bytes([255, 251])) or data.startswith(bytes([255, 243])) or data.startswith(bytes([255, 242])),
                                 ".wav": data.startswith(b"RIFF") and data[8:12] == b"WAVE",
                                 ".ogg": data.startswith(b"OggS"),
