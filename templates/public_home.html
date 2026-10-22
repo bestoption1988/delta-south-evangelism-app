@@ -818,10 +818,6 @@ document.getElementById("year").textContent = new Date().getFullYear();
     return line;
   }
 
-  const ticker = document.createElement("div");
-  ticker.className = "daily-devotion-ticker";
-  ticker.setAttribute("aria-label", "Daily Scripture and Hymn. Select a quotation to read it.");
-
   /* One independent moving line for Scripture and one for Hymn. */
   ticker.appendChild(createLine(items[0], 0));
   ticker.appendChild(createLine(items[1], 1));
