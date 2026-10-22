@@ -1,13 +1,113 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Church Media Library</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f8f6;color:#17342a;font:16px system-ui}header{background:#125d43;color:white;padding:24px 16px}header div,main{max-width:1050px;margin:auto}main{padding:20px 14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px}.card{background:white;border:1px solid #dce7e1;border-radius:14px;padding:16px;min-width:0}p{line-height:1.5;overflow-wrap:anywhere}a{color:#126b4b}.media{width:100%;max-height:360px;margin-top:10px;border-radius:8px}</style></head><body><header><div><h1>Church Media Library</h1><p>Messages, church documents, music and videos — Methodist Church Nigeria, Delta South Diocese.</p></div></header><main><p><a href="/">← Back to homepage</a></p>{% if not items %}<article class="card"><h2>No published media yet</h2><p>Please check again later.</p></article>{% endif %}<div class="grid">{% for x in items %}<article class="card"><h2>{{ x.title }}</h2>{% if x.description %}<p>{{ x.description }}</p>{% endif %}{% if x.media_type in ['audio', 'video'] and not x.signed_url %}<p>Temporarily unavailable. Please try again later.</p>{% elif x.media_type == 'audio' %}<audio class="media" controls preload="none" src="{{ x.signed_url }}"></audio>{% elif x.media_type == 'video' %}<video class="media" controls playsinline preload="metadata" src="{{ x.signed_url }}"></video>{% else %}
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Church Media Library</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f8f6;color:#17342a;font:16px system-ui}header{background:#125d43;color:white;padding:24px 16px}header div,main{max-width:1050px;margin:auto}main{padding:20px 14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px}.card{background:white;border:1px solid #dce7e1;border-radius:14px;padding:16px;min-width:0}p{line-height:1.5;overflow-wrap:anywhere}a{color:#126b4b}.media{width:100%;max-height:360px;margin-top:10px;border-radius:8px}</style>
+<style>
+.pdf-book-preview {
+  position: relative;
+  width: 180px;
+  max-width: 100%;
+  height: 240px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0;
+  border: 1px solid #d8deea;
+  border-radius: 8px;
+  background: #f5f7fb;
+  box-shadow: 0 2px 6px rgba(0,0,0,.08);
+}
+.pdf-book-preview canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.pdf-preview-loading {
+  padding: 12px;
+  text-align: center;
+  font: 12px system-ui, sans-serif;
+  color: #536174;
+}
+.pdf-book-preview.pdf-preview-error .pdf-preview-loading {
+  color: #9b2525;
+}
+</style>
+
+</head><body><header><div><h1>Church Media Library</h1><p>Messages, church documents, music and videos — Methodist Church Nigeria, Delta South Diocese.</p></div></header><main><p><a href="/">← Back to homepage</a></p>{% if not items %}<article class="card"><h2>No published media yet</h2><p>Please check again later.</p></article>{% endif %}<div class="grid">{% for x in items %}<article class="card"><h2>{{ x.title }}</h2>{% if x.description %}<p>{{ x.description }}</p>{% endif %}{% if x.media_type in ['audio', 'video'] and not x.signed_url %}<p>Temporarily unavailable. Please try again later.</p>{% elif x.media_type == 'audio' %}<audio class="media" controls preload="none" src="{{ x.signed_url }}"></audio>{% elif x.media_type == 'video' %}<video class="media" controls playsinline preload="metadata" src="{{ x.signed_url }}"></video>{% else %}
 {% if x.mime_type and x.mime_type.startswith('image/') %}
 <a href="{{ url_for('media_document_view', media_id=x.id) }}">
 <img class="media" src="{{ url_for('media_document_view', media_id=x.id) }}" alt="{{ x.title }}" loading="lazy" style="display:block;width:180px;max-width:100%;height:240px;object-fit:contain;border:1px solid #d8deea;border-radius:8px;background:#f5f7fb">
 </a>
 {% elif x.mime_type == 'application/pdf' %}
-<iframe class="media" title="{{ x.title }}" src="{{ url_for('media_document_view', media_id=x.id) }}" loading="lazy" style="display:block;width:180px;max-width:100%;height:240px;border:1px solid #d8deea;border-radius:8px;background:#f5f7fb"></iframe>
+<div class="pdf-book-preview"
+     data-pdf-url="{{ url_for('media_document_view', media_id=x.id) }}"
+     aria-label="Preview of {{ x.title }}">
+  <div class="pdf-preview-loading">Loading document preview…</div>
+  <canvas aria-label="First page of {{ x.title }}"></canvas>
+</div>
 {% else %}
 <div class="media" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;width:180px;max-width:100%;height:240px;padding:16px;background:#f5f7fb;border:1px solid #d8deea;border-radius:8px;text-align:center"><span style="font-size:56px">📘</span><strong style="font-size:14px">Word document</strong></div>
 {% endif %}
 <p><a href="{{ url_for('media_document_view', media_id=x.id) }}">View Document</a></p>
 <p><a href="{{ url_for('media_document_download', media_id=x.id) }}" download>Download Document</a></p>
-{% endif %}</article>{% endfor %}</div></main></body></html>
+{% endif %}</article>{% endfor %}</div></main>
+<script type="module">
+(async function () {
+  const boxes = [...document.querySelectorAll(".pdf-book-preview")];
+  if (!boxes.length) return;
+
+  try {
+    const pdfjs = await import(
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs"
+    );
+
+    pdfjs.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+
+    for (const box of boxes) {
+      const url = box.dataset.pdfUrl;
+      const canvas = box.querySelector("canvas");
+      const label = box.querySelector(".pdf-preview-loading");
+
+      try {
+        const pdf = await pdfjs.getDocument({ url }).promise;
+        const page = await pdf.getPage(1);
+        const availableWidth = Math.max(120, box.clientWidth - 12);
+        const availableHeight = Math.max(160, box.clientHeight - 12);
+        const original = page.getViewport({ scale: 1 });
+        const scale = Math.min(
+          availableWidth / original.width,
+          availableHeight / original.height
+        );
+        const viewport = page.getViewport({ scale });
+
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(viewport.width * ratio);
+        canvas.height = Math.floor(viewport.height * ratio);
+        canvas.style.width = Math.floor(viewport.width) + "px";
+        canvas.style.height = Math.floor(viewport.height) + "px";
+
+        const context = canvas.getContext("2d");
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        await page.render({ canvasContext: context, viewport }).promise;
+
+        label.remove();
+      } catch (error) {
+        console.error("PDF thumbnail failed:", url, error);
+        label.textContent = "Preview unavailable — tap View Document";
+        box.classList.add("pdf-preview-error");
+      }
+    }
+  } catch (error) {
+    console.error("PDF.js could not load:", error);
+    boxes.forEach(box => {
+      const label = box.querySelector(".pdf-preview-loading");
+      label.textContent = "Preview unavailable — tap View Document";
+      box.classList.add("pdf-preview-error");
+    });
+  }
+})();
+</script>
+
+</body></html>
