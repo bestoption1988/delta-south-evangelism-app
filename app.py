@@ -1,5 +1,9 @@
 import time
 import os, sqlite3, json, io, socket, secrets, shutil, hashlib
+from pathlib import Path
+from dotenv import load_dotenv as _load_dotenv
+_load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
+
 import urllib.request, urllib.error
 from datetime import datetime, timedelta
 from functools import wraps
