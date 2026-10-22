@@ -17,7 +17,7 @@ const schemas={
   ["death","Death","select",["No","Yes"]],["death_date","Death Date","date"],
   ["seed_of_faith_payment","Seed of Faith Payment (₦)","number"],["tithe_payment","Tithe Payment (₦)","number"],["notes","Notes","textarea"]
  ],
- churches:[["circuit","Circuit","select",["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]],["church_name","Church name","text"],["annual_target","Annual target (₦)","number"],["contact_person","Contact person","text"],["phone","Phone","tel"],["notes","Notes","textarea"]],
+ churches:[["circuit","Circuit","select",["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]],["church_name","Church name","text"],["address","Physical address","text"],["town","Town / City","text"],["state","State","text"],["maps_url","Google Maps URL","url"],["annual_target","Annual target (₦)","number"],["contact_person","Contact person","text"],["phone","Phone","tel"],["notes","Notes","textarea"]],
  commitments:[["date","Date","date"],["donor_name","Donor / partner name","text"],["donor_type","Donor type","select",["Individual","Local Church","Business","Major Patron","Mission Partner"]],["phone","Phone","tel"],["purpose","Purpose","select",["General Evangelism","Equipment Fund","Outreach Fund","Church Planting Fund","Training Fund","Mission Support Fund"]],["amount","Amount pledged (₦)","number"],["frequency","Frequency","select",["One-time","Monthly","Quarterly","Annual"]],["status","Status","select",["Pledged","Part-paid","Paid","Cancelled"]],["notes","Notes","textarea"]],
  income:[["date","Date received","date"],["donor_name","Donor name","text"],["source","Source","select",["Local Church","Evangelism Partner","Major Patron","Business Sponsor","Special Offering","Fundraising Event","In-kind converted value","Other"]],["fund","Fund / purpose","select",["General Evangelism","Equipment Fund","Outreach Fund","Church Planting Fund","Training Fund","Mission Support Fund"]],["amount","Amount received (₦)","number"],["method","Payment method","select",["Transfer","Cash","POS","Cheque","In-kind"]],["reference","Receipt / transaction reference","text"],["received_by","Received by","text"],["notes","Notes","textarea"]],
  expenses:[["date","Date paid","date"],["category","Category","select",["Outreach","Church Planting","Transport","Equipment","Training","Publicity / Media","Mission Support","Administration","Maintenance","Other"]],["description","Description","text"],["circuit","Circuit","select",["Diocesan","Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]],["church_name","Local Church","select",[]],["amount","Amount (₦)","number"],["approved_by","Approved by","text"],["paid_by","Paid by","text"],["receipt_ref","Receipt / voucher reference","text"],["notes","Notes","textarea"]],
@@ -1507,7 +1507,7 @@ if(current==="members"){
   keys=memberOrder.filter(k=>list.some(r=>Object.prototype.hasOwnProperty.call(r,k)));
 }else{
   keys=[...new Set(list.flatMap(r=>Object.keys(r)))].filter(k=>!( ["id","password"].includes(k) ));
-}let showAction=current!=="audit"&&me.role!=="Auditor";let canUpgrade=current==="churches"&&me.role==="Admin";$("#tableWrap").innerHTML=`<table><thead><tr>${keys.map(k=>`<th>${esc(k.replaceAll("_"," "))}</th>`).join("")}${showAction?"<th>Action</th>":""}</tr></thead><tbody>${list.map(r=>`<tr>${keys.map(k=>`<td class="${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?"amount":""}">${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?money(r[k]):esc(r[k]??"—")}</td>`).join("")}${showAction?`<td class="actions-cell">${canUpgrade&&r.church_status!=="Circuit Headquarters"?`<button class="upgrade" data-upgrade="${r.id}">Upgrade to Circuit</button>`:""}${canUpgrade&&r.church_status==="Circuit Headquarters"?`<span class="status-badge">Circuit HQ</span>`:""}${current==="circuit_reports"&&me.role==="Admin"?`<button class="upgrade" data-review="${r.id}" data-status="Approved">Approve</button><button class="delete" data-review="${r.id}" data-status="Returned">Return</button>`:""}${current==="users"&&me.role==="Admin"?`<button class="secondary" data-link-user="${r.id}">Link member</button><button class="secondary" data-edit-user="${r.id}">Edit access</button><button class="secondary" data-toggle-user="${r.id}">${r.active?"Deactivate":"Activate"}</button>`:""}${current==="planting_prospects"&&me.role!=="Local Church Evangelism Officer"&&r.status!=="Converted to Church Plant"&&r.status!=="Closed"?`<button class="upgrade" data-convert-prospect="${r.id}">Convert to Church Plant</button>`:""}${current==="members"?`<button class="secondary" data-edit-member="${r.id}">Edit Member</button><button class="upgrade" data-manage-offices="${r.id}">Manage Offices</button>`:""}<button class="delete" data-del="${r.id}">Delete</button></td>`:""}</tr>`).join("")}</tbody></table>`;document.querySelectorAll("[data-convert-prospect]").forEach(b=>b.onclick=async()=>{
+}let showAction=current!=="audit"&&me.role!=="Auditor";let canUpgrade=current==="churches"&&me.role==="Admin";$("#tableWrap").innerHTML=`<table><thead><tr>${keys.map(k=>`<th>${esc(k.replaceAll("_"," "))}</th>`).join("")}${showAction?"<th>Action</th>":""}</tr></thead><tbody>${list.map(r=>`<tr>${keys.map(k=>`<td class="${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?"amount":""}">${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?money(r[k]):esc(r[k]??"—")}</td>`).join("")}${showAction?`<td class="actions-cell">${canUpgrade&&r.church_status!=="Circuit Headquarters"?`<button class="upgrade" data-upgrade="${r.id}">Upgrade to Circuit</button>`:""}${canUpgrade&&r.church_status==="Circuit Headquarters"?`<span class="status-badge">Circuit HQ</span>`:""}${current==="circuit_reports"&&me.role==="Admin"?`<button class="upgrade" data-review="${r.id}" data-status="Approved">Approve</button><button class="delete" data-review="${r.id}" data-status="Returned">Return</button>`:""}${current==="users"&&me.role==="Admin"?`<button class="secondary" data-link-user="${r.id}">Link member</button><button class="secondary" data-edit-user="${r.id}">Edit access</button><button class="secondary" data-toggle-user="${r.id}">${r.active?"Deactivate":"Activate"}</button>`:""}${current==="planting_prospects"&&me.role!=="Local Church Evangelism Officer"&&r.status!=="Converted to Church Plant"&&r.status!=="Closed"?`<button class="upgrade" data-convert-prospect="${r.id}">Convert to Church Plant</button>`:""}${current==="churches"&&me.role==="Admin"?`<button class="secondary" data-edit-church="${r.id}">Edit Church</button>`:""}${current==="members"?`<button class="secondary" data-edit-member="${r.id}">Edit Member</button><button class="upgrade" data-manage-offices="${r.id}">Manage Offices</button>`:""}<button class="delete" data-del="${r.id}">Delete</button></td>`:""}</tr>`).join("")}</tbody></table>`;document.querySelectorAll("[data-convert-prospect]").forEach(b=>b.onclick=async()=>{
 const row=list.find(x=>String(x.id)===String(b.dataset.convertProspect));
 if(!row)return;
 
@@ -1541,7 +1541,34 @@ setStatus("Planting prospect converted to church plant.");
 alert(e.message);
 }
 });
-document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(confirm("Delete this record? This cannot be undone.")){try{if(current==="users")await api(`/api/users/${b.dataset.del}`,{method:"DELETE"});else await api(`/api/${current}/${b.dataset.del}`,{method:"DELETE"});loadTable();loadDashboard()}catch(e){alert(e.message)}}});document.querySelectorAll("[data-edit-member]").forEach(b=>b.onclick=async()=>{
+document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(confirm("Delete this record? This cannot be undone.")){try{if(current==="users")await api(`/api/users/${b.dataset.del}`,{method:"DELETE"});else await api(`/api/${current}/${b.dataset.del}`,{method:"DELETE"});loadTable();loadDashboard()}catch(e){alert(e.message)}}});document.querySelectorAll("[data-edit-church]").forEach(b=>b.onclick=async()=>{
+  const row=list.find(x=>String(x.id)===String(b.dataset.editChurch));
+  if(!row)return;
+  try{
+    const fresh=await api(`/api/churches/${row.id}`);
+    current="churches";
+    await openForm();
+    const form=document.querySelector("#recordForm");
+    if(!form)return;
+    let editMarker=form.elements["__editing_church_id"];
+    if(!editMarker){
+      editMarker=document.createElement("input");
+      editMarker.type="hidden";
+      editMarker.name="__editing_church_id";
+      form.appendChild(editMarker);
+    }
+    editMarker.value=String(fresh.id);
+    Object.keys(fresh).forEach(key=>{
+      if(key==="id")return;
+      const field=form.elements[key];
+      if(field&&fresh[key]!==undefined&&fresh[key]!==null)field.value=fresh[key];
+    });
+    const title=document.querySelector("#formTitle");
+    if(title)title.textContent="Edit Church — "+(fresh.church_name||"Local Church");
+    const submit=form.querySelector('[type="submit"]');
+    if(submit)submit.textContent="Save Church Changes";
+  }catch(err){alert("Unable to load church: "+err.message);}
+});document.querySelectorAll("[data-edit-member]").forEach(b=>b.onclick=async()=>{
   const row=list.find(x=>String(x.id)===String(b.dataset.editMember));
   if(!row)return;
 
@@ -2280,8 +2307,15 @@ if(current==="members"){
 if(current==="users")setTimeout(applyUserAssignmentRules,0);$("#formTitle").textContent=current==="members"?"Add Church Member — Member ID is automatic":"Add "+labels[current].toLowerCase().replace(/s$/ ,"");$("#formWrap").hidden=false;$("#formWrap").scrollIntoView({behavior:"smooth",block:"start"})}
 $("#commandRefreshBtn")?.addEventListener("click",loadCommandCentre);$("#healthRefreshBtn")?.addEventListener("click",async()=>{setStatus("Checking system health…");const b=$("#healthRefreshBtn");if(b){b.disabled=true;b.textContent="Checking…"}try{await loadSystemHealth();setStatus("System health check completed.")}finally{if(b){b.disabled=false;b.textContent="Run Check Again"}}});$("#qualityCheckBtn")?.addEventListener("click",loadDataQuality);$("#qualityDetailsBtn")?.addEventListener("click",loadQualityDetails);$("#qualityCleanupBtn")?.addEventListener("click",async()=>{if(me.role!=="Admin")return alert("Only an Administrator can run safe cleanup.");if(!confirm("Run safe cleanup? It only trims whitespace and fills a missing member circuit when the church-to-circuit match is unambiguous. Ambiguous records will not be changed."))return;try{const d=await api("/api/system/data-quality/safe-cleanup",{method:"POST"});alert(`${d.message} ${d.total_updated} field(s)/record updates made.`);await loadDataQuality();await loadQualityDetails();}catch(e){alert(e.message)}});$("#workflowCheckBtn")?.addEventListener("click",loadWorkflowCheck);$("#securityRefreshBtn")?.addEventListener("click",loadSecurityCentre);$("#securityBackupBtn")?.addEventListener("click",async()=>{try{const d=await api("/api/security/backup",{method:"POST"});alert(`Backup created: ${d.filename}`);loadSecurityCentre()}catch(e){alert(e.message)}});$("#runReportBtn")?.addEventListener("click",loadReports);$("#reportPrintBtn")?.addEventListener("click",()=>window.print());$("#addBtn").onclick=openForm;$("#cancelBtn").onclick=()=>$("#formWrap").hidden=true;
 $("#recordForm").onsubmit=async e=>{e.preventDefault();const data={};new FormData(e.target).forEach((v,k)=>{const f=schemas[current].find(x=>x[0]===k);data[k]=f&&["number"].includes(f[2])?(v===""?0:Number(v)):v});if(current==="users"){const diocesanRoles=["Admin","Bishop / Diocesan Executive","Evangelism Minister","Planting Officer","Diocesan Secretary","Finance Officer","Auditor"];if(diocesanRoles.includes(data.role)){data.circuit="";data.church_name="";}else if(data.role==="Circuit Coordinator"){data.church_name="";}}try{
-  const form=e.target;const editingMemberId=form.elements["__editing_member_id"]?.value||"";
-  if(current==="members" && editingMemberId){
+  const form=e.target;const editingChurchId=form.elements["__editing_church_id"]?.value||"";const editingMemberId=form.elements["__editing_member_id"]?.value||"";
+  if(current==="churches" && editingChurchId){
+        await api(`/api/churches/${editingChurchId}`,{method:"PUT",body:JSON.stringify(data)});
+        form.elements["__editing_church_id"].remove();
+        e.target.reset();
+        $("#formWrap").hidden=true;
+        await loadTable();
+        setStatus("Church details updated successfully.");
+      }else if(current==="members" && editingMemberId){
     delete data.member_id;
     delete data.created_at;
     await api(`/api/members/${editingMemberId}`,{method:"PUT",body:JSON.stringify(data)});

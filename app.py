@@ -495,6 +495,8 @@ def init_db():
     CREATE TABLE IF NOT EXISTS churches(
       id INTEGER PRIMARY KEY AUTOINCREMENT, circuit TEXT NOT NULL, church_name TEXT NOT NULL,
       annual_target REAL DEFAULT 100000, contact_person TEXT DEFAULT '', phone TEXT DEFAULT '',
+      address TEXT DEFAULT '', town TEXT DEFAULT '', state TEXT DEFAULT 'Delta State',
+      maps_url TEXT DEFAULT '',
       notes TEXT DEFAULT '', church_status TEXT DEFAULT 'Local Church',
       is_circuit_headquarters INTEGER DEFAULT 0, upgraded_at TEXT DEFAULT '',
       UNIQUE(circuit, church_name));
@@ -917,6 +919,10 @@ def init_db():
     }
     for col, definition in mission_contact_migrations.items():
         ensure_column(conn, "mission_contacts", col, definition)
+    ensure_column(conn, "churches", "address", "TEXT DEFAULT ''")
+    ensure_column(conn, "churches", "town", "TEXT DEFAULT ''")
+    ensure_column(conn, "churches", "state", "TEXT DEFAULT 'Delta State'")
+    ensure_column(conn, "churches", "maps_url", "TEXT DEFAULT ''")
     ensure_column(conn, "churches", "church_status", "TEXT DEFAULT 'Local Church'")
     ensure_column(conn, "churches", "is_circuit_headquarters", "INTEGER DEFAULT 0")
     ensure_column(conn, "churches", "upgraded_at", "TEXT DEFAULT ''")
