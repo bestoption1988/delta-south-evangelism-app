@@ -9834,7 +9834,7 @@ def _ml_document_bytes(row):
         if response is not None:
             response.close()
 
-@app.get("/media-library/document/<int:media_id>/view")
+@app.get("/media-library/document/<media_id>/view")
 def media_document_view(media_id):
     """Render PDFs and images inline without exposing a Supabase URL."""
     from flask import abort, send_file
@@ -9901,7 +9901,7 @@ color:white;border-radius:8px;text-decoration:none}}
         return "Document preview is temporarily unavailable.", 503
 
 
-@app.get("/media-library/document/<int:media_id>/download")
+@app.get("/media-library/document/<media_id>/download")
 def media_document_download(media_id):
     """Download a published document through the application."""
     from flask import abort, send_file
