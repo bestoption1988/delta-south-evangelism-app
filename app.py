@@ -3085,8 +3085,36 @@ def public_member_care_ai():
         with urllib.request.urlopen(req,timeout=22) as response: result=json.loads(response.read().decode())
         answer=str(result.get("choices",[{}])[0].get("message",{}).get("content") or "").strip()
         return jsonify({"reply":answer}) if answer else (jsonify({"error":"AI returned no answer."}),502)
-    except (urllib.error.URLError,urllib.error.HTTPError,TimeoutError,ValueError,KeyError,IndexError) as exc:
-        app.logger.warning("Public Member Care AI request failed: %s",type(exc).__name__)
+    except urllib.error.HTTPError as exc:
+        # Log the HTTP status and a short provider message, never credentials.
+        try:
+            body = exc.read(2000).decode("utf-8", errors="replace")
+            try:
+                obj = json.loads(body).get("error", {})
+                if not isinstance(obj, dict):
+                    obj = {"message": str(obj)}
+                message = str(obj.get("message", ""))[:300]
+                code = str(obj.get("code", ""))[:100]
+                error_type = str(obj.get("type", ""))[:100]
+            except (ValueError, AttributeError):
+                message, code, error_type = "Non-JSON provider error", "", ""
+
+            app.logger.warning(
+                "Public Member Care AI HTTP failure: status=%s code=%s type=%s message=%s",
+                exc.code, code, error_type, message
+            )
+        except Exception:
+            app.logger.warning(
+                "Public Member Care AI HTTP failure: status=%s; details unavailable",
+                exc.code
+            )
+        return jsonify({"error":"AI service unavailable. Please contact an officer."}),502
+
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError, IndexError) as exc:
+        app.logger.warning(
+            "Public Member Care AI request failed: %s",
+            type(exc).__name__
+        )
         return jsonify({"error":"AI service unavailable. Please contact an officer."}),502
 
 @app.get("/api/customer-care")
