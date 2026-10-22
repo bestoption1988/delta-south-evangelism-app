@@ -2721,7 +2721,6 @@ def live_worship_page():
     )
 
 
-@app.get("/")
 def _daily_scripture_and_hymn():
     # Load the supplied verse/hymn collection using Nigeria's calendar date.
     source = Path(ROOT) / "data" / "scripture_hymns.json"
@@ -2744,6 +2743,7 @@ def _daily_scripture_and_hymn():
         return {"date": datetime.now().date().isoformat(), "verse": {}, "hymn": {}}
 
 
+@app.get("/")
 def public_home():
     """Public diocesan homepage; no login required."""
     profiles = db().execute(
