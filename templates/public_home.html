@@ -624,15 +624,27 @@ document.getElementById("year").textContent = new Date().getFullYear();
 #daily-devotion .daily-devotion-ticker {
   width: 100%;
   overflow: hidden;
-  white-space: nowrap;
   position: relative;
+}
+#daily-devotion .daily-devotion-line {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+#daily-devotion .daily-devotion-line + .daily-devotion-line {
+  border-top: 1px solid #e0e6f0;
 }
 #daily-devotion .daily-devotion-track {
   display: inline-flex;
   align-items: center;
   width: max-content;
-  min-width: 100%;
+  min-width: 200%;
   animation: ds-devotion-scroll 34s linear infinite;
+}
+#daily-devotion .daily-devotion-line:nth-child(2) .daily-devotion-track {
+  animation-duration: 40s;
+  animation-direction: reverse;
 }
 #daily-devotion .daily-devotion-ticker:hover .daily-devotion-track,
 #daily-devotion .daily-devotion-ticker:focus-within .daily-devotion-track {
@@ -696,6 +708,7 @@ document.getElementById("year").textContent = new Date().getFullYear();
   #daily-devotion .daily-devotion-track {
     animation: none;
     width: 100%;
+    min-width: 0;
     white-space: normal;
     flex-wrap: wrap;
     justify-content: center;
@@ -734,9 +747,6 @@ document.getElementById("year").textContent = new Date().getFullYear();
   ticker.className = "daily-devotion-ticker";
   ticker.setAttribute("aria-label", "Daily Scripture and Hymn. Select a quotation to read it.");
 
-  const track = document.createElement("div");
-  track.className = "daily-devotion-track";
-
   const dialog = document.createElement("dialog");
   dialog.id = "ds-devotion-dialog";
   dialog.setAttribute("aria-labelledby", "ds-devotion-title");
@@ -772,8 +782,14 @@ document.getElementById("year").textContent = new Date().getFullYear();
     }
   }
 
-  function addTickerItems(target) {
-    items.forEach(function (item, index) {
+  function createLine(item, index) {
+    const line = document.createElement("div");
+    line.className = "daily-devotion-line";
+
+    const track = document.createElement("div");
+    track.className = "daily-devotion-track";
+
+    function addButton(target) {
       const button = document.createElement("button");
       button.type = "button";
       button.textContent = (index === 0 ? "📖 SCRIPTURE OF THE DAY: " : "🎵 HYMN OF THE DAY: ")
@@ -784,24 +800,31 @@ document.getElementById("year").textContent = new Date().getFullYear();
         openItem(item);
       });
       target.appendChild(button);
-
       const separator = document.createElement("span");
       separator.className = "daily-devotion-separator";
       separator.textContent = "  ✦  ";
       separator.setAttribute("aria-hidden", "true");
       target.appendChild(separator);
+    }
+
+    addButton(track);
+    const duplicate = track.cloneNode(true);
+    duplicate.setAttribute("aria-hidden", "true");
+    duplicate.querySelectorAll("button").forEach(function (button) {
+      button.tabIndex = -1;
+      button.removeAttribute("aria-label");
     });
+    line.append(track, duplicate);
+    return line;
   }
 
-  addTickerItems(track);
+  const ticker = document.createElement("div");
+  ticker.className = "daily-devotion-ticker";
+  ticker.setAttribute("aria-label", "Daily Scripture and Hymn. Select a quotation to read it.");
 
-  /* Duplicate the line so the animation loops without a blank gap. */
-  const duplicate = track.cloneNode(true);
-  duplicate.setAttribute("aria-hidden", "true");
-  duplicate.querySelectorAll("button").forEach(function (button) {
-    button.tabIndex = -1;
-  });
-  ticker.append(track, duplicate);
+  /* One independent moving line for Scripture and one for Hymn. */
+  ticker.appendChild(createLine(items[0], 0));
+  ticker.appendChild(createLine(items[1], 1));
 
   if (heading) heading.hidden = true;
   if (grid) grid.hidden = true;
