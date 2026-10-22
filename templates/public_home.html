@@ -143,18 +143,36 @@
 <p>Worship, witness, service and discipleship.</p>
 </div>
 <div class="leadership-grid">
+{% set leadership_defaults = {
+  "Prelate": {"name": "His Eminence, Dr. Oliver Ali Aba (JP)", "bio": "Prelate of the Methodist Church Nigeria.", "photo": "uploads/leadership/prelate.jpg"},
+  "Archbishop": {"name": "The Most Revd Samuel Nortey", "bio": "Archbishop of the Edo-Delta Archdiocese.", "photo": "uploads/leadership/archbishop.jpg"},
+  "Bishop": {"name": "The Right Revd Dr. Nosa O. Nosayaba", "bio": "Bishop of the Delta South Diocese.", "photo": "uploads/leadership/bishop.jpg"},
+  "Synod Secretary": {"name": "The Very Rev FearGod Chibueze", "bio": "Serving as Synod Secretary of the Delta South Diocese.", "photo": "uploads/leadership/synod-secretary.jpg"},
+  "Minister of Evangelism": {"name": "The Revd Christopher Ighoevwogue", "bio": "Serving as Minister of Evangelism of the Delta South Diocese.", "photo": "uploads/leadership/minister-of-evangelism.jpg"},
+  "Lay President": {"name": "Sir Engr. Maduabuchi Orji", "bio": "Serving as Lay President of the Delta South Diocese.", "photo": "uploads/leadership/lay-president.jpg"},
+  "Evangelism Coordinator": {"name": "Sir Engr. Nicolas Akpotowho", "bio": "Serving as Evangelism Coordinator of the Delta South Diocese.", "photo": "uploads/leadership/evangelism-coordinator.jpg"},
+  "Men Fellowship President": {"name": "Bro. Stephen Agbai JP", "bio": "President of the Men Fellowship.", "photo": "uploads/leadership/men-fellowship-president.jpg"},
+  "Women Fellowship President": {"name": "Dame Pastor Glory Udauk Nosayaba", "bio": "President of the Women Fellowship.", "photo": "uploads/leadership/women-fellowship-president.jpg"},
+  "Youth Fellowship President": {"name": "To Be Announced", "bio": "The Youth Fellowship leadership name will be announced when confirmed.", "photo": "uploads/leadership/youth-fellowship-president.jpg"}
+} %}
 {% for profile in leadership_profiles %}
+{% set defaults = leadership_defaults.get(profile.title, {}) %}
+{% if not defaults and 'Bishop' in profile.title %}
+{% set defaults = leadership_defaults.get('Bishop', {}) %}
+{% endif %}
+{% set leader_name = profile.full_name or defaults.get("name") or "Profile coming soon" %}
+{% set leader_bio = profile.biography or defaults.get("bio") or "Official profile information will be published here." %}
+{% set leader_photo = profile.photo_path or defaults.get("photo", "") %}
 <article class="leader-card">
-{% if profile.photo_path %}
-{% set leader_photo = profile.photo_path %}
-<img class="leader-photo" src="{{ leader_photo if leader_photo.startswith('https://') or leader_photo.startswith('http://') else url_for('static', filename=leader_photo) }}" alt="{{ profile.title }}" loading="lazy" onerror="this.onerror=null;this.src='/static/uploads/leadership/{{ profile.title|lower|replace(' ', '-') }}.jpg';">
+{% if leader_photo %}
+<img class="leader-photo" src="{{ leader_photo if leader_photo.startswith('https://') or leader_photo.startswith('http://') else url_for('static', filename=leader_photo) }}" alt="{{ leader_name }}" loading="lazy" onerror="this.onerror=null;this.src='/static/uploads/leadership/{{ profile.title|lower|replace(' ', '-') }}.jpg';">
 {% else %}
 <div class="leader-photo leader-placeholder">✝</div>
 {% endif %}
 <div class="leader-info">
 <p class="eyebrow">{{ profile.title }}</p>
-<h3>{{ profile.full_name or "Profile coming soon" }}</h3>
-<p>{{ profile.biography or "Official profile information will be published here." }}</p>
+<h3>{{ leader_name }}</h3>
+<p>{{ leader_bio }}</p>
 </div>
 </article>
 {% endfor %}
@@ -241,12 +259,12 @@
         <a href="{{ url_for('media_document_view', media_id=item.id) }}" aria-label="View {{ item.title }}">
           <img src="{{ url_for('media_document_view', media_id=item.id) }}"
                alt="{{ item.title }}" loading="lazy"
-               style="display:block;width:100%;max-height:260px;object-fit:contain;border-radius:8px">
+               style="display:block;width:180px;max-width:100%;height:240px;object-fit:contain;border:1px solid #d8deea;border-radius:8px;background:#f5f7fb">
         </a>
       {% elif item.mime_type == 'application/pdf' %}
         <iframe title="{{ item.title }}"
                 src="{{ url_for('media_document_view', media_id=item.id) }}"
-                loading="lazy" style="width:100%;height:260px;border:1px solid #ddd;border-radius:8px"></iframe>
+                loading="lazy" style="display:block;width:180px;max-width:100%;height:240px;border:1px solid #d8deea;border-radius:8px;background:#f5f7fb"></iframe>
       {% else %}
         <div class="document-thumbnail" aria-hidden="true">📄</div>
       {% endif %}
