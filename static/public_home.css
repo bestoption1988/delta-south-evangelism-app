@@ -439,3 +439,31 @@ footer .footer-brand {
         padding: 18px;
     }
 }
+
+/* Church finder: clear, readable Google Maps directions button */
+.church-map-button,
+.church-map-button:link,
+.church-map-button:visited {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 12px 18px;
+    background: #12377b;
+    color: #ffffff !important;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.4;
+    border-radius: 8px;
+    text-decoration: none;
+    white-space: normal;
+    visibility: visible;
+    opacity: 1;
+}
+
+.church-map-button:hover,
+.church-map-button:focus {
+    background: #092657;
+    color: #ffffff !important;
+}
