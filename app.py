@@ -2795,6 +2795,90 @@ def public_home():
     except Exception:
         app.logger.exception("Homepage Supabase media preview could not be loaded")
 
+
+    # Birthday celebrations use Nigeria's local calendar date.
+    birthday_celebration_members = []
+    try:
+        try:
+            from zoneinfo import ZoneInfo
+            birthday_today = datetime.now(ZoneInfo("Africa/Lagos")).date()
+        except Exception:
+            from datetime import timedelta
+            birthday_today = (
+                datetime.utcnow() + timedelta(hours=1)
+            ).date()
+
+        birthday_rows = db().execute("""
+            SELECT full_name, birthday, passport_photo, circuit, church_name
+            FROM members
+            WHERE birthday IS NOT NULL
+              AND TRIM(birthday) <> ''
+              AND (
+                  death IS NULL
+                  OR LOWER(TRIM(death)) NOT IN ('yes', 'true', '1', 'deceased')
+              )
+            ORDER BY full_name
+        """).fetchall()
+
+        for birthday_row in birthday_rows:
+            birthday_value = str(birthday_row["birthday"] or "").strip()
+            parsed_birthday = None
+
+            # Accept common date formats used by membership records.
+            for birthday_format in (
+                "%Y-%m-%d",
+                "%d/%m/%Y",
+                "%d-%m-%Y",
+                "%m/%d/%Y",
+                "%d/%m",
+                "%d-%m",
+            ):
+                try:
+                    parsed_birthday = datetime.strptime(
+                        birthday_value, birthday_format
+                    ).date()
+                    break
+                except ValueError:
+                    continue
+
+            if not parsed_birthday:
+                continue
+
+            if (
+                parsed_birthday.month != birthday_today.month
+                or parsed_birthday.day != birthday_today.day
+            ):
+                continue
+
+            member_item = {
+                "full_name": birthday_row["full_name"] or "Church Member",
+                "circuit": birthday_row["circuit"] or "",
+                "church_name": birthday_row["church_name"] or "",
+                "photo_url": "",
+            }
+
+            photo_path = str(birthday_row["passport_photo"] or "").strip()
+
+            if photo_path:
+                try:
+                    if photo_path.startswith(("https://", "http://")):
+                        member_item["photo_url"] = photo_path
+                    else:
+                        member_item["photo_url"] = (
+                            _member_photo_storage_signed_url(photo_path)
+                        )
+                except Exception:
+                    app.logger.warning(
+                        "Could not prepare a birthday photo for a member."
+                    )
+
+            birthday_celebration_members.append(member_item)
+
+    except Exception:
+        # A birthday lookup must never prevent the public homepage from loading.
+        app.logger.exception("Birthday celebration lookup failed")
+        birthday_celebration_members = []
+
     return render_template(
         "public_home.html", leadership_profiles=profiles,
         leadership_titles=LEADERSHIP_TITLES,
@@ -2803,7 +2887,8 @@ def public_home():
         homepage_events=events,
         homepage_churches=churches,
         homepage_media_items=homepage_media_items,
-        daily_devotion=daily_devotion
+        daily_devotion=daily_devotion,
+        birthday_celebration_members=birthday_celebration_members
     )
 
 
@@ -5447,7 +5532,7 @@ def _member_photo_storage_signed_url(object_path):
             "apikey": key,
             "Content-Type": "application/json",
         },
-        json={"expiresIn": 60},
+        json={"expiresIn": 3600},
         timeout=30,
     )
     response.raise_for_status()
