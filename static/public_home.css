@@ -696,3 +696,114 @@ footer .footer-brand {
     letter-spacing: 0.4px;
   }
 }
+
+
+/* Mission Map — Delta South Diocese strategic church-planting plan */
+.mission-map-section {
+  padding: clamp(24px, 4vw, 52px) clamp(12px, 3vw, 36px);
+  background: linear-gradient(145deg, #eaf2ff, #fff 55%, #edf7f1);
+  border-top: 1px solid #dbe4f2;
+  border-bottom: 1px solid #dbe4f2;
+}
+.mission-map-inner {
+  max-width: 1250px;
+  margin: 0 auto;
+}
+.mission-map-heading {
+  max-width: 900px;
+  margin: 0 auto 22px;
+  text-align: center;
+}
+.mission-map-eyebrow {
+  margin: 0 0 8px;
+  color: #c51f32;
+  font-size: clamp(10px, 1.4vw, 13px);
+  font-weight: 800;
+  letter-spacing: 1.4px;
+}
+.mission-map-heading h2 {
+  margin: 0;
+  color: #071b50;
+  font-family: Georgia, serif;
+  font-size: clamp(28px, 4vw, 44px);
+  line-height: 1.15;
+}
+.mission-map-heading h3 {
+  margin: 8px 0;
+  color: #12377b;
+  font-size: clamp(17px, 2.4vw, 25px);
+}
+.mission-map-heading > p:last-child {
+  margin: 8px 0 0;
+  color: #657087;
+  font-size: clamp(13px, 1.7vw, 16px);
+}
+.mission-map-image-link {
+  display: block;
+  overflow: hidden;
+  padding: clamp(5px, 1vw, 12px);
+  background: #fff;
+  border: 1px solid #d7e0ed;
+  border-radius: 16px;
+  box-shadow: 0 12px 34px #071b501c;
+}
+.mission-map-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+  border-radius: 9px;
+}
+.mission-map-caption {
+  padding: 15px 10px 0;
+  color: #24324e;
+  text-align: center;
+}
+.mission-map-caption p {
+  margin: 5px 0;
+  line-height: 1.6;
+}
+.mission-map-caption p:first-child {
+  color: #12377b;
+}
+.mission-map-open-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12px;
+  padding: 13px 22px;
+  color: #fff;
+  background: #12377b;
+  border-radius: 10px;
+  font-weight: 800;
+  box-shadow: 0 4px 12px #071b5020;
+}
+.mission-map-open-button:hover {
+  color: #fff;
+  background: #071b50;
+}
+.mission-map-image-link:focus-visible,
+.mission-map-open-button:focus-visible {
+  outline: 3px solid #f5c21b;
+  outline-offset: 3px;
+}
+@media (max-width: 650px) {
+  .mission-map-section {
+    padding: 24px 10px;
+  }
+  .mission-map-heading {
+    margin-bottom: 16px;
+  }
+  .mission-map-image-link {
+    padding: 4px;
+    border-radius: 10px;
+  }
+  .mission-map-caption {
+    padding: 12px 4px 0;
+  }
+  .mission-map-open-button {
+    width: 100%;
+    max-width: 340px;
+  }
+}

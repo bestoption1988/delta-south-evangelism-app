@@ -451,6 +451,44 @@
   <a class="button blue-button" href="{{ url_for('public_member_registration_page') }}">Register Your Interest</a>
 </section>
 
+
+<section class="mission-map-section" id="mission-map"
+         aria-labelledby="mission-map-title">
+  <div class="mission-map-inner">
+    <header class="mission-map-heading">
+      <p class="mission-map-eyebrow">
+        REACHING PEOPLE · PLANTING CHURCHES · TRANSFORMING COMMUNITIES
+      </p>
+      <h2 id="mission-map-title">MISSION MAP</h2>
+      <h3>5–10 Year Church Planting Strategic Map</h3>
+      <p>
+        Explore the Diocese's church-planting axes, strategic locations,
+        and opportunities to reach more communities.
+      </p>
+    </header>
+
+    <a class="mission-map-image-link"
+       href="{{ url_for('static', filename='uploads/mission-map.png') }}"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="Open the complete Mission Map">
+      <img class="mission-map-image"
+           src="{{ url_for('static', filename='uploads/mission-map.png') }}"
+           alt="Methodist Church Nigeria, Delta South Diocese, 5–10 Year Church Planting Strategic Map showing 11 church-planting axes, strategic locations, institutional mission opportunities, and rolling targets."
+           loading="lazy">
+    </a>
+
+    <div class="mission-map-caption">
+      <p><strong>11 Church Planting Axes · 70+ Strategic Locations · 1 Mission</strong></p>
+      <p>Rolling target: five new churches per year — 25 in five years and 50 in ten years.</p>
+      <a class="mission-map-open-button"
+         href="{{ url_for('static', filename='uploads/mission-map.png') }}"
+         target="_blank" rel="noopener noreferrer">
+        View Full Mission Map ↗
+      </a>
+    </div>
+  </div>
+</section>
+
 <section class="contact-section" id="contact">
   <p class="eyebrow">WE WOULD LOVE TO HEAR FROM YOU</p>
   <h2>Connect With the Diocese</h2>
