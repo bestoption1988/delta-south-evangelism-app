@@ -134,6 +134,19 @@
     <a href="#home">⌂ Home</a>
     <a href="#about">About Us</a>
     <a href="#diocese">Our Diocese</a>
+    <div class="nav-dropdown" id="fellowshipsDropdown">
+      <button type="button" class="nav-drop-toggle"
+              aria-expanded="false" aria-controls="fellowshipsSubmenu">
+        Our Fellowships ▾
+      </button>
+      <div class="nav-submenu" id="fellowshipsSubmenu">
+        <a href="/fellowship/methodist-mens-fellowship">Men</a>
+        <a href="/fellowship/methodist-womens-fellowship">Women</a>
+        <a href="/fellowship/methodist-youth-fellowship">Youth</a>
+        <a href="/fellowship/methodist-campus-fellowship">MCF</a>
+        <a href="/fellowships">View All Fellowships</a>
+      </div>
+    </div>
     <a href="#ministries">Ministries</a>
     <a href="#watch">Sermons & Media</a>
     <a href="#events">Events</a>
@@ -196,15 +209,8 @@
   </div>
 </section>
 
-<section class="feature-card" id="diocesan-fellowships">
-<div class="section-heading"><h2>Our Methodist Fellowships</h2><p>Connect, grow in faith, and serve across Delta South Diocese.</p></div>
-<div class="quick-links">
-<a class="quick-card" href="/fellowship/methodist-mens-fellowship"><b>Methodist Mens Fellowship</b><small>MMF</small></a>
-<a class="quick-card" href="/fellowship/methodist-womens-fellowship"><b>Methodist Womens Fellowship</b><small>MWF</small></a>
-<a class="quick-card" href="/fellowship/methodist-youth-fellowship"><b>Methodist Youth Fellowship</b><small>MYF</small></a>
-<a class="quick-card" href="/fellowship/methodist-campus-fellowship"><b>Methodist Campus Fellowship</b><small>MCF</small></a>
-<a class="quick-card" href="/fellowships"><b>View All Fellowships</b><small>Explore our fellowships</small></a>
-</div></section>
+
+
 <section class="quick-links" id="ministries">
   <a class="quick-card" href="{{ url_for('public_member_registration_page') }}"><span class="icon purple">♟</span><b>Church Membership</b><small>Register or Login</small></a>
   <a class="quick-card" href="{{ url_for('public_member_registration_page') }}?type=new-convert"><span class="icon green">▤</span><b>New Converts</b><small>Start Your Journey</small></a>
@@ -585,17 +591,109 @@
 
 <script src="{{ url_for('static', filename='public-member-care.js') }}?v=20261016-guest-chat"></script>
 <script>
-const toggle = document.getElementById("menuToggle");
-const links = document.getElementById("navLinks");
-toggle.addEventListener("click", () => {
-  const open = links.classList.toggle("open");
-  toggle.setAttribute("aria-expanded", String(open));
-});
-links.querySelectorAll("a").forEach(a => a.addEventListener("click", () => {
-  links.classList.remove("open");
-  toggle.setAttribute("aria-expanded", "false");
-}));
-document.getElementById("year").textContent = new Date().getFullYear();
+(() => {
+  const toggle = document.getElementById("menuToggle");
+  const links = document.getElementById("navLinks");
+  const dropdown = document.getElementById("fellowshipsDropdown");
+  const dropToggle = dropdown?.querySelector(".nav-drop-toggle");
+  const submenu = document.getElementById("fellowshipsSubmenu");
+
+  if (toggle && links) {
+    toggle.addEventListener("click", () => {
+      const open = links.classList.toggle("open");
+      toggle.setAttribute("aria-expanded", String(open));
+    });
+  }
+
+  if (dropdown && dropToggle && submenu) {
+    dropToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const open = dropdown.classList.toggle("open");
+      dropToggle.setAttribute("aria-expanded", String(open));
+    });
+
+    fetch("/api/public/fellowships", {headers: {"Accept": "application/json"}})
+      .then(response => {
+        if (!response.ok) throw new Error("Fellowship list unavailable");
+        return response.json();
+      })
+      .then(items => {
+        if (!Array.isArray(items) || !items.length) return;
+        submenu.replaceChildren();
+
+        const preferred = [
+          ["methodist-mens-fellowship", "Men"],
+          ["methodist-womens-fellowship", "Women"],
+          ["methodist-youth-fellowship", "Youth"],
+          ["methodist-campus-fellowship", "MCF"]
+        ];
+
+        const bySlug = new Map(items.map(item => [item.slug, item]));
+        const used = new Set();
+
+        for (const [slug, label] of preferred) {
+          const item = bySlug.get(slug);
+          if (item) {
+            const a = document.createElement("a");
+            a.href = "/fellowship/" + encodeURIComponent(item.slug);
+            a.textContent = label;
+            submenu.appendChild(a);
+            used.add(slug);
+          }
+        }
+
+        for (const item of items) {
+          if (used.has(item.slug)) continue;
+          const a = document.createElement("a");
+          a.href = "/fellowship/" + encodeURIComponent(item.slug);
+          a.textContent = item.name;
+          submenu.appendChild(a);
+        }
+
+        const all = document.createElement("a");
+        all.href = "/fellowships";
+        all.textContent = "View All Fellowships";
+        submenu.appendChild(all);
+      })
+      .catch(() => {
+        // Keep the four known links as a fallback if the API is unavailable.
+      });
+  }
+
+  if (links) {
+    links.addEventListener("click", event => {
+      const anchor = event.target.closest("a");
+      if (!anchor) return;
+
+      if (dropdown && !dropdown.contains(anchor)) {
+        dropdown.classList.remove("open");
+        dropToggle?.setAttribute("aria-expanded", "false");
+      }
+
+      links.classList.remove("open");
+      toggle?.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  document.addEventListener("click", event => {
+    if (dropdown && !dropdown.contains(event.target)) {
+      dropdown.classList.remove("open");
+      dropToggle?.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      dropdown?.classList.remove("open");
+      dropToggle?.setAttribute("aria-expanded", "false");
+      links?.classList.remove("open");
+      toggle?.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  const year = document.getElementById("year");
+  if (year) year.textContent = new Date().getFullYear();
+})();
 </script>
 
 <script type="module">

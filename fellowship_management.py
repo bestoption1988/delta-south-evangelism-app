@@ -8,10 +8,11 @@ user_getter() to return the logged-in user mapping (or None). It uses the existi
 fellowship_* schema created by migrate_fellowship_management.py.
 """
 from datetime import datetime
+import re
 from functools import wraps
 import os
 import uuid
-from flask import render_template, request, redirect, url_for, flash, abort, session
+from flask import render_template, request, redirect, url_for, flash, abort, session, jsonify
 
 FELLOWSHIP_SLUGS = {
     "methodist-mens-fellowship": "Methodist Men’s Fellowship",
@@ -122,10 +123,94 @@ def register_fellowship_routes(app, db_getter, user_getter):
         rows = query("SELECT * FROM fellowships WHERE active=1 ORDER BY name").fetchall()
         return render_template("fellowship_directory.html", fellowships=[row_dict(x) for x in rows])
 
+
+    @app.get("/api/public/fellowships")
+    def public_fellowships_api():
+        rows = query(
+            "SELECT slug, name, short_name FROM fellowships "
+            "WHERE active=1 ORDER BY name"
+        ).fetchall()
+        return jsonify([row_dict(row) for row in rows])
+
+    @app.post("/admin/fellowships/new")
+    @login_required
+    @admin_required
+    def fellowship_admin_create():
+        user = logged_user()
+        if role_of(user) not in DIOCESAN_ROLES:
+            abort(403)
+
+        name = request.form.get("name", "").strip()
+        short_name = request.form.get("short_name", "").strip()
+        if not name or not short_name:
+            flash("Fellowship name and short name are required.", "error")
+            return redirect(url_for("fellowship_admin_directory"))
+
+        if len(name) > 160 or len(short_name) > 40:
+            flash("Fellowship name or short name is too long.", "error")
+            return redirect(url_for("fellowship_admin_directory"))
+
+        base_slug = re.sub(r"[^a-z0-9]+", "-", name.casefold()).strip("-")
+        if not base_slug:
+            flash("Enter a valid fellowship name.", "error")
+            return redirect(url_for("fellowship_admin_directory"))
+
+        slug = "fellowship-" + base_slug[:100]
+        suffix = 2
+        while query("SELECT 1 FROM fellowships WHERE slug=?", (slug,)).fetchone():
+            slug = "fellowship-" + base_slug[:90] + "-" + str(suffix)
+            suffix += 1
+
+        conn = db_getter()
+        conn.execute(
+            """INSERT INTO fellowships
+               (slug, name, short_name, introduction, history, vision,
+                mission, objectives, active, created_by)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?)""",
+            (
+                slug, name, short_name,
+                request.form.get("introduction", "").strip(),
+                request.form.get("history", "").strip(),
+                request.form.get("vision", "").strip(),
+                request.form.get("mission", "").strip(),
+                request.form.get("objectives", "").strip(),
+                user.get("id"),
+            ),
+        )
+        if hasattr(conn, "commit"):
+            conn.commit()
+
+        flash("Fellowship created as pending approval.", "success")
+        return redirect(url_for("fellowship_admin_directory"))
+
+    @app.post("/admin/fellowships/<slug>/approve")
+    @login_required
+    @admin_required
+    def fellowship_admin_approve(slug):
+        user = logged_user()
+        if role_of(user) not in DIOCESAN_ROLES:
+            abort(403)
+
+        row = query("SELECT * FROM fellowships WHERE slug=?", (slug,)).fetchone()
+        fellowship = row_dict(row)
+        if not fellowship:
+            abort(404)
+
+        conn = db_getter()
+        conn.execute(
+            """UPDATE fellowships
+               SET active=1, updated_at=CURRENT_TIMESTAMP, updated_by=?
+               WHERE slug=?""",
+            (user.get("id"), slug),
+        )
+        if hasattr(conn, "commit"):
+            conn.commit()
+
+        flash("Fellowship approved and published.", "success")
+        return redirect(url_for("fellowship_admin_directory"))
+
     @app.get("/fellowship/<slug>")
     def fellowship_public_home(slug):
-        if slug not in FELLOWSHIP_SLUGS:
-            abort(404)
         row = query("SELECT * FROM fellowships WHERE slug=? AND active=1", (slug,)).fetchone()
         if not row:
             abort(404)
@@ -195,8 +280,6 @@ def register_fellowship_routes(app, db_getter, user_getter):
     @login_required
     @admin_required
     def fellowship_admin_edit(slug):
-        if slug not in FELLOWSHIP_SLUGS:
-            abort(404)
         row = query("SELECT * FROM fellowships WHERE slug=?", (slug,)).fetchone()
         if not row:
             abort(404)
@@ -326,8 +409,6 @@ def register_fellowship_routes(app, db_getter, user_getter):
     @login_required
     @admin_required
     def fellowship_admin_add_leader(slug):
-        if slug not in FELLOWSHIP_SLUGS:
-            abort(404)
         fellowship = row_dict(query("SELECT * FROM fellowships WHERE slug=?", (slug,)).fetchone())
         if not fellowship:
             abort(404)
@@ -408,8 +489,6 @@ def register_fellowship_routes(app, db_getter, user_getter):
     @login_required
     @admin_required
     def fellowship_admin_add_content(slug):
-        if slug not in FELLOWSHIP_SLUGS:
-            abort(404)
         fellowship = row_dict(query("SELECT * FROM fellowships WHERE slug=?", (slug,)).fetchone())
         if not fellowship:
             abort(404)

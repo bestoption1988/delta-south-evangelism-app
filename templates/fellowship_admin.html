@@ -1,7 +1,78 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Fellowship Management</title><style>
-:root{--navy:#082b55;--gold:#d6a53b;--paper:#f4f7fb}*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif;background:var(--paper);color:#17263a}
-header{background:var(--navy);color:white;padding:22px;border-bottom:5px solid var(--gold)}main{max-width:1100px;margin:22px auto;padding:0 14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px}.card{background:white;padding:20px;border-radius:12px;border:1px solid #e0e8f1}
-a.btn{display:inline-block;background:var(--navy);color:white;text-decoration:none;padding:10px 14px;border-radius:8px}.muted{color:#68768a}
-</style></head><body><header><h1>Fellowship Management</h1><p>MCN Delta South Diocese · Administration</p></header><main><p><a href="/fellowships">Public fellowship directory</a> · <a href="/dashboard">Dashboard</a></p>
-<div class="grid">{% for f in fellowships %}<article class="card"><h2>{{ f.name }}</h2><p class="muted">{{ f.short_name }} · {{ 'Active' if f.active else 'Inactive' }}</p><a class="btn" href="{{ url_for('fellowship_admin_edit',slug=f.slug) }}">Manage fellowship</a><p><a href="{{ url_for('fellowship_public_home',slug=f.slug) }}" target="_blank">Preview public page ↗</a></p></article>{% endfor %}</div></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fellowship Management · MCN Delta South</title>
+<style>
+:root{--navy:#082b55;--gold:#d6a53b;--paper:#f4f7fb}
+*{box-sizing:border-box}
+body{margin:0;font:16px Arial,sans-serif;background:var(--paper);color:#17263a}
+header{background:var(--navy);color:white;padding:22px;border-bottom:5px solid var(--gold)}
+main{max-width:1100px;margin:22px auto;padding:0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:15px}
+.card,.form-card{background:white;padding:20px;border-radius:12px;border:1px solid #e0e8f1;min-width:0}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+label{display:block;font-size:13px;font-weight:bold;margin-bottom:5px}
+input,textarea{width:100%;padding:10px;border:1px solid #ccd6e3;border-radius:7px;font:inherit}
+textarea{min-height:75px;resize:vertical}
+button,.btn{display:inline-block;background:var(--navy);color:white;text-decoration:none;padding:10px 14px;border:0;border-radius:8px;font:inherit;cursor:pointer}
+.approve{background:#176b37}.muted{color:#68768a}.status{font-weight:bold}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+@media(max-width:600px){.form-grid{grid-template-columns:1fr}header{padding:16px}}
+</style>
+</head>
+<body>
+<header>
+<h1>Fellowship Management</h1>
+<p>MCN Delta South Diocese · Administration</p>
+</header>
+<main>
+<p><a href="/">Home</a> · <a href="/fellowships">Public fellowship directory</a> ·
+<a href="/dashboard">Dashboard</a></p>
+
+<section class="form-card">
+<h2>Add a Fellowship</h2>
+<p class="muted">New fellowships remain unpublished until an authorized diocesan administrator approves them.</p>
+<form method="post" action="/admin/fellowships/new">
+<div class="form-grid">
+<div><label for="name">Fellowship name *</label><input id="name" name="name" maxlength="160" required></div>
+<div><label for="short_name">Short name *</label><input id="short_name" name="short_name" maxlength="40" required></div>
+<div><label for="introduction">Introduction</label><textarea id="introduction" name="introduction"></textarea></div>
+<div><label for="history">History</label><textarea id="history" name="history"></textarea></div>
+<div><label for="vision">Vision</label><textarea id="vision" name="vision"></textarea></div>
+<div><label for="mission">Mission</label><textarea id="mission" name="mission"></textarea></div>
+<div><label for="objectives">Objectives</label><textarea id="objectives" name="objectives"></textarea></div>
+</div>
+<p><button type="submit">Create Fellowship — Pending Approval</button></p>
+</form>
+</section>
+
+<h2>Existing Fellowships</h2>
+<div class="grid">
+{% for f in fellowships %}
+<article class="card">
+<h2>{{ f.name }}</h2>
+<p class="muted">{{ f.short_name }} ·
+<span class="status">{{ 'Active / Approved' if f.active else 'Pending / Inactive' }}</span>
+</p>
+<div class="actions">
+<a class="btn" href="{{ url_for('fellowship_admin_edit',slug=f.slug) }}">Manage fellowship</a>
+{% if f.active %}
+<a class="btn" href="{{ url_for('fellowship_public_home',slug=f.slug) }}" target="_blank" rel="noopener">Preview public page</a>
+{% endif %}
+{% if not f.active %}
+<form method="post" action="{{ url_for('fellowship_admin_approve',slug=f.slug) }}"
+onsubmit="return confirm('Approve and publish this fellowship?')">
+<button class="approve" type="submit">Approve & Publish</button>
+</form>
+{% endif %}
+</div>
+</article>
+{% else %}
+<p>No fellowship records were found.</p>
+{% endfor %}
+</div>
+</main>
+</body>
+</html>
