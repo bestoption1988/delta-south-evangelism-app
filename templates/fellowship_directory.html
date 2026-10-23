@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MCN Delta South Fellowships</title><style>
+:root{--navy:#082b55;--gold:#d6a53b;--paper:#f4f7fb}*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif;background:var(--paper);color:#17263a}
+header{background:var(--navy);color:white;padding:24px 18px;border-bottom:5px solid var(--gold)}main{max-width:1100px;margin:24px auto;padding:0 16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}.card{background:white;border-radius:14px;padding:20px;box-shadow:0 5px 18px #082b5514;border:1px solid #e0e8f1}
+a.button{display:inline-block;background:var(--navy);color:white;padding:10px 14px;border-radius:8px;text-decoration:none}.muted{color:#65748a}
+</style></head><body><header><h1>Methodist Church Nigeria</h1><div>Delta South Diocese · Fellowship Directory</div></header><main><h2>Our Fellowships</h2><p class="muted">Explore fellowship news, leaders, programmes and Bible studies.</p><div class="grid">
+{% for f in fellowships %}<article class="card"><h2>{{ f.name }}</h2><p>{{ f.introduction or 'Growing in faith, fellowship and service.' }}</p><a class="button" href="{{ url_for('fellowship_public_home',slug=f.slug) }}">Visit fellowship</a></article>{% endfor %}
+</div><p><a href="/login">Staff login</a></p></main></body></html>

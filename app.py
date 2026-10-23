@@ -1873,7 +1873,7 @@ def page_login_required(fn):
 
 @app.before_request
 def protect_app():
-    public = {"public_home", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "media_document_view", "media_document_download", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai"}
+    public = {"public_home", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "media_document_view", "media_document_download", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai", "fellowship_directory", "fellowship_public_home"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if is_setup_needed():
@@ -7890,6 +7890,10 @@ def validate_postgres_startup_schema():
 
     return build_table_map()
 
+
+# Fellowship Management routes — integrated additively.
+from fellowship_management import register_fellowship_routes
+register_fellowship_routes(app, db_getter=db, user_getter=current_user)
 
 with app.app_context():
     if database_backend() == "postgres":

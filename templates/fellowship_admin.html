@@ -1,0 +1,7 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fellowship Management</title><style>
+:root{--navy:#082b55;--gold:#d6a53b;--paper:#f4f7fb}*{box-sizing:border-box}body{margin:0;font:16px Arial,sans-serif;background:var(--paper);color:#17263a}
+header{background:var(--navy);color:white;padding:22px;border-bottom:5px solid var(--gold)}main{max-width:1100px;margin:22px auto;padding:0 14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:15px}.card{background:white;padding:20px;border-radius:12px;border:1px solid #e0e8f1}
+a.btn{display:inline-block;background:var(--navy);color:white;text-decoration:none;padding:10px 14px;border-radius:8px}.muted{color:#68768a}
+</style></head><body><header><h1>Fellowship Management</h1><p>MCN Delta South Diocese · Administration</p></header><main><p><a href="/fellowships">Public fellowship directory</a> · <a href="/dashboard">Dashboard</a></p>
+<div class="grid">{% for f in fellowships %}<article class="card"><h2>{{ f.name }}</h2><p class="muted">{{ f.short_name }} · {{ 'Active' if f.active else 'Inactive' }}</p><a class="btn" href="{{ url_for('fellowship_admin_edit',slug=f.slug) }}">Manage fellowship</a><p><a href="{{ url_for('fellowship_public_home',slug=f.slug) }}" target="_blank">Preview public page ↗</a></p></article>{% endfor %}</div></main></body></html>
