@@ -807,3 +807,46 @@ footer .footer-brand {
     max-width: 340px;
   }
 }
+
+
+/* MCN Delta South: compact right-aligned member login */
+.topbar {
+  justify-content: space-between;
+}
+
+.topbar .contact {
+  margin-left: auto;
+  justify-content: flex-end;
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.topbar .contact .member-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 7px 11px;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  border-radius: 6px;
+}
+
+@media (max-width: 700px) {
+  .topbar {
+    align-items: stretch;
+  }
+
+  .topbar .contact {
+    width: 100%;
+    justify-content: flex-end;
+    margin-left: 0;
+  }
+
+  .topbar .contact .member-btn {
+    min-height: 32px;
+    padding: 7px 10px;
+    font-size: 10px;
+  }
+}
