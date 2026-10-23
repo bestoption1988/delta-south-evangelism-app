@@ -424,6 +424,52 @@ def register_fellowship_routes(app, db_getter, user_getter):
         if not title:
             flash("A title is required.", "error")
             return redirect(url_for("fellowship_admin_edit", slug=slug))
+
+        # Direct image upload from phone to private Supabase Storage.
+        media_path = request.form.get("media_path", "").strip()
+        media_file = request.files.get("media_file")
+        if media_file and media_file.filename:
+            filename = media_file.filename.rsplit("/", 1)[-1].rsplit(chr(92), 1)[-1]
+            ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+            types = {
+                ".jpg": ("image/jpeg", bytes.fromhex("FFD8FF")),
+                ".jpeg": ("image/jpeg", bytes.fromhex("FFD8FF")),
+                ".png": ("image/png", bytes.fromhex("89504E470D0A1A0A")),
+                ".webp": ("image/webp", b"RIFF"),
+            }
+            if ext not in types:
+                flash("Upload a JPG, PNG or WebP image.", "error")
+                return redirect(url_for("fellowship_admin_edit", slug=slug))
+            data = media_file.stream.read(5 * 1024 * 1024 + 1)
+            mime, signature = types[ext]
+            if (not data or len(data) > 5 * 1024 * 1024
+                    or not data.startswith(signature)
+                    or (ext == ".webp" and data[8:12] != b"WEBP")):
+                flash("Invalid image or image exceeds 5 MB.", "error")
+                return redirect(url_for("fellowship_admin_edit", slug=slug))
+            import requests
+            from uuid import uuid4
+            base = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+            key = (os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
+            if not base or not key:
+                flash("Supabase Storage credentials are missing.", "error")
+                return redirect(url_for("fellowship_admin_edit", slug=slug))
+            media_path = f"fellowships/{slug}/media-{uuid4().hex}{ext}"
+            upload = requests.post(
+                f"{base}/storage/v1/object/church-media/{media_path}",
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "apikey": key,
+                    "Content-Type": mime,
+                    "x-upsert": "false",
+                },
+                data=data,
+                timeout=120,
+            )
+            if not upload.ok:
+                flash("Image upload failed (HTTP " + str(upload.status_code) + ").", "error")
+                return redirect(url_for("fellowship_admin_edit", slug=slug))
+
         common = (fellowship["id"], title)
         conn = db_getter()
         if kind == "event":
@@ -434,7 +480,7 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 (fellowship["id"], title, request.form.get("body", "").strip(),
                  request.form.get("event_type", "programme"), request.form.get("venue", "").strip(),
                  request.form.get("starts_at", "").strip(), request.form.get("ends_at", "").strip(),
-                 request.form.get("media_path", "").strip(), status, request.form.get("scope_type", "diocese"),
+                 media_path, status, request.form.get("scope_type", "diocese"),
                  request.form.get("scope_value", "").strip(), request.form.get("circuit", "").strip(),
                  request.form.get("church_name", "").strip(),
                  datetime.utcnow().isoformat(timespec="seconds") if status == "published" else None, user.get("id")))
@@ -445,7 +491,7 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (fellowship["id"], kind, title, request.form.get("scripture_reference", "").strip(),
                  request.form.get("teacher", "").strip(), request.form.get("summary", "").strip(),
-                 request.form.get("body", "").strip(), request.form.get("media_path", "").strip(),
+                 request.form.get("body", "").strip(), media_path,
                  request.form.get("event_date", "").strip(), status, request.form.get("scope_type", "diocese"),
                  request.form.get("scope_value", "").strip(), request.form.get("circuit", "").strip(),
                  request.form.get("church_name", "").strip(),
@@ -455,7 +501,7 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 (fellowship_id,title,body,image_path,status,scope_type,scope_value,circuit,church_name,published_at,created_by)
                 VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (fellowship["id"], title, request.form.get("body", "").strip(),
-                 request.form.get("media_path", "").strip(), status, request.form.get("scope_type", "diocese"),
+                 media_path, status, request.form.get("scope_type", "diocese"),
                  request.form.get("scope_value", "").strip(), request.form.get("circuit", "").strip(),
                  request.form.get("church_name", "").strip(),
                  datetime.utcnow().isoformat(timespec="seconds") if status == "published" else None, user.get("id")))
