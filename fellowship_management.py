@@ -464,7 +464,7 @@ def register_fellowship_routes(app, db_getter, user_getter):
 
             photo_path = f"fellowships/{slug}/leader-{uuid4().hex}{ext}"
             upload = requests.post(
-                f"{base}/storage/v1/object/church-media/{photo_path}",
+                f"{base}/storage/v1/object/leadership-photos/{photo_path}",
                 headers={
                     "Authorization": f"Bearer {key}",
                     "apikey": key,
@@ -478,6 +478,9 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 flash("Leader photo upload failed (HTTP "
                       + str(upload.status_code) + ").", "error")
                 return redirect(url_for("fellowship_admin_edit", slug=slug))
+
+        if photo_file and photo_file.filename:
+            photo_path = f"{base}/storage/v1/object/public/leadership-photos/{photo_path}"
 
         if not name or not title:
             flash("Leader name and position are required.", "error")
