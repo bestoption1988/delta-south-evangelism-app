@@ -335,7 +335,7 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 import requests
                 path = f"fellowships/{slug}/{field_name}-{uuid.uuid4().hex}{ext}"
                 response = requests.post(
-                    f"{base}/storage/v1/object/church-media/{path}",
+                    f"{base}/storage/v1/object/leadership-photos/{path}",
                     headers={
                         "Authorization": f"Bearer {key}",
                         "apikey": key,
@@ -354,8 +354,7 @@ def register_fellowship_routes(app, db_getter, user_getter):
                     detail = str(detail)[:500]
                     app.logger.error('Fellowship image upload failed: HTTP %s; %s', response.status_code, detail)
                     raise RuntimeError('Image upload failed (HTTP ' + str(response.status_code) + '): ' + detail)
-                return path
-
+                return f"{base}/storage/v1/object/public/leadership-photos/{path}"
             try:
                 logo_path = upload_fellowship_image("logo_file", logo_path, "Fellowship logo")
                 cover_path = upload_fellowship_image("cover_file", cover_path, "Cover image")
