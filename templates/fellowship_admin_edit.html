@@ -7,14 +7,79 @@ label{display:block;font-weight:bold;margin:10px 0 5px}input,textarea,select{wid
 </style></head><body><header><h1>{{ fellowship.name }}</h1><p>Fellowship administration · <a style="color:white" href="{{ url_for('fellowship_public_home',slug=fellowship.slug) }}" target="_blank">Preview public page ↗</a></p></header><main>
 <p><a href="{{ url_for('fellowship_admin_directory') }}">← All fellowships</a> · <a href="/dashboard">Dashboard</a></p>
 {% with messages=get_flashed_messages(with_categories=true) %}{% for category,message in messages %}<p><b>{{ message }}</b></p>{% endfor %}{% endwith %}
-<section class="panel"><h2>Fellowship Profile</h2><form method="post" enctype="multipart/form-data"><div class="row"><div><label>Display name</label><input name="name" value="{{ fellowship.name }}" required></div><div><label>Short name</label><input name="short_name" value="{{ fellowship.short_name }}"></div><div><label>Fellowship logo (JPG, PNG, WebP; max 5 MB)</label><input id="logo_file" type="file" name="logo_file" accept="image/jpeg,image/png,image/webp"><small class="muted">Leave empty to keep the current logo.</small>{% if fellowship.logo_display_url %}<p><img id="logo_preview" src="{{ fellowship.logo_display_url }}" alt="Current fellowship logo" style="max-width:150px;max-height:150px;object-fit:contain">{% else %}<p><img id="logo_preview" alt="Logo preview" style="display:none;max-width:150px;max-height:150px;object-fit:contain">{% endif %}</p></div><div><label>Cover image (JPG, PNG, WebP; max 5 MB)</label><input id="cover_file" type="file" name="cover_file" accept="image/jpeg,image/png,image/webp"><small class="muted">Leave empty to keep the current cover.</small>{% if fellowship.cover_display_url %}<p><img id="cover_preview" src="{{ fellowship.cover_display_url }}" alt="Current cover image" style="max-width:100%;max-height:180px;object-fit:cover">{% else %}<p><img id="cover_preview" alt="Cover preview" style="display:none;max-width:100%;max-height:180px;object-fit:cover">{% endif %}</p></div></div>
+<section class="panel"><h2>Fellowship Profile</h2><form method="post" enctype="multipart/form-data"><div class="row"><div><label>Display name</label><input name="name" value="{{ fellowship.name }}" required></div><div><label>Short name</label><input name="short_name" value="{{ fellowship.short_name }}"></div><div><label>Fellowship logo (JPG, PNG, WebP; max 5 MB)</label><input id="logo_file" type="file" name="logo_file" accept="image/jpeg,image/png,image/webp"><small class="muted">Leave empty to keep the current logo.</small><label><input type="checkbox" name="remove_logo" value="1" style="width:auto"> Remove current logo</label>{% if fellowship.logo_display_url %}<p><img id="logo_preview" src="{{ fellowship.logo_display_url }}" alt="Current fellowship logo" style="max-width:150px;max-height:150px;object-fit:contain">{% else %}<p><img id="logo_preview" alt="Logo preview" style="display:none;max-width:150px;max-height:150px;object-fit:contain">{% endif %}</p></div><div><label>Cover image (JPG, PNG, WebP; max 5 MB)</label><input id="cover_file" type="file" name="cover_file" accept="image/jpeg,image/png,image/webp"><small class="muted">Leave empty to keep the current cover.</small><label><input type="checkbox" name="remove_cover" value="1" style="width:auto"> Remove current cover</label>{% if fellowship.cover_display_url %}<p><img id="cover_preview" src="{{ fellowship.cover_display_url }}" alt="Current cover image" style="max-width:100%;max-height:180px;object-fit:cover">{% else %}<p><img id="cover_preview" alt="Cover preview" style="display:none;max-width:100%;max-height:180px;object-fit:cover">{% endif %}</p></div></div>
 <label>Introduction</label><textarea name="introduction">{{ fellowship.introduction }}</textarea><label>History</label><textarea name="history">{{ fellowship.history }}</textarea><label>Vision</label><textarea name="vision">{{ fellowship.vision }}</textarea><label>Mission</label><textarea name="mission">{{ fellowship.mission }}</textarea><label>Objectives</label><textarea name="objectives">{{ fellowship.objectives }}</textarea><button type="submit">Save profile</button></form></section>
 <section class="panel"><h2>Add a Fellowship Leader</h2><form method="post" enctype="multipart/form-data" action="{{ url_for('fellowship_admin_add_leader',slug=fellowship.slug) }}"><div class="row"><div><label>Full name</label><input name="full_name" required></div><div><label>Position</label><input name="position_title" required></div><div><label>Leader photograph (JPG, PNG or WebP; max 5 MB)</label><input type="file" name="photo_file" accept="image/jpeg,image/png,image/webp"></div><div><label>Term starts</label><input name="term_start" placeholder="2026"></div><div><label>Term ends</label><input name="term_end" placeholder="2028"></div><div><label>Display order</label><input name="display_order" type="number" value="0"></div></div><label>Biography</label><textarea name="biography"></textarea><div class="row"><div><label>Scope</label><select name="scope_type"><option value="diocese">Diocese</option><option value="circuit">Circuit</option><option value="church">Local church</option><option value="campus">Campus</option></select></div><div><label>Circuit</label><input name="circuit"></div><div><label>Church</label><input name="church_name"></div><div><label>Scope value</label><input name="scope_value"></div></div><button>Add leader</button></form>
-<h3>Current leaders</h3>{% for l in leaders %}<div class="item" style="display:flex;align-items:center;gap:14px">{% if l.photo_display_url %}<img src="{{ l.photo_display_url }}" alt="{{ l.full_name }}" style="width:76px;height:76px;object-fit:cover;border-radius:50%;border:3px solid var(--gold);background:#fff">{% endif %}<div><b>{{ l.position_title }} — {{ l.full_name }}</b><p>{{ l.biography }}</p></div></div>{% else %}<p class="muted">No leaders added yet.</p>{% endfor %}</section>
+<h3>Current leaders</h3>{% for l in leaders %}<div class="item" style="display:flex;align-items:center;gap:14px">{% if l.photo_display_url %}<img src="{{ l.photo_display_url }}" alt="{{ l.full_name }}" style="width:76px;height:76px;object-fit:cover;border-radius:50%;border:3px solid var(--gold);background:#fff">{% endif %}<div><b>{{ l.position_title }} — {{ l.full_name }}</b><p>{{ l.biography }}</p>
+<form method="post" enctype="multipart/form-data" action="{{ url_for('fellowship_admin_edit_leader', slug=fellowship.slug, row_id=l.id) }}">
+<div class="row">
+<div><label>Name</label><input name="full_name" value="{{ l.full_name }}" required></div>
+<div><label>Position</label><input name="position_title" value="{{ l.position_title }}" required></div>
+<div><label>Term starts</label><input name="term_start" value="{{ l.term_start }}"></div>
+<div><label>Term ends</label><input name="term_end" value="{{ l.term_end }}"></div>
+<div><label>Display order</label><input name="display_order" type="number" value="{{ l.display_order }}"></div>
+<div><label>Active</label><select name="active"><option value="1" {% if l.active %}selected{% endif %}>Active</option><option value="0" {% if not l.active %}selected{% endif %}>Inactive</option></select></div>
+</div>
+<label>Biography</label><textarea name="biography">{{ l.biography }}</textarea><label>Replace portrait (optional, JPG/PNG/WebP, max 5 MB)</label><input type="file" name="photo_file" accept="image/jpeg,image/png,image/webp">
+<button type="submit">Save leader changes</button></form>
+<form method="post" action="{{ url_for('fellowship_admin_delete_leader', slug=fellowship.slug, row_id=l.id) }}" onsubmit="return confirm('Delete this leader record? This cannot be undone.');"><button type="submit" style="background:#a11">Delete leader</button></form>
+</div></div>{% else %}<p class="muted">No leaders added yet.</p>{% endfor %}</section>
+<section class="panel"><h2>Gallery management</h2>
+<form method="post" enctype="multipart/form-data" action="{{ url_for('fellowship_admin_add_gallery', slug=fellowship.slug) }}">
+<div class="row">
+<div><label>Gallery title</label><input name="title" required></div>
+<div><label>Event date</label><input name="event_date" placeholder="2026-11-01"></div>
+<div><label>Status</label><select name="status"><option value="draft">Draft</option><option value="published">Publish now</option></select></div>
+<div><label>Image (JPG, PNG or WebP; max 5 MB)</label><input type="file" name="media_file" accept="image/jpeg,image/png,image/webp" required></div>
+</div>
+<label>Description</label><textarea name="description"></textarea>
+<button type="submit">Upload gallery image</button>
+</form>
+<h3>Existing gallery images</h3>
+{% for g in gallery %}
+<div class="item">
+{% if g.media_display_url %}<img src="{{ g.media_display_url }}" alt="{{ g.title }}" style="max-width:180px;max-height:140px;object-fit:cover;border-radius:8px">{% endif %}
+<form method="post" enctype="multipart/form-data" action="{{ url_for('fellowship_admin_edit_gallery', slug=fellowship.slug, row_id=g.id) }}">
+<label>Title</label><input name="title" value="{{ g.title }}" required>
+<label>Description</label><textarea name="description">{{ g.description }}</textarea>
+<div class="row">
+<div><label>Event date</label><input name="event_date" value="{{ g.event_date }}"></div>
+<div><label>Status</label><select name="status"><option value="draft" {% if g.status == 'draft' %}selected{% endif %}>Draft</option><option value="published" {% if g.status == 'published' %}selected{% endif %}>Published</option></select></div>
+<div><label>Replace image (optional)</label><input type="file" name="media_file" accept="image/jpeg,image/png,image/webp"></div>
+</div>
+<button type="submit">Save gallery changes</button>
+</form>
+<form method="post" action="{{ url_for('fellowship_admin_delete_gallery', slug=fellowship.slug, row_id=g.id) }}" onsubmit="return confirm('Delete this gallery record? The stored file will not be deleted.');">
+<button type="submit" style="background:#a11">Delete gallery record</button>
+</form>
+</div>
+{% else %}<p class="muted">No gallery images have been added yet.</p>{% endfor %}
+</section>
 <section class="panel"><h2>Publish announcements, events, sermons and Bible studies</h2><form method="post" action="{{ url_for('fellowship_admin_add_content',slug=fellowship.slug) }}"><div class="row"><div><label>Content type</label><select name="kind"><option value="announcement">Announcement</option><option value="event">Event / programme</option><option value="sermon">Sermon</option><option value="bible_study">Bible study</option></select></div><div><label>Title</label><input name="title" required></div><div><label>Status</label><select name="status"><option value="draft">Save as draft</option><option value="published">Publish now</option></select></div><div><label>Upload image/poster from phone (JPG, PNG or WebP; max 5 MB)</label><input type="file" name="media_file" accept="image/jpeg,image/png,image/webp"><small class="muted">Or use the media URL field below.</small><label>External media URL (optional)</label><input name="media_path"></div><div><label>Event type</label><input name="event_type" value="programme"></div><div><label>Venue</label><input name="venue"></div><div><label>Starts / event date</label><input name="starts_at" placeholder="2026-11-01 10:00"><input name="event_date" placeholder="Study date"></div><div><label>Ends</label><input name="ends_at"></div><div><label>Scripture reference</label><input name="scripture_reference"></div><div><label>Preacher / teacher</label><input name="teacher"></div><div><label>Summary</label><input name="summary"></div><div><label>Scope</label><select name="scope_type"><option value="diocese">Diocese</option><option value="circuit">Circuit</option><option value="church">Local church</option><option value="campus">Campus</option></select></div><div><label>Circuit</label><input name="circuit"></div><div><label>Church</label><input name="church_name"></div><div><label>Scope value</label><input name="scope_value"></div></div><label>Description / content</label><textarea name="body"></textarea><button>Save content</button></form>
-<h3>Recent announcements</h3>{% for a in announcements %}<div class="item"><b>{{ a.title }}</b> — {{ a.status }}<p>{{ a.body }}</p></div>{% endfor %}
-<h3>Recent events</h3>{% for e in events %}<div class="item"><b>{{ e.title }}</b> — {{ e.status }} · {{ e.starts_at }}</div>{% endfor %}
-<h3>Recent sermons / studies</h3>{% for s in studies %}<div class="item"><b>{{ s.title }}</b> — {{ s.content_type }} / {{ s.status }}</div>{% endfor %}</section>
+<h3>Recent announcements</h3>{% for a in announcements %}<div class="item"><b>{{ a.title }}</b> — {{ a.status }}<p>{{ a.body }}</p>
+<form method="post" enctype="multipart/form-data" action="{{ url_for('fellowship_admin_edit_announcement', slug=fellowship.slug, row_id=a.id) }}">
+<label>Title</label><input name="title" value="{{ a.title }}" required>
+<label>Body</label><textarea name="body">{{ a.body }}</textarea>
+<label>Replace image (optional)</label><input type="file" name="image_file" accept="image/jpeg,image/png,image/webp"><label>Status</label><select name="status"><option value="draft" {% if a.status == 'draft' %}selected{% endif %}>Draft</option><option value="published" {% if a.status == 'published' %}selected{% endif %}>Published</option></select>
+<button>Save announcement</button></form>
+<form method="post" action="{{ url_for('fellowship_admin_delete_announcement', slug=fellowship.slug, row_id=a.id) }}" onsubmit="return confirm('Delete this announcement permanently?');"><button style="background:#a11">Delete announcement</button></form>
+</div>{% endfor %}
+<h3>Recent events</h3>{% for e in events %}<div class="item"><b>{{ e.title }}</b> — {{ e.status }} · {{ e.starts_at }}
+<form method="post" enctype="multipart/form-data" action="{{ url_for('fellowship_admin_edit_event', slug=fellowship.slug, row_id=e.id) }}">
+<label>Title</label><input name="title" value="{{ e.title }}" required>
+<label>Description</label><textarea name="description">{{ e.description }}</textarea>
+<div class="row"><div><label>Event type</label><input name="event_type" value="{{ e.event_type }}"></div><div><label>Venue</label><input name="venue" value="{{ e.venue }}"></div><div><label>Starts</label><input name="starts_at" value="{{ e.starts_at }}"></div><div><label>Ends</label><input name="ends_at" value="{{ e.ends_at }}"></div><div><label>Status</label><select name="status"><option value="draft" {% if e.status == 'draft' %}selected{% endif %}>Draft</option><option value="published" {% if e.status == 'published' %}selected{% endif %}>Published</option></select></div></div>
+<label>Replace event poster (optional)</label><input type="file" name="poster_file" accept="image/jpeg,image/png,image/webp"><button>Save event</button></form>
+<form method="post" action="{{ url_for('fellowship_admin_delete_event', slug=fellowship.slug, row_id=e.id) }}" onsubmit="return confirm('Delete this event permanently?');"><button style="background:#a11">Delete event</button></form>
+</div>{% endfor %}
+<h3>Recent sermons / studies</h3>{% for s in studies %}<div class="item"><b>{{ s.title }}</b> — {{ s.content_type }} / {{ s.status }}
+<form method="post" enctype="multipart/form-data" action="{{ url_for('fellowship_admin_edit_study', slug=fellowship.slug, row_id=s.id) }}">
+<label>Title</label><input name="title" value="{{ s.title }}" required>
+<div class="row"><div><label>Content type</label><select name="content_type"><option value="sermon" {% if s.content_type == 'sermon' %}selected{% endif %}>Sermon</option><option value="bible_study" {% if s.content_type == 'bible_study' %}selected{% endif %}>Bible study</option></select></div><div><label>Scripture</label><input name="scripture_reference" value="{{ s.scripture_reference }}"></div><div><label>Preacher / teacher</label><input name="preacher_or_teacher" value="{{ s.preacher_or_teacher }}"></div><div><label>Date</label><input name="event_date" value="{{ s.event_date }}"></div><div><label>Status</label><select name="status"><option value="draft" {% if s.status == 'draft' %}selected{% endif %}>Draft</option><option value="published" {% if s.status == 'published' %}selected{% endif %}>Published</option></select></div></div>
+<label>Summary</label><textarea name="summary">{{ s.summary }}</textarea><label>Content</label><textarea name="content">{{ s.content }}</textarea>
+<label>Replace sermon/study image (optional)</label><input type="file" name="media_file" accept="image/jpeg,image/png,image/webp"><button>Save study</button></form>
+<form method="post" action="{{ url_for('fellowship_admin_delete_study', slug=fellowship.slug, row_id=s.id) }}" onsubmit="return confirm('Delete this sermon or study permanently?');"><button style="background:#a11">Delete sermon / study</button></form>
+</div>{% endfor %}</section>
 </main>
 <script>
 (function () {

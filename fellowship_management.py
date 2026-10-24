@@ -267,9 +267,15 @@ def register_fellowship_routes(app, db_getter, user_getter):
         return render_template(
             "fellowship_public.html", fellowship=f,
             leaders=[dict(row_dict(x), photo_display_url=fellowship_image_url(row_dict(x).get("photo_path"))) for x in leaders],
-            announcements=[row_dict(x) for x in announcements],
-            events=[row_dict(x) for x in events],
-            studies=[row_dict(x) for x in studies],
+            announcements=[dict(row_dict(x), image_display_url=fellowship_image_url(
+                row_dict(x).get("image_path")
+            )) for x in announcements],
+            events=[dict(row_dict(x), poster_display_url=fellowship_image_url(
+                row_dict(x).get("poster_path")
+            )) for x in events],
+            studies=[dict(row_dict(x), media_display_url=fellowship_image_url(
+                row_dict(x).get("media_path")
+            )) for x in studies],
             gallery=[dict(row_dict(x), media_display_url=fellowship_image_url(row_dict(x).get("media_path"))) for x in gallery],
         )
 
@@ -303,6 +309,10 @@ def register_fellowship_routes(app, db_getter, user_getter):
             # FELLOWSHIP_IMAGE_UPLOAD_V2: persistent image uploads to Supabase Storage.
             logo_path = fellowship.get("logo_path") or ""
             cover_path = fellowship.get("cover_path") or ""
+            if request.form.get("remove_logo") == "1":
+                logo_path = ""
+            if request.form.get("remove_cover") == "1":
+                cover_path = ""
 
             def upload_fellowship_image(field_name, current_path, label):
                 uploaded = request.files.get(field_name)
@@ -357,8 +367,10 @@ def register_fellowship_routes(app, db_getter, user_getter):
                     raise RuntimeError('Image upload failed (HTTP ' + str(response.status_code) + '): ' + detail)
                 return f"{base}/storage/v1/object/public/leadership-photos/{path}"
             try:
-                logo_path = upload_fellowship_image("logo_file", logo_path, "Fellowship logo")
-                cover_path = upload_fellowship_image("cover_file", cover_path, "Cover image")
+                if request.form.get("remove_logo") != "1":
+                    logo_path = upload_fellowship_image("logo_file", logo_path, "Fellowship logo")
+                if request.form.get("remove_cover") != "1":
+                    cover_path = upload_fellowship_image("cover_file", cover_path, "Cover image")
             except Exception as exc:
                 flash(str(exc), "error")
                 return redirect(url_for("fellowship_admin_edit", slug=slug))
@@ -383,6 +395,11 @@ def register_fellowship_routes(app, db_getter, user_getter):
                        (fellowship["id"],)).fetchall()
         studies = query("SELECT * FROM fellowship_studies WHERE fellowship_id=? ORDER BY event_date DESC",
                         (fellowship["id"],)).fetchall()
+        gallery_rows = query(
+            "SELECT * FROM fellowship_gallery WHERE fellowship_id=? "
+            "ORDER BY created_at DESC",
+            (fellowship["id"],),
+        ).fetchall()
         def admin_image_url(path):
             if not path:
                 return ""
@@ -417,7 +434,10 @@ def register_fellowship_routes(app, db_getter, user_getter):
             leaders=[dict(row_dict(x), photo_display_url=admin_image_url(row_dict(x).get(chr(112)+chr(104)+chr(111)+chr(116)+chr(111)+chr(95)+chr(112)+chr(97)+chr(116)+chr(104)))) for x in leaders],
             announcements=[row_dict(x) for x in announcements],
             events=[row_dict(x) for x in events],
-            studies=[row_dict(x) for x in studies])
+            studies=[row_dict(x) for x in studies],
+            gallery=[dict(row_dict(x), media_display_url=admin_image_url(
+                row_dict(x).get("media_path")
+            )) for x in gallery_rows])
 
     @app.post("/admin/fellowships/<slug>/leaders")
     @login_required
@@ -605,3 +625,299 @@ def register_fellowship_routes(app, db_getter, user_getter):
             conn.commit()
         flash("Content saved as " + status + ".", "success")
         return redirect(url_for("fellowship_admin_edit", slug=slug))
+
+
+    @app.post("/admin/fellowships/<slug>/gallery")
+    @login_required
+    @admin_required
+    def fellowship_admin_add_gallery(slug):
+        fellowship, user = management_fellowship(slug)
+        title = request.form.get("title", "").strip()
+        description = request.form.get("description", "").strip()
+        status = request.form.get("status", "draft")
+        if status not in ("draft", "published"):
+            status = "draft"
+        if not title:
+            flash("A gallery title is required.", "error")
+            return redirect(url_for("fellowship_admin_edit", slug=slug))
+        try:
+            media_path = management_upload_image(
+                slug, request.files.get("media_file"),
+                bucket="church-media", prefix="gallery"
+            )
+        except Exception as exc:
+            flash(str(exc), "error")
+            return redirect(url_for("fellowship_admin_edit", slug=slug))
+        if not media_path:
+            flash("Choose an image to upload.", "error")
+            return redirect(url_for("fellowship_admin_edit", slug=slug))
+        conn = db_getter()
+        conn.execute(
+            """INSERT INTO fellowship_gallery
+               (fellowship_id, title, description, media_path, media_type,
+                event_date, status, scope_type, scope_value, circuit,
+                church_name, created_by)
+               VALUES (?, ?, ?, ?, 'image', ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                fellowship["id"], title, description, media_path,
+                request.form.get("event_date", "").strip(), status,
+                request.form.get("scope_type", "diocese"),
+                request.form.get("scope_value", "").strip(),
+                request.form.get("circuit", "").strip(),
+                request.form.get("church_name", "").strip(), user.get("id"),
+            ),
+        )
+        if hasattr(conn, "commit"):
+            conn.commit()
+        flash("Gallery image saved as " + status + ".", "success")
+        return redirect(url_for("fellowship_admin_edit", slug=slug))
+
+    # FELLOWSHIP_MANAGEMENT_V2
+    # Every mutation checks login, admin role, fellowship scope, and row ownership.
+    def management_row(table, row_id, fellowship_id):
+        allowed = {
+            "fellowship_leaders",
+            "fellowship_gallery",
+            "fellowship_announcements",
+            "fellowship_events",
+            "fellowship_studies",
+        }
+        if table not in allowed:
+            abort(400)
+        return query(
+            f"SELECT * FROM {table} WHERE id=? AND fellowship_id=?",
+            (row_id, fellowship_id),
+        ).fetchone()
+
+    def management_fellowship(slug):
+        row = query("SELECT * FROM fellowships WHERE slug=?", (slug,)).fetchone()
+        if not row:
+            abort(404)
+        fellowship = row_dict(row)
+        user = logged_user()
+        if not can_manage(user, fellowship):
+            abort(403)
+        return fellowship, user
+
+
+    # FELLOWSHIP_COMPLETION_V3
+    def management_upload_image(slug, uploaded, bucket="church-media",
+                                prefix="media"):
+        if not uploaded or not uploaded.filename:
+            return None
+        filename = uploaded.filename.rsplit("/", 1)[-1].rsplit(chr(92), 1)[-1]
+        ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+        allowed = {
+            ".jpg": ("image/jpeg", lambda b: b.startswith(bytes.fromhex("FFD8FF"))),
+            ".jpeg": ("image/jpeg", lambda b: b.startswith(bytes.fromhex("FFD8FF"))),
+            ".png": ("image/png", lambda b: b.startswith(bytes.fromhex("89504E470D0A1A0A"))),
+            ".webp": ("image/webp", lambda b: len(b) >= 12 and b[:4] == b"RIFF" and b[8:12] == b"WEBP"),
+        }
+        if ext not in allowed:
+            raise ValueError("Use a JPG, PNG, or WebP image.")
+        data = uploaded.stream.read(5 * 1024 * 1024 + 1)
+        mime, signature_check = allowed[ext]
+        if not data or len(data) > 5 * 1024 * 1024 or not signature_check(data):
+            raise ValueError("Invalid image or image exceeds 5 MB.")
+        base = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+        key = (os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
+        if not base or not key:
+            raise RuntimeError("Supabase Storage credentials are missing.")
+        import requests
+        path = f"fellowships/{slug}/{prefix}-{uuid.uuid4().hex}{ext}"
+        response = requests.post(
+            f"{base}/storage/v1/object/{bucket}/{path}",
+            headers={
+                "Authorization": f"Bearer {key}",
+                "apikey": key,
+                "Content-Type": mime,
+                "x-upsert": "false",
+            },
+            data=data,
+            timeout=120,
+        )
+        if not response.ok:
+            raise RuntimeError(
+                f"Supabase upload failed (HTTP {response.status_code})."
+            )
+        if bucket == "leadership-photos":
+            return f"{base}/storage/v1/object/public/{bucket}/{path}"
+        return path
+
+    def management_update(table, row_id, slug):
+        fellowship, user = management_fellowship(slug)
+        allowed_columns = {
+            "fellowship_leaders": {
+                "full_name", "position_title", "biography", "term_start",
+                "term_end", "display_order", "active", "scope_type",
+                "scope_value", "circuit", "church_name", "photo_path",
+            },
+            "fellowship_gallery": {
+                "title", "description", "event_date", "status",
+                "scope_type", "scope_value", "circuit", "church_name",
+                "media_path",
+            },
+            "fellowship_announcements": {
+                "title", "body", "status", "scope_type", "scope_value",
+                "circuit", "church_name", "image_path",
+            },
+            "fellowship_events": {
+                "title", "description", "event_type", "venue", "starts_at",
+                "ends_at", "status", "scope_type", "scope_value", "circuit",
+                "church_name", "poster_path",
+            },
+            "fellowship_studies": {
+                "content_type", "title", "scripture_reference",
+                "preacher_or_teacher", "summary", "content", "event_date",
+                "status", "scope_type", "scope_value", "circuit",
+                "church_name", "media_path",
+            },
+        }
+        row = management_row(table, row_id, fellowship["id"])
+        if not row:
+            abort(404)
+
+        columns = allowed_columns[table]
+        values = {}
+        for column in columns:
+            if column not in request.form:
+                continue
+            value = request.form.get(column, "").strip()
+            if column == "status" and value not in ("draft", "published"):
+                value = "draft"
+            if column == "active":
+                value = 1 if value in ("1", "true", "on", "yes") else 0
+            if column == "display_order":
+                try:
+                    value = int(value or 0)
+                except ValueError:
+                    value = 0
+            values[column] = value
+
+        upload_fields = {
+            "fellowship_leaders": ("photo_file", "photo_path", "leadership-photos", "leader"),
+            "fellowship_gallery": ("media_file", "media_path", "church-media", "gallery"),
+            "fellowship_announcements": ("image_file", "image_path", "church-media", "announcement"),
+            "fellowship_events": ("poster_file", "poster_path", "church-media", "event-poster"),
+            "fellowship_studies": ("media_file", "media_path", "church-media", "study"),
+        }
+        file_field, db_field, bucket, prefix = upload_fields[table]
+        uploaded = request.files.get(file_field)
+        if uploaded and uploaded.filename:
+            try:
+                new_path = management_upload_image(
+                    slug, uploaded, bucket=bucket, prefix=prefix
+                )
+            except Exception as exc:
+                flash(str(exc), "error")
+                return redirect(url_for("fellowship_admin_edit", slug=slug))
+            values[db_field] = new_path
+
+        if table == "fellowship_gallery":
+            values["media_type"] = "image"
+
+        if table == "fellowship_leaders":
+            if not values.get("full_name", row["full_name"]) or not values.get(
+                "position_title", row["position_title"]
+            ):
+                flash("Leader name and position are required.", "error")
+                return redirect(url_for("fellowship_admin_edit", slug=slug))
+
+        if not values:
+            flash("No editable fields were submitted.", "error")
+            return redirect(url_for("fellowship_admin_edit", slug=slug))
+
+        values["updated_by"] = (user or {}).get("id")
+        assignments = ", ".join(f"{column}=?" for column in values)
+        params = list(values.values())
+        params.extend([row_id, fellowship["id"]])
+
+        conn = db_getter()
+        assignments += ", updated_by=?, updated_at=CURRENT_TIMESTAMP"
+        params.append((user or {}).get("id"))
+        params.extend([row_id, fellowship["id"]])
+        conn.execute(
+            f"UPDATE {table} SET {assignments} WHERE id=? AND fellowship_id=?",
+            tuple(params),
+        )
+        if hasattr(conn, "commit"):
+            conn.commit()
+
+        flash("Fellowship record updated.", "success")
+        return redirect(url_for("fellowship_admin_edit", slug=slug))
+
+    def management_delete(table, row_id, slug):
+        fellowship, user = management_fellowship(slug)
+        row = management_row(table, row_id, fellowship["id"])
+        if not row:
+            abort(404)
+
+        conn = db_getter()
+        conn.execute(
+            f"DELETE FROM {table} WHERE id=? AND fellowship_id=?",
+            (row_id, fellowship["id"]),
+        )
+        if hasattr(conn, "commit"):
+            conn.commit()
+        flash("Fellowship record deleted.", "success")
+        return redirect(url_for("fellowship_admin_edit", slug=slug))
+
+    @app.post("/admin/fellowships/<slug>/leaders/<int:row_id>/edit")
+    @login_required
+    @admin_required
+    def fellowship_admin_edit_leader(slug, row_id):
+        return management_update("fellowship_leaders", row_id, slug)
+
+    @app.post("/admin/fellowships/<slug>/leaders/<int:row_id>/delete")
+    @login_required
+    @admin_required
+    def fellowship_admin_delete_leader(slug, row_id):
+        return management_delete("fellowship_leaders", row_id, slug)
+
+    @app.post("/admin/fellowships/<slug>/gallery/<int:row_id>/edit")
+    @login_required
+    @admin_required
+    def fellowship_admin_edit_gallery(slug, row_id):
+        return management_update("fellowship_gallery", row_id, slug)
+
+    @app.post("/admin/fellowships/<slug>/gallery/<int:row_id>/delete")
+    @login_required
+    @admin_required
+    def fellowship_admin_delete_gallery(slug, row_id):
+        return management_delete("fellowship_gallery", row_id, slug)
+
+    @app.post("/admin/fellowships/<slug>/announcements/<int:row_id>/edit")
+    @login_required
+    @admin_required
+    def fellowship_admin_edit_announcement(slug, row_id):
+        return management_update("fellowship_announcements", row_id, slug)
+
+    @app.post("/admin/fellowships/<slug>/announcements/<int:row_id>/delete")
+    @login_required
+    @admin_required
+    def fellowship_admin_delete_announcement(slug, row_id):
+        return management_delete("fellowship_announcements", row_id, slug)
+
+    @app.post("/admin/fellowships/<slug>/events/<int:row_id>/edit")
+    @login_required
+    @admin_required
+    def fellowship_admin_edit_event(slug, row_id):
+        return management_update("fellowship_events", row_id, slug)
+
+    @app.post("/admin/fellowships/<slug>/events/<int:row_id>/delete")
+    @login_required
+    @admin_required
+    def fellowship_admin_delete_event(slug, row_id):
+        return management_delete("fellowship_events", row_id, slug)
+
+    @app.post("/admin/fellowships/<slug>/studies/<int:row_id>/edit")
+    @login_required
+    @admin_required
+    def fellowship_admin_edit_study(slug, row_id):
+        return management_update("fellowship_studies", row_id, slug)
+
+    @app.post("/admin/fellowships/<slug>/studies/<int:row_id>/delete")
+    @login_required
+    @admin_required
+    def fellowship_admin_delete_study(slug, row_id):
+        return management_delete("fellowship_studies", row_id, slug)
