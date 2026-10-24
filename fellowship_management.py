@@ -833,9 +833,9 @@ def register_fellowship_routes(app, db_getter, user_getter):
         params.extend([row_id, fellowship["id"]])
 
         conn = db_getter()
-        assignments += ", updated_by=?, updated_at=CURRENT_TIMESTAMP"
-        params.append((user or {}).get("id"))
-        params.extend([row_id, fellowship["id"]])
+        # updated_by is already included in values and assignments.
+        # Do not assign the same column twice in PostgreSQL.
+        assignments += ", updated_at=CURRENT_TIMESTAMP"
         conn.execute(
             f"UPDATE {table} SET {assignments} WHERE id=? AND fellowship_id=?",
             tuple(params),
