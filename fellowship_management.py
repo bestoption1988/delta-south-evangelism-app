@@ -342,11 +342,15 @@ def register_fellowship_routes(app, db_getter, user_getter):
                     timeout=120,
                 )
                 if not response.ok:
-                    raise RuntimeError(
-                        label + " upload failed (HTTP " + str(response.status_code) + "). "
-                        "Check that the church-media bucket permits uploads by the server key."
-                    )
-                return path
+                    try:
+                        payload = response.json()
+                        detail = payload.get('message') or payload.get('error') or str(payload)
+                    except Exception:
+                        detail = response.text
+                    detail = str(detail)[:500]
+                    app.logger.error('Fellowship image upload failed: HTTP %s; %s', response.status_code, detail)
+                    raise RuntimeError('Image upload failed (HTTP ' + str(response.status_code) + '): ' + detail)
+            return path
 
             try:
                 logo_path = upload_fellowship_image("logo_file", logo_path, "Fellowship logo")
