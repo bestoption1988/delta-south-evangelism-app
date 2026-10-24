@@ -238,9 +238,13 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 app.logger.warning("Could not sign a fellowship image URL (HTTP %s)", response.status_code)
                 return ""
             signed = response.json().get("signedURL") or response.json().get("signedUrl") or ""
-            if signed.startswith("/"):
-                return base + signed
-            return signed
+            if not signed:
+                app.logger.warning("Supabase returned an empty signed URL for fellowship image")
+                return ""
+            if signed.startswith(("https://", "http://")):
+                return signed
+            storage_base = base + "/storage/v1"
+            return storage_base + (signed if signed.startswith("/") else "/" + signed)
 
         f["logo_display_url"] = fellowship_image_url(f.get("logo_path"))
         f["cover_display_url"] = fellowship_image_url(f.get("cover_path"))
@@ -399,7 +403,13 @@ def register_fellowship_routes(app, db_getter, user_getter):
             if not response.ok:
                 return ""
             signed = response.json().get("signedURL") or response.json().get("signedUrl") or ""
-            return base + signed if signed.startswith("/") else signed
+            if not signed:
+                app.logger.warning("Supabase returned an empty signed URL for fellowship image")
+                return ""
+            if signed.startswith(("https://", "http://")):
+                return signed
+            storage_base = base + "/storage/v1"
+            return storage_base + (signed if signed.startswith("/") else "/" + signed)
 
         fellowship["logo_display_url"] = admin_image_url(fellowship.get("logo_path"))
         fellowship["cover_display_url"] = admin_image_url(fellowship.get("cover_path"))
