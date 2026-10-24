@@ -30,7 +30,7 @@ label{display:block;font-weight:bold;margin:10px 0 5px}input,textarea,select{wid
 <div><label>Gallery title</label><input name="title" required></div>
 <div><label>Event date</label><input name="event_date" placeholder="2026-11-01"></div>
 <div><label>Status</label><select name="status"><option value="draft">Draft</option><option value="published">Publish now</option></select></div>
-<div><label>Image (JPG, PNG or WebP; max 5 MB)</label><input type="file" name="media_file" accept="image/jpeg,image/png,image/webp" required></div>
+<div><label>Image (JPG, PNG or WebP; max 5 MB)</label><input type="file" name="media_files" accept="image/jpeg,image/png,image/webp" multiple required><small class="muted">Select several photos at once. Each image is saved as its own gallery item.</small></div>
 </div>
 <label>Description</label><textarea name="description"></textarea>
 <button type="submit">Upload gallery image</button>

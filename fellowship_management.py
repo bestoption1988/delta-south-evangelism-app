@@ -640,36 +640,59 @@ def register_fellowship_routes(app, db_getter, user_getter):
         if not title:
             flash("A gallery title is required.", "error")
             return redirect(url_for("fellowship_admin_edit", slug=slug))
-        try:
-            media_path = management_upload_image(
-                slug, request.files.get("media_file"),
-                bucket="church-media", prefix="gallery"
-            )
-        except Exception as exc:
-            flash(str(exc), "error")
+        uploads = [
+            item for item in request.files.getlist("media_files")
+            if item and item.filename
+        ]
+        # Backward compatibility with the old single-image form.
+        if not uploads:
+            single = request.files.get("media_file")
+            if single and single.filename:
+                uploads = [single]
+
+        if not uploads:
+            flash("Choose one or more gallery images.", "error")
             return redirect(url_for("fellowship_admin_edit", slug=slug))
-        if not media_path:
-            flash("Choose an image to upload.", "error")
-            return redirect(url_for("fellowship_admin_edit", slug=slug))
+
         conn = db_getter()
-        conn.execute(
-            """INSERT INTO fellowship_gallery
-               (fellowship_id, title, description, media_path, media_type,
-                event_date, status, scope_type, scope_value, circuit,
-                church_name, created_by)
-               VALUES (?, ?, ?, ?, 'image', ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                fellowship["id"], title, description, media_path,
-                request.form.get("event_date", "").strip(), status,
-                request.form.get("scope_type", "diocese"),
-                request.form.get("scope_value", "").strip(),
-                request.form.get("circuit", "").strip(),
-                request.form.get("church_name", "").strip(), user.get("id"),
-            ),
-        )
-        if hasattr(conn, "commit"):
-            conn.commit()
-        flash("Gallery image saved as " + status + ".", "success")
+        saved = 0
+        try:
+            for index, uploaded in enumerate(uploads, start=1):
+                media_path = management_upload_image(
+                    slug, uploaded, bucket="church-media", prefix="gallery"
+                )
+                if not media_path:
+                    continue
+                photo_title = title if len(uploads) == 1 else f"{title} ({index})"
+                conn.execute(
+                    """INSERT INTO fellowship_gallery
+                       (fellowship_id, title, description, media_path, media_type,
+                        event_date, status, scope_type, scope_value, circuit,
+                        church_name, created_by)
+                       VALUES (?, ?, ?, ?, 'image', ?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        fellowship["id"], photo_title, description, media_path,
+                        request.form.get("event_date", "").strip(), status,
+                        request.form.get("scope_type", "diocese"),
+                        request.form.get("scope_value", "").strip(),
+                        request.form.get("circuit", "").strip(),
+                        request.form.get("church_name", "").strip(),
+                        user.get("id"),
+                    ),
+                )
+                saved += 1
+            if saved == 0:
+                raise RuntimeError("No gallery images were saved.")
+            if hasattr(conn, "commit"):
+                conn.commit()
+        except Exception as exc:
+            if hasattr(conn, "rollback"):
+                conn.rollback()
+            app.logger.exception("Fellowship multi-image gallery upload failed")
+            flash("Gallery upload failed: " + str(exc), "error")
+            return redirect(url_for("fellowship_admin_edit", slug=slug))
+
+        flash(f"{saved} gallery image(s) saved as {status}.", "success")
         return redirect(url_for("fellowship_admin_edit", slug=slug))
 
     # FELLOWSHIP_MANAGEMENT_V2
