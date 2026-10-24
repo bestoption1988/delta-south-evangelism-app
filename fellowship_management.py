@@ -227,24 +227,25 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 return ""
             import requests
             from urllib.parse import quote
-            response = requests.post(
-                f"{base}/storage/v1/object/sign/church-media/{quote(str(path), safe='/')}",
-                headers={"Authorization": f"Bearer {key}", "apikey": key,
-                         "Content-Type": "application/json"},
-                json={"expiresIn": 3600},
-                timeout=20,
-            )
-            if not response.ok:
-                app.logger.warning("Could not sign a fellowship image URL (HTTP %s)", response.status_code)
-                return ""
-            signed = response.json().get("signedURL") or response.json().get("signedUrl") or ""
-            if not signed:
-                app.logger.warning("Supabase returned an empty signed URL for fellowship image")
-                return ""
-            if signed.startswith(("https://", "http://")):
-                return signed
-            storage_base = base + "/storage/v1"
-            return storage_base + (signed if signed.startswith("/") else "/" + signed)
+            from urllib.parse import quote
+            # Existing records may reference either storage bucket.
+            for bucket in ("church-media", "leadership-photos"):
+                response = requests.post(
+                    f"{base}/storage/v1/object/sign/{bucket}/{quote(str(path), safe='/')}",
+                    headers={"Authorization": f"Bearer {key}", "apikey": key,
+                             "Content-Type": "application/json"},
+                    json={"expiresIn": 3600},
+                    timeout=20,
+                )
+                if response.ok:
+                    signed = response.json().get("signedURL") or response.json().get("signedUrl") or ""
+                    if signed:
+                        if signed.startswith(("https://", "http://")):
+                            return signed
+                        storage_base = base + "/storage/v1"
+                        return storage_base + (signed if signed.startswith("/") else "/" + signed)
+            app.logger.warning("Could not sign fellowship image from either storage bucket")
+            return ""
 
         f["logo_display_url"] = fellowship_image_url(f.get("logo_path"))
         f["cover_display_url"] = fellowship_image_url(f.get("cover_path"))
@@ -393,22 +394,22 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 return ""
             import requests
             from urllib.parse import quote
-            response = requests.post(
-                f"{base}/storage/v1/object/sign/church-media/{quote(str(path), safe='/')}",
-                headers={"Authorization": f"Bearer {key}", "apikey": key,
-                         "Content-Type": "application/json"},
-                json={"expiresIn": 3600}, timeout=20,
-            )
-            if not response.ok:
-                return ""
-            signed = response.json().get("signedURL") or response.json().get("signedUrl") or ""
-            if not signed:
-                app.logger.warning("Supabase returned an empty signed URL for fellowship image")
-                return ""
-            if signed.startswith(("https://", "http://")):
-                return signed
-            storage_base = base + "/storage/v1"
-            return storage_base + (signed if signed.startswith("/") else "/" + signed)
+            for bucket in ("church-media", "leadership-photos"):
+                response = requests.post(
+                    f"{base}/storage/v1/object/sign/{bucket}/{quote(str(path), safe='/')}",
+                    headers={"Authorization": f"Bearer {key}", "apikey": key,
+                             "Content-Type": "application/json"},
+                    json={"expiresIn": 3600}, timeout=20,
+                )
+                if response.ok:
+                    signed = response.json().get("signedURL") or response.json().get("signedUrl") or ""
+                    if signed:
+                        if signed.startswith(("https://", "http://")):
+                            return signed
+                        storage_base = base + "/storage/v1"
+                        return storage_base + (signed if signed.startswith("/") else "/" + signed)
+            app.logger.warning("Could not sign fellowship image from either storage bucket")
+            return ""
 
         fellowship["logo_display_url"] = admin_image_url(fellowship.get("logo_path"))
         fellowship["cover_display_url"] = admin_image_url(fellowship.get("cover_path"))
