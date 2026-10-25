@@ -5443,7 +5443,8 @@ def command_centre():
 @app.get("/api/public/churches")
 def public_churches():
     return jsonify(rows(
-        "SELECT circuit, church_name FROM churches "
+        "SELECT circuit, church_name, address, town, state, maps_url, "
+        "contact_person, phone FROM churches "
         "ORDER BY circuit, church_name"
     ))
 
