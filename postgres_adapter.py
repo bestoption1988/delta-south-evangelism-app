@@ -54,7 +54,13 @@ def postgres_config():
             "user": unquote(parsed.username or ""),
             "password": unquote(parsed.password or ""),
             "timeout": 15,
-            "ssl_context": True,
+            # Naijacloud private PostgreSQL endpoint: SSL is disabled
+            # unless the provider explicitly requires it.
+            "ssl_context": (
+                True
+                if os.environ.get("DATABASE_SSLMODE", "").strip().lower() == "require"
+                else None
+            ),
             "startup_params": {"search_path": schema},
         }
         if not config["user"] or not config["password"]:
