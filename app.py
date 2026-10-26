@@ -7653,9 +7653,34 @@ def backup():
 @app.post("/api/security/backup")
 @login_required
 def create_security_backup():
-    if not security_allowed(): return jsonify({"error":"Administrator access required."}),403
-    path,filename,digest=make_backup("Manual")
-    return jsonify({"success":True,"filename":filename,"sha256":digest,"size_bytes":os.path.getsize(path)})
+    if not security_allowed():
+        return jsonify({"error": "Administrator access required."}), 403
+
+    if database_backend() != "sqlite":
+        return jsonify({
+            "success": False,
+            "backup_managed_by": "NaijaCloud",
+            "error": (
+                "This application uses PostgreSQL. Database backups are managed "
+                "through the NaijaCloud dashboard. Open your database's Backups "
+                "section and use Back up now to create a backup."
+            )
+        }), 409
+
+    try:
+        path, filename, digest = make_backup("Manual")
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "sha256": digest,
+            "size_bytes": os.path.getsize(path)
+        })
+    except Exception:
+        app.logger.exception("Manual SQLite backup failed")
+        return jsonify({
+            "success": False,
+            "error": "The backup could not be created. Check the server logs."
+        }), 500
 
 @app.get("/api/security/backups")
 @login_required
