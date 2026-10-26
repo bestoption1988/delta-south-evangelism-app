@@ -1679,7 +1679,20 @@ document.querySelectorAll("[data-link-user]").forEach(b=>b.onclick=async()=>{
   }catch(e){alert(e.message)}
 });
 document.querySelectorAll("[data-toggle-user]").forEach(b=>b.onclick=async()=>{try{const d=await api(`/api/security/users/${b.dataset.toggleUser}/toggle`,{method:"POST"});setStatus(d.active?"User activated.":"User deactivated.");await loadTable()}catch(e){alert(e.message)}});document.querySelectorAll("[data-upgrade]").forEach(b=>b.onclick=async()=>{const row=list.find(x=>String(x.id)===String(b.dataset.upgrade));if(!row)return;let proposed=(row.church_name||"").trim()+" Circuit";let name=prompt("Enter the new circuit name for this church.\nExample: Enerhen Circuit",proposed);if(name===null)return;name=name.trim();if(!name)return alert("A circuit name is required.");if(!confirm(`Upgrade "${row.church_name}" to circuit headquarters and create "${name}"?`))return;try{const d=await api(`/api/churches/${row.id}/upgrade-to-circuit`,{method:"POST",body:JSON.stringify({circuit_name:name})});alert(`Success. ${row.church_name} is now the headquarters of ${d.circuit_name}.`);await loadTable();await loadDashboard()}catch(e){alert(e.message)}});document.querySelectorAll("[data-review]").forEach(b=>b.onclick=async()=>{const action=b.dataset.status;let note="";if(action==="Returned"){note=prompt("Reason for returning this report (optional):","");if(note===null)return}if(!confirm(action==="Approved"?"Approve this circuit report?":"Return this circuit report for correction?"))return;try{await api(`/api/circuit_reports/${b.dataset.review}/review`,{method:"POST",body:JSON.stringify({status:action,review_note:note})});await loadTable();setStatus(`Report ${action.toLowerCase()}.`)}catch(e){alert(e.message)}})}
-async function loadCircuits(){try{const data=await api("/api/circuits");const names=data.filter(x=>x.status!=="Inactive").map(x=>x.name);circuitOptions=["Diocesan",...names.filter(n=>n!=="Diocesan")];}catch(e){/* keep baseline options if circuits endpoint is unavailable */}}
+async function loadCircuits(){
+  const baseline = ["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"];
+  try {
+    const data = await api("/api/circuits");
+    const names = Array.isArray(data)
+      ? data.filter(x => x && x.status !== "Inactive")
+          .map(x => String(x.name || "").trim()).filter(Boolean)
+      : [];
+    const available = names.length ? names : baseline;
+    circuitOptions = ["Diocesan", ...available.filter(n => n !== "Diocesan")];
+  } catch (e) {
+    circuitOptions = ["Diocesan", ...baseline];
+  }
+}
  
 
 async function loadMemberRegistrations(){
@@ -2211,7 +2224,7 @@ $("#fields").innerHTML=
     let control;
 
     if(type==="select"){
-      let choices=(current==="churches"&&key==="circuit")?opts:(key==="circuit"?circuitOptions:opts);
+      let choices=(current==="churches"&&key==="circuit")?circuitOptions.filter(x=>x!=="Diocesan"):(key==="circuit"?circuitOptions:opts);
 
       if(current==="users"&&key==="member_id"){
         control=`<select name="member_id" required>
