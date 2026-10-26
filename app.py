@@ -2734,7 +2734,7 @@ def _daily_scripture_and_hymn():
             today = datetime.now(ZoneInfo("Africa/Lagos")).date()
         except Exception:
             today = datetime.now().date()
-        # Stable random selection: everyone sees the same hymn each day.
+        # Stable daily selection: all visitors see the same Scripture.
         day_key = today.isoformat().encode("utf-8")
         day_digest = hashlib.sha256(day_key).digest()
 
@@ -2742,13 +2742,130 @@ def _daily_scripture_and_hymn():
             int.from_bytes(day_digest[:8], "big") % len(verses)
             if verses else 0
         )
-        hymn_index = (
-            int.from_bytes(day_digest[8:16], "big") % len(hymns)
-            if hymns else 0
-        )
-
         verse = verses[verse_index] if verses else {}
-        hymn = hymns[hymn_index] if hymns else {}
+
+        # Match the hymn to the main themes in the selected Scripture.
+        theme_keywords = {
+            "salvation": [
+                "salvation", "redeem", "redeemer", "saviour", "savior",
+                "saved", "eternal life", "cross", "blood of jesus",
+                "forgive", "forgiveness", "grace", "perish"
+            ],
+            "love": [
+                "love", "loved", "loving", "beloved", "compassion",
+                "kindness", "charity", "merciful", "mercy"
+            ],
+            "praise": [
+                "praise", "thanksgiving", "thankful", "thanks",
+                "worship", "glory", "hallelujah", "bless the lord",
+                "sing unto", "rejoice"
+            ],
+            "prayer": [
+                "pray", "prayer", "supplication", "intercede",
+                "hear my cry", "call upon"
+            ],
+            "evangelism": [
+                "preach", "proclaim", "gospel", "witness", "mission",
+                "spread the word", "all nations", "make disciples",
+                "tell the world"
+            ],
+            "holy_spirit": [
+                "holy spirit", "holy ghost", "comforter", "pentecost",
+                "anoint", "sanctify", "spirit of god"
+            ],
+            "faith": [
+                "faith", "believe", "believes", "believing", "trust",
+                "faithful", "depend upon"
+            ],
+            "hope": [
+                "hope", "resurrection", "heaven", "everlasting",
+                "eternal", "comfort", "promise"
+            ],
+            "guidance": [
+                "guide", "guidance", "way", "truth", "light",
+                "path", "shepherd", "word of god"
+            ],
+            "peace": [
+                "peace", "rest", "calm", "fear not", "still my soul",
+                "quietness"
+            ],
+            "repentance": [
+                "repent", "repentance", "confess", "cleanse",
+                "pardon", "forgive", "cleansing"
+            ],
+            "holiness": [
+                "holy", "holiness", "righteous", "purity", "pure",
+                "obedience", "sanctification"
+            ],
+            "service": [
+                "serve", "servant", "service", "labour", "work for god",
+                "disciples", "follow me"
+            ],
+            "creation": [
+                "creator", "creation", "created", "earth", "heavens",
+                "nature", "almighty god"
+            ],
+        }
+
+        scripture_text = (
+            str(verse.get("reference", "")) + " " +
+            str(verse.get("text", ""))
+        ).lower()
+
+        theme_scores = {}
+        for theme, keywords in theme_keywords.items():
+            score = sum(
+                1 for keyword in keywords
+                if keyword in scripture_text
+            )
+            if score:
+                theme_scores[theme] = score
+
+        # Use the strongest Scripture themes; if no keywords match,
+        # use the Scripture reference/text as a general matching basis.
+        if theme_scores:
+            highest_score = max(theme_scores.values())
+            selected_themes = {
+                theme for theme, score in theme_scores.items()
+                if score == highest_score
+            }
+        else:
+            selected_themes = set()
+
+        scored_hymns = []
+        for index, hymn_item in enumerate(hymns):
+            title = str(hymn_item.get("title", "")).lower()
+            lyrics = str(hymn_item.get("lyrics", "")).lower()
+            score = 0
+
+            for theme in selected_themes:
+                for keyword in theme_keywords[theme]:
+                    if keyword in title:
+                        score += 3
+                    elif keyword in lyrics:
+                        score += 1
+
+            if score:
+                scored_hymns.append((index, score))
+
+        # Select randomly but deterministically among the best matches.
+        if scored_hymns:
+            best_score = max(score for _, score in scored_hymns)
+            best_hymns = [
+                index for index, score in scored_hymns
+                if score == best_score
+            ]
+        else:
+            # Safe fallback if no hymn matches the detected themes.
+            best_hymns = list(range(len(hymns)))
+
+        if best_hymns:
+            hymn_choice = int.from_bytes(day_digest[8:16], "big")
+            hymn_index = best_hymns[hymn_choice % len(best_hymns)]
+            hymn = hymns[hymn_index]
+        else:
+            hymn = {}
+
         return {"date": today.isoformat(), "verse": verse, "hymn": hymn}
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         app.logger.exception("Daily Scripture and Hymn collection could not be loaded")
