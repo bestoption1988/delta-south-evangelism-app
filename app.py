@@ -2910,6 +2910,8 @@ def home():
 
 def role_allows_table(u, table, method):
     role = u["role"]
+    if table == "circuits" and method != "GET":
+        return role == "Admin"
     if role == "Admin": return True
     if role in {"Bishop / Diocesan Executive", "Auditor"}: return method == "GET"
     if role == "Evangelism Minister":
@@ -6380,6 +6382,8 @@ def public_member_registration():
 @login_required
 def create_row(table):
     u = current_user()
+    if table == "circuits" and u["role"] != "Admin":
+        return jsonify({"error":"Only an Administrator can post circuits."}), 403
     if table == "member_registrations":
         return jsonify({"error":"Member registrations must use the registration review workflow."}),403
     if table not in TABLES or not role_allows_table(u, table, "POST"):
@@ -6732,6 +6736,8 @@ def get_row(table, rid):
 @login_required
 def update_row(table, rid):
     u = current_user()
+    if table == "circuits" and u["role"] != "Admin":
+        return jsonify({"error":"Only an Administrator can put circuits."}), 403
     if table == "member_registrations":
         return jsonify({"error":"Member registrations must use the registration review workflow."}),403
     if table not in TABLES or not role_allows_table(u, table, "PUT"):
@@ -6772,6 +6778,8 @@ def update_row(table, rid):
 @login_required
 def delete_row(table,rid):
     u = current_user()
+    if table == "circuits" and u["role"] != "Admin":
+        return jsonify({"error":"Only an Administrator can delete circuits."}), 403
     if table == "member_registrations":
         return jsonify({"error":"Member registrations must use the registration review workflow."}),403
     if table not in TABLES or not role_allows_table(u, table, "DELETE"):
@@ -6782,10 +6790,69 @@ def delete_row(table,rid):
         return jsonify({"error":"You can only delete records for your assigned circuit."}),403
     if u["role"] == "Local Church Evangelism Officer" and "church_name" in existing.keys() and u["church_name"] and existing["church_name"] != u["church_name"]:
         return jsonify({"error":"You can only delete records for your assigned church."}),403
+    # Guard against accidental loss of church/circuit records with dependencies.
+    if table == "churches":
+        church_name = existing["church_name"]
+        linked = []
+        for dependent_table in ("members", "income", "expenses", "church_accounts", "commitments",
+                                "testimonies", "appreciations", "mission_teams", "mission_contacts",
+                                "outreach", "church_plants", "planting_prospects", "equipment",
+                                "trust_fund", "mission_budgets", "procurement_requests", "sponsors"):
+            if dependent_table not in TABLES or "church_name" not in TABLES[dependent_table]:
+                continue
+            try:
+                count = db().execute(
+                    f"SELECT COUNT(*) FROM {dependent_table} WHERE church_name=?", (church_name,)
+                ).fetchone()[0]
+                if count:
+                    linked.append(f"{dependent_table}: {count}")
+            except database_error_types():
+                db().rollback()
+                return jsonify({
+                    "error": "Could not verify church dependencies. Deletion was cancelled."
+                }), 500
+        if linked:
+            return jsonify({
+                "error": "This church has linked records and cannot be deleted. Reassign or archive related records first.",
+                "dependencies": linked
+            }), 409
+    if table == "circuits":
+        circuit_name = existing["name"]
+        linked = []
+
+        # Protect a circuit whose headquarters reference exists,
+        # even if the church's circuit-name field is inconsistent.
+        headquarters_id = (
+            existing["headquarters_church_id"]
+            if "headquarters_church_id" in existing.keys()
+            else None
+        )
+        if headquarters_id:
+            linked.append("headquarters_church_id: 1")
+
+        for dependent_table, columns in TABLES.items():
+            if dependent_table in {"circuits"} or "circuit" not in columns:
+                continue
+            try:
+                count = db().execute(
+                    f"SELECT COUNT(*) FROM {dependent_table} WHERE circuit=?",
+                    (circuit_name,)
+                ).fetchone()[0]
+            except database_error_types():
+                db().rollback()
+                return jsonify({
+                    "error": "Could not verify circuit dependencies. Deletion was cancelled."
+                }), 500
+            if count:
+                linked.append(f"{dependent_table}: {count}")
+
+        if linked:
+            return jsonify({
+                "error": "This circuit has linked records. Reassign or archive related records before deleting it.",
+                "dependencies": linked
+            }), 409
     db().execute(f"DELETE FROM {table} WHERE id=?",(rid,)); db().commit(); audit("DELETE",table,rid,"")
     return jsonify({"ok":True})
-
-
 
 @app.get("/api/account-requests")
 @login_required
