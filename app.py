@@ -2734,9 +2734,21 @@ def _daily_scripture_and_hymn():
             today = datetime.now(ZoneInfo("Africa/Lagos")).date()
         except Exception:
             today = datetime.now().date()
-        day_index = today.timetuple().tm_yday - 1
-        verse = verses[day_index % len(verses)] if verses else {}
-        hymn = hymns[day_index % len(hymns)] if hymns else {}
+        # Stable random selection: everyone sees the same hymn each day.
+        day_key = today.isoformat().encode("utf-8")
+        day_digest = hashlib.sha256(day_key).digest()
+
+        verse_index = (
+            int.from_bytes(day_digest[:8], "big") % len(verses)
+            if verses else 0
+        )
+        hymn_index = (
+            int.from_bytes(day_digest[8:16], "big") % len(hymns)
+            if hymns else 0
+        )
+
+        verse = verses[verse_index] if verses else {}
+        hymn = hymns[hymn_index] if hymns else {}
         return {"date": today.isoformat(), "verse": verse, "hymn": hymn}
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         app.logger.exception("Daily Scripture and Hymn collection could not be loaded")
