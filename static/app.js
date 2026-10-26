@@ -2224,7 +2224,7 @@ $("#fields").innerHTML=
     let control;
 
     if(type==="select"){
-      let choices=(current==="churches"&&key==="circuit")?circuitOptions.filter(x=>x!=="Diocesan"):(key==="circuit"?circuitOptions:opts);
+      let choices=(current==="churches"&&key==="circuit")?["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]:(key==="circuit"?circuitOptions:opts);
 
       if(current==="users"&&key==="member_id"){
         control=`<select name="member_id" required>
