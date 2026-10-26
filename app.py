@@ -2801,6 +2801,34 @@ def _daily_scripture_and_hymn():
                 "serve", "servant", "service", "labour", "work for god",
                 "disciples", "follow me"
             ],
+            "provision": [
+                "provide", "provision", "provider", "supplies",
+                "supply", "needs", "daily bread", "bread",
+                "sustain", "sustains", "sustenance", "bountiful",
+                "abundance", "feed", "feeding", "care for",
+                "my shepherd", "want", "riches", "storehouse"
+            ],
+            "healing": [
+                "heal", "healing", "healer", "restore health",
+                "sick", "disease", "affliction", "wounded",
+                "broken heart", "physician"
+            ],
+            "protection": [
+                "protect", "protection", "defend", "deliver",
+                "deliverance", "refuge", "fortress", "shield",
+                "shelter", "safe", "safety", "keep me",
+                "guardian", "preserve"
+            ],
+            "strength": [
+                "strength", "strong", "mighty", "power",
+                "weary", "weak", "uphold", "renew my strength",
+                "courage", "victory"
+            ],
+            "wisdom": [
+                "wisdom", "understanding", "knowledge",
+                "teach me", "instruction", "discernment",
+                "counsel", "judgment"
+            ],
             "creation": [
                 "creator", "creation", "created", "earth", "heavens",
                 "nature", "almighty god"
