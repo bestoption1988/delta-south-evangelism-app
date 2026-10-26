@@ -2211,7 +2211,7 @@ $("#fields").innerHTML=
     let control;
 
     if(type==="select"){
-      let choices=key==="circuit"?circuitOptions:opts;
+      let choices=(current==="churches"&&key==="circuit")?opts:(key==="circuit"?circuitOptions:opts);
 
       if(current==="users"&&key==="member_id"){
         control=`<select name="member_id" required>
