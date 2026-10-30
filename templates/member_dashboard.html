@@ -1604,7 +1604,6 @@ loadMemberRecords();
     event.preventDefault();
 
     const button=document.getElementById("member-pay-button");
-
     const donor_name=document.getElementById("payment-donor-name").value.trim();
     const donor_email=document.getElementById("payment-donor-email").value.trim();
     const donor_phone=document.getElementById("payment-donor-phone").value.trim();
@@ -1616,121 +1615,92 @@ loadMemberRecords();
       paymentMessage("Please enter your name and email address.",false);
       return;
     }
-
     if(!church_account_id){
       paymentMessage("Please select the church account for this payment.",false);
       return;
     }
-
-    if(!Number.isFinite(amount) || amount<=0){
-      paymentMessage("Please enter a valid amount.",false);
+    if(!Number.isFinite(amount) || amount<100){
+      paymentMessage("Please enter a valid amount of at least ₦100.",false);
       return;
     }
 
     button.disabled=true;
     button.textContent="⏳ Connecting to secure payment...";
-
-    paymentMessage("Initializing secure payment...",true);
+    paymentMessage("Initializing payment using the Diocese's active payment method...",true);
 
     try{
-
       const r=await fetch("/api/payment/initiate",{
         method:"POST",
-        headers:{
-          "Content-Type":"application/json"
-        },
+        headers:{"Content-Type":"application/json"},
         body:JSON.stringify({
-          donor_name,
-          donor_email,
-          donor_phone,
+          donor_name,donor_email,donor_phone,
           church_account_id:Number(church_account_id),
-          purpose,
-          amount,
-          payment_method:"Flutterwave"
+          purpose,amount,payment_method:"Online Payment"
         })
       });
-
       const data=await r.json();
+      if(!r.ok) throw new Error(data.error || "Unable to initialize payment.");
 
-      if(!r.ok){
-        throw new Error(data.error || "Unable to initialize payment.");
+      if(data.bank_transfer){
+        const bank=data.bank_transfer;
+        paymentMessage(
+          "BANK TRANSFER DETAILS | Reference: "+data.reference+
+          " | Bank: "+bank.bank_name+
+          " | Account Name: "+bank.account_name+
+          " | Account Number: "+bank.account_number+
+          " | "+(bank.instructions||"Use the payment reference as your transfer narration.")+
+          " | Payment remains pending until the Finance Office confirms receipt.",
+          true
+        );
+        button.disabled=false;
+        button.textContent="Transfer details displayed";
+        return;
       }
-
       if(!data.authorization_url){
-        throw new Error("Payment authorization URL was not returned.");
+        throw new Error("The selected payment provider did not return a checkout address.");
       }
-
-      paymentMessage(
-        "Payment initialized. Redirecting to secure payment...",
-        true
-      );
-
+      paymentMessage("Payment initialized. Redirecting to secure checkout...",true);
       window.location.href=data.authorization_url;
-
     }catch(e){
-
       paymentMessage(e.message,false);
-
       button.disabled=false;
       button.textContent="💳 Continue to Secure Payment";
     }
   }
 
   const form=document.getElementById("member-payment-form");
+  if(form) form.addEventListener("submit",startMemberPayment);
 
-  if(form){
-    form.addEventListener("submit",startMemberPayment);
-  }
+  async function verifyMemberPaymentReturn(){
+    const params=new URLSearchParams(window.location.search);
+    const reference=params.get("tx_ref") || params.get("reference") || params.get("trxref");
+    const transactionId=params.get("transaction_id");
+    const status=(params.get("status") || "").toLowerCase();
 
-  async function verifyMemberFlutterwaveReturn(){
-    const params = new URLSearchParams(window.location.search);
-    const reference = params.get("tx_ref");
-    const transactionId = params.get("transaction_id");
-    const status = (params.get("status") || "").toLowerCase();
-
-    if(status === "cancelled"){
+    if(status==="cancelled"){
       paymentMessage("Payment checkout was cancelled. No successful payment has been confirmed.",false);
       return;
     }
-
     if(!reference) return;
 
-    if(!transactionId){
-      paymentMessage("Flutterwave returned without a transaction ID. Please contact the Finance Office with reference: " + reference,false);
-      return;
-    }
-
-    paymentMessage("Verifying your Flutterwave payment securely...",true);
-
+    paymentMessage("Verifying your payment securely with the payment provider...",true);
     try{
-      const response = await fetch(
-        "/api/payment/verify/" + encodeURIComponent(reference) +
-        "?transaction_id=" + encodeURIComponent(transactionId)
-      );
-
-      const result = await response.json();
-
-      if(!response.ok){
-        throw new Error(result.error || "Payment verification failed.");
-      }
-
+      const verifyUrl="/api/payment/verify/"+encodeURIComponent(reference)+
+        (transactionId ? "?transaction_id="+encodeURIComponent(transactionId) : "");
+      const response=await fetch(verifyUrl,{cache:"no-store"});
+      const result=await response.json();
+      if(!response.ok) throw new Error(result.error || "Payment verification failed.");
       if(result.paid){
-        paymentMessage(
-          "Payment successful! Your transaction has been verified and recorded. Reference: " + reference,
-          true
-        );
+        paymentMessage("Payment successful! Your transaction has been verified and recorded. Reference: "+reference,true);
       }else{
-        paymentMessage(
-          result.error || "Payment has not yet been confirmed. Please contact the Finance Office with reference: " + reference,
-          false
-        );
+        paymentMessage(result.error || "Payment is not yet confirmed. Contact the Finance Office with reference: "+reference,false);
       }
     }catch(error){
-      paymentMessage(error.message || "Unable to verify your payment. Please contact the Finance Office.",false);
+      paymentMessage(error.message || "Unable to verify payment. Please contact the Finance Office.",false);
     }
   }
 
-  verifyMemberFlutterwaveReturn();
+  verifyMemberPaymentReturn();
   loadMemberPaymentAccounts();
   loadMemberPaymentIdentity();
 
