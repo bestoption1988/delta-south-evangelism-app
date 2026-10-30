@@ -8157,6 +8157,20 @@ with app.app_context():
         ensure_member_care_timeline_schema()
     # Additive payment configuration migration for both SQLite and PostgreSQL.
     _payment_conn = db()
+    if not table_column_names(_payment_conn, "payment_settings"):
+        if database_backend() == "postgres":
+            _payment_conn.execute("""
+                CREATE TABLE IF NOT EXISTS payment_settings(
+                    id BIGSERIAL PRIMARY KEY,
+                    provider TEXT NOT NULL DEFAULT 'Monnify',
+                    enabled INTEGER DEFAULT 0,
+                    public_key TEXT,
+                    secret_key TEXT,
+                    contract_code TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
     for _column, _definition in {
         "mode": "TEXT DEFAULT 'test'",
         "secret_encrypted": "TEXT DEFAULT ''",
