@@ -18,7 +18,7 @@ window.DS_TURN_CONFIG = {{ turn_config | tojson }};
     <div id="menuPanel" class="menu-panel" role="menu">
       <button class="active" data-page="dashboard">Dashboard</button><button type="button" onclick="window.location.href=&quot;/admin/fellowships&quot;">Fellowship Management</button><button type="button" onclick="window.location.href='/member-dashboard'">Member Portal</button><button data-page="communications">Communications</button><button data-page="conference">Conference</button><button data-page="command_centre">Command Centre</button>
       <button data-page="churches">Churches</button><button data-page="circuits" data-role="admin">Circuit Management</button><button data-page="members" data-role="membership">Membership</button><button data-page="mission_teams" data-role="mission">Mission Teams</button><button data-page="mission_contacts" data-role="mission">People Reached / Follow-up</button><button data-page="testimonies" data-role="membership">Testimonies</button><button data-page="appreciations" data-role="membership">Special Appreciation</button><button data-page="commitments" data-role="finance">Pledges</button>
-      <button data-page="income" data-role="finance">Income</button><button data-page="church_accounts" data-role="finance">Church Accounts</button><button data-page="online_giving">Online Giving</button><button data-page="payment_management" data-role="finance">Payment Management</button><button data-page="payment_reconciliation" data-role="finance">Payment Reconciliation</button><button data-page="finance_summary" data-role="finance">Financial Dashboard</button><button data-page="financial_accountability" data-role="finance">Financial Accountability Report</button><button data-page="expenses" data-role="finance">Expenses</button><button data-page="equipment" data-role="finance">Equipment</button><button data-page="trust_fund" data-role="finance">Evangelism Trust Fund</button><button data-page="mission_budgets" data-role="finance">Mission Budgets</button><button data-page="procurement_requests" data-role="finance">Procurement</button>
+      <button data-page="income" data-role="finance">Income</button><button data-page="church_accounts" data-role="finance">Church Accounts</button><button data-page="online_giving">Online Giving</button><button data-page="payment_settings" data-role="admin">Payment Settings</button><button data-page="payment_management" data-role="finance">Payment Management</button><button data-page="payment_reconciliation" data-role="finance">Payment Reconciliation</button><button data-page="finance_summary" data-role="finance">Financial Dashboard</button><button data-page="financial_accountability" data-role="finance">Financial Accountability Report</button><button data-page="expenses" data-role="finance">Expenses</button><button data-page="equipment" data-role="finance">Equipment</button><button data-page="trust_fund" data-role="finance">Evangelism Trust Fund</button><button data-page="mission_budgets" data-role="finance">Mission Budgets</button><button data-page="procurement_requests" data-role="finance">Procurement</button>
       <button data-page="planting_prospects" data-role="mission">Planting Prospects</button><button data-page="church_plants" data-role="mission">Church Plants</button><button data-page="outreach" data-role="mission">Outreach</button><button data-page="mission_calendar" data-role="mission">Mission Calendar</button><button data-page="sponsors" data-role="finance">Sponsors</button>
       <button data-page="report_periods" data-role="reporting">Reporting Periods</button><button data-page="circuit_reports" data-role="reporting">Circuit Reports</button><button data-page="action_points" data-role="reporting">Action Points</button><button data-page="meetings" data-role="reporting">Meetings & Minutes</button><button data-page="diocesan_reviews" data-role="reporting">Executive Reviews</button><button data-page="reports">Reports & Analytics</button><button type="button" data-role="admin" onclick="window.location.href='/admin/leadership'">Leadership Management</button><button type="button" data-role="admin" onclick="window.location.href='/admin/homepage'">Homepage Management</button><button type="button" data-role="admin" onclick="window.location.href='/admin/homepage-media'">Sermons &amp; Events</button><button type="button" data-role="admin" onclick="window.location.href='/admin/media-library'">📚 Media Library Management</button><button data-page="users" data-role="admin">Users</button><button data-page="audit" data-role="audit">Audit Log</button><button data-page="security" data-role="admin">Security & Backup</button><button data-page="system_health" data-role="admin">System Health</button>
     </div>
@@ -564,6 +564,52 @@ window.DS_TURN_CONFIG = {{ turn_config | tojson }};
   </div>
 </section>
 
+<section id="payment_settings" class="page">
+  <div class="page-head">
+    <div><div class="eyebrow">ADMINISTRATION</div><h2>Payment Provider Settings</h2>
+    <p>Configure online checkout and direct bank transfer. Secret credentials are encrypted before storage and never displayed again.</p></div>
+  </div>
+  <div class="card">
+    <div class="form-grid">
+      <label>Payment provider<select id="psProvider" onchange="loadPaymentProviderForm()">
+        <option value="flutterwave">Flutterwave</option><option value="paystack">Paystack</option>
+        <option value="monnify">Monnify (integration pending)</option>
+        <option value="direct_bank_transfer">Direct Bank Transfer</option>
+      </select></label>
+      <label>Mode<select id="psMode"><option value="test">Test Mode</option><option value="live">Live Mode</option></select></label>
+      <label class="check-row"><input type="checkbox" id="psEnabled"> Activate this provider</label>
+      <label class="check-row"><input type="checkbox" id="psDefault"> Make this the default payment method</label>
+    </div>
+    <div id="psOnlineFields" class="form-grid">
+      <label>Public Key<input id="psPublicKey" autocomplete="off" placeholder="Public key (optional for checkout)"></label>
+      <label>Secret Key<input id="psSecretKey" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>
+      <label>Webhook Secret / Hash<input id="psWebhookSecret" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved webhook secret"></label>
+      <label>Contract Code<input id="psContractCode" autocomplete="off"></label>
+      <label>Merchant ID<input id="psMerchantId" autocomplete="off"></label>
+    </div>
+    <div id="psBankFields" class="form-grid" hidden>
+      <label>Bank Name<input id="psBankName"></label>
+      <label>Account Name<input id="psAccountName"></label>
+      <label>Account Number<input id="psAccountNumber" inputmode="numeric"></label>
+      <label style="grid-column:1/-1">Transfer Instructions<textarea id="psInstructions" rows="3" placeholder="Include payment reference and instructions for sending proof of payment."></textarea></label>
+    </div>
+    <div id="psCredentialStatus" class="muted">Loading provider status…</div>
+    <div class="actions-row">
+      <button type="button" class="primary" onclick="savePaymentProviderSettings()">Save Settings</button>
+      <button type="button" class="secondary" onclick="testPaymentProviderConnection()">Test Connection</button>
+      <button type="button" class="secondary" onclick="loadPaymentSettings()">Refresh</button>
+    </div>
+    <div id="psMessage" class="security-note" aria-live="polite"></div>
+  </div>
+  <div class="card">
+    <h3>Provider availability</h3>
+    <p><b>Flutterwave:</b> Online checkout and server-side verification.</p>
+    <p><b>Paystack:</b> Online checkout and server-side verification. Webhook signature verification is supported.</p>
+    <p><b>Direct Bank Transfer:</b> Publishes the configured bank details for manual finance-office confirmation. It does not automatically mark a transfer as paid.</p>
+    <p><b>Monnify:</b> Settings can be saved, but checkout is not enabled until its API integration is completed. Do not activate it yet.</p>
+  </div>
+</section>
+
 <section id="payment_management" class="page">
 <div class="page-head">
 <div><div class="eyebrow">FINANCE & ACCOUNTABILITY</div>
@@ -794,6 +840,85 @@ window.DS_TURN_CONFIG = {{ turn_config | tojson }};
         );
     }
 })();
+</script>
+
+<script>
+/* MCN PAYMENT PROVIDER SETTINGS */
+let mcnPaymentSettingsCache = {};
+async function loadPaymentSettings(){
+  const message=document.getElementById("psMessage");
+  try{
+    const r=await fetch("/api/payment/settings",{headers:{"Accept":"application/json"},cache:"no-store"});
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error||"Unable to load payment settings.");
+    mcnPaymentSettingsCache=data.providers||{};
+    loadPaymentProviderForm();
+  }catch(e){ if(message) message.textContent=e.message; }
+}
+function loadPaymentProviderForm(){
+  const provider=document.getElementById("psProvider").value;
+  const item=mcnPaymentSettingsCache[provider]||{};
+  document.getElementById("psMode").value=item.mode||"test";
+  document.getElementById("psEnabled").checked=!!Number(item.enabled);
+  document.getElementById("psDefault").checked=!!Number(item.is_default);
+  document.getElementById("psPublicKey").value=item.public_key||"";
+  document.getElementById("psSecretKey").value="";
+  document.getElementById("psWebhookSecret").value="";
+  document.getElementById("psContractCode").value=item.contract_code||"";
+  document.getElementById("psMerchantId").value=item.merchant_id||"";
+  document.getElementById("psBankName").value=item.bank_name||"";
+  document.getElementById("psAccountName").value=item.account_name||"";
+  document.getElementById("psAccountNumber").value=item.account_number||"";
+  document.getElementById("psInstructions").value=item.account_instructions||"";
+  const bank=provider==="direct_bank_transfer";
+  document.getElementById("psOnlineFields").hidden=bank;
+  document.getElementById("psBankFields").hidden=!bank;
+  document.getElementById("psMode").disabled=bank;
+  const state=document.getElementById("psCredentialStatus");
+  state.textContent="Secret key: "+(item.secret_configured?"saved (hidden)":"not configured")+
+    " · Webhook secret: "+(item.webhook_secret_configured?"saved (hidden)":"not configured");
+  if(provider==="monnify") state.textContent+=" · Checkout integration pending; activation is blocked.";
+  document.getElementById("psMessage").textContent="";
+}
+async function savePaymentProviderSettings(){
+  const provider=document.getElementById("psProvider").value;
+  const bank=provider==="direct_bank_transfer";
+  const payload={
+    provider,mode:document.getElementById("psMode").value,
+    enabled:document.getElementById("psEnabled").checked,
+    is_default:document.getElementById("psDefault").checked,
+    public_key:document.getElementById("psPublicKey").value,
+    secret_key:document.getElementById("psSecretKey").value,
+    webhook_secret:document.getElementById("psWebhookSecret").value,
+    contract_code:document.getElementById("psContractCode").value,
+    merchant_id:document.getElementById("psMerchantId").value,
+    bank_name:document.getElementById("psBankName").value,
+    account_name:document.getElementById("psAccountName").value,
+    account_number:document.getElementById("psAccountNumber").value,
+    account_instructions:document.getElementById("psInstructions").value
+  };
+  const msg=document.getElementById("psMessage"); msg.textContent="Saving securely…";
+  try{
+    const r=await fetch("/api/payment/settings",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify(payload)});
+    const data=await r.json(); if(!r.ok) throw new Error(data.error||"Settings could not be saved.");
+    msg.textContent=data.message||"Settings saved."; await loadPaymentSettings();
+  }catch(e){msg.textContent=e.message;}
+}
+async function testPaymentProviderConnection(){
+  const provider=document.getElementById("psProvider").value;
+  const msg=document.getElementById("psMessage"); msg.textContent="Testing connection…";
+  try{
+    const r=await fetch("/api/payment/settings/test",{method:"POST",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({provider,secret_key:document.getElementById("psSecretKey").value})});
+    const data=await r.json(); msg.textContent=data.message||data.error||"Connection test completed.";
+  }catch(e){msg.textContent=e.message;}
+}
+document.addEventListener("DOMContentLoaded",function(){
+  const nav=document.getElementById("nav");
+  if(nav) nav.addEventListener("click",function(e){
+    const button=e.target.closest('button[data-page="payment_settings"]');
+    if(button) loadPaymentSettings();
+  });
+});
 </script>
 
 </body></html>
