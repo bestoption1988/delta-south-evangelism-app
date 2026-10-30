@@ -10462,7 +10462,11 @@ def api_payment_initiate():
                     "tx_ref": reference, "amount": amount, "currency": "NGN",
                     "redirect_url": redirect_url,
                     "customer": {"email":email,"name":name,"phonenumber":phone},
-                    "customizations": {"title":"MCN Delta South Diocese","description":purpose}
+                    "customizations": {"title":"MCN Delta South Diocese","description":purpose},
+                    # Explicit Nigerian NGN checkout methods. In Flutterwave dashboard,
+                    # disable "Enable Dashboard Payment Options" for these per-payment
+                    # options to take effect, and enable Card under Business Preferences.
+                    "payment_options": "card, banktransfer, ussd, account, opay"
                 }
                 response = requests.post(
                     "https://api.flutterwave.com/v3/payments",
