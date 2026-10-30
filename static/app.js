@@ -352,7 +352,7 @@ function configureNav(){
     `${me.role}${me.circuit?" · "+me.circuit:""}`;
 }
 
-function nav(page){if(!canPage(page))return;current=page;document.querySelectorAll("#menuPanel button[data-page]").forEach(b=>b.classList.toggle("active",b.dataset.page===page));const chosen=document.querySelector(`#menuPanel button[data-page="${page}"]`);if(chosen){const label=$("#menuCurrent");if(label)label.textContent=chosen.textContent.trim();}closeMenu();document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));if(page==="dashboard"){$("#dashboard").classList.add("active");loadDashboard();loadReportingSummary();loadConnection()}else if(page==="command_centre"){$("#command_centre").classList.add("active");loadCommandCentre()}else if(page==="communications"){$("#communications").classList.add("active");loadCommunications()}else if(page==="customer_care"){$("#customer_care").classList.add("active");loadCustomerCare()}else if(page==="conference"){$("#conference").classList.add("active");loadConference()}else if(page==="reports"){$("#reports").classList.add("active");loadReports()}else if(page==="security"){$("#security").classList.add("active");loadSecurityCentre()}else if(page==="system_health"){$("#system_health").classList.add("active");loadSystemHealth()}else if(page==="online_giving"){$("#online_giving").classList.add("active");loadOnlineGiving()}else if(page==="payment_management"){$("#payment_management").classList.add("active");loadPaymentManagement()}else if(page==="payment_reconciliation"){$("#payment_reconciliation").classList.add("active");loadPaymentReconciliation()}else if(page==="finance_summary"){$("#finance_summary").classList.add("active");loadFinanceSummary()}else if(page==="financial_accountability"){$("#financial_accountability").classList.add("active");loadFinancialAccountabilityReport()}else{$("#dataPage").classList.add("active");$("#sectionTitle").textContent=labels[page];$("#sectionEyebrow").textContent=page==="audit"?"SECURITY & ACCOUNTABILITY":page==="users"?"SECURE ACCESS":"MANAGE RECORDS";$("#formWrap").hidden=true;$("#search").value="";$("#addBtn").hidden=page==="audit"||me.role==="Auditor";loadTable();if(page==="members")loadMemberRegistrations();else if(page==="users")loadAccountRequests();else{if($("#memberRegistrationsPanel"))$("#memberRegistrationsPanel").hidden=true;if($("#accountRequestsPanel"))$("#accountRequestsPanel").hidden=true}}}
+function nav(page){if(!canPage(page))return;current=page;document.querySelectorAll("#menuPanel button[data-page]").forEach(b=>b.classList.toggle("active",b.dataset.page===page));const chosen=document.querySelector(`#menuPanel button[data-page="${page}"]`);if(chosen){const label=$("#menuCurrent");if(label)label.textContent=chosen.textContent.trim();}closeMenu();document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));if(page==="dashboard"){$("#dashboard").classList.add("active");loadDashboard();loadReportingSummary();loadConnection()}else if(page==="command_centre"){$("#command_centre").classList.add("active");loadCommandCentre()}else if(page==="communications"){$("#communications").classList.add("active");loadCommunications()}else if(page==="customer_care"){$("#customer_care").classList.add("active");loadCustomerCare()}else if(page==="conference"){$("#conference").classList.add("active");loadConference()}else if(page==="reports"){$("#reports").classList.add("active");loadReports()}else if(page==="security"){$("#security").classList.add("active");loadSecurityCentre()}else if(page==="system_health"){$("#system_health").classList.add("active");loadSystemHealth()}else if(page==="online_giving"){$("#online_giving").classList.add("active");loadOnlineGiving()}else if(page==="payment_settings"){$("#payment_settings").classList.add("active");loadPaymentSettings()}else if(page==="payment_management"){$("#payment_management").classList.add("active");loadPaymentManagement()}else if(page==="payment_reconciliation"){$("#payment_reconciliation").classList.add("active");loadPaymentReconciliation()}else if(page==="finance_summary"){$("#finance_summary").classList.add("active");loadFinanceSummary()}else if(page==="financial_accountability"){$("#financial_accountability").classList.add("active");loadFinancialAccountabilityReport()}else{$("#dataPage").classList.add("active");$("#sectionTitle").textContent=labels[page];$("#sectionEyebrow").textContent=page==="audit"?"SECURITY & ACCOUNTABILITY":page==="users"?"SECURE ACCESS":"MANAGE RECORDS";$("#formWrap").hidden=true;$("#search").value="";$("#addBtn").hidden=page==="audit"||me.role==="Auditor";loadTable();if(page==="members")loadMemberRegistrations();else if(page==="users")loadAccountRequests();else{if($("#memberRegistrationsPanel"))$("#memberRegistrationsPanel").hidden=true;if($("#accountRequestsPanel"))$("#accountRequestsPanel").hidden=true}}}
 document.querySelectorAll("#menuPanel button[data-page]").forEach(b=>b.addEventListener("click",()=>nav(b.dataset.page)));
 function closeMenu(){const panel=$("#menuPanel"),toggle=$("#menuToggle");if(panel)panel.classList.remove("open");if(toggle){toggle.setAttribute("aria-expanded","false")}}
 $("#menuToggle")?.addEventListener("click",()=>{const panel=$("#menuPanel"),toggle=$("#menuToggle");if(!panel||!toggle)return;const open=panel.classList.toggle("open");toggle.setAttribute("aria-expanded",String(open))});
@@ -2986,7 +2986,7 @@ async function loadPaymentManagement(){
         <td>${money(p.amount||0)}</td>
         <td><span class="status-badge ${esc(status)}">${esc(p.status||"")}</span></td>
         <td>${esc(p.gateway||"")}</td>
-        <td><button type="button" class="secondary payment-details-btn" data-reference="${esc(p.reference||"")}">View</button></td>
+        <td><button type="button" class="secondary payment-details-btn" data-reference="${esc(p.reference||"")}">View</button> ${String(p.gateway||"").toLowerCase()==="direct bank transfer" && status!=="paid" ? `<button type="button" class="primary confirm-bank-transfer-btn" data-reference="${esc(p.reference||"")}">Confirm Transfer</button>` : ""}</td>
       </tr>`;
     }).join("");
 
@@ -3155,7 +3155,21 @@ async function viewPaymentDetails(reference){
   }
 }
 
-document.addEventListener("click",function(e){
+document.addEventListener("click",async function(e){
+  const confirmBtn=e.target.closest(".confirm-bank-transfer-btn");
+  if(confirmBtn){
+    e.preventDefault();
+    const reference=confirmBtn.dataset.reference||"";
+    if(!reference || !confirm("Confirm that this bank transfer has actually been received in the church bank account?")) return;
+    confirmBtn.disabled=true;
+    try{
+      const result=await api("/api/payment/bank-transfer/"+encodeURIComponent(reference)+"/confirm",{method:"POST",body:"{}"});
+      alert("Bank transfer confirmed and recorded. Reference: "+reference+" | Amount: "+money(result.amount));
+      loadPaymentManagement();
+      if(typeof loadPaymentReconciliation==="function")loadPaymentReconciliation();
+    }catch(err){alert("Transfer was not confirmed: "+err.message);confirmBtn.disabled=false;}
+    return;
+  }
   const btn=e.target.closest(".payment-details-btn");
   if(!btn)return;
   e.preventDefault();
