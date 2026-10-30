@@ -196,7 +196,7 @@ document.addEventListener("submit",async function(e){
 
   try{
     if(btn)btn.disabled=true;
-    if(status)status.textContent="Connecting securely to Flutterwave...";
+    if(status)status.textContent="Connecting securely to the selected payment provider...";
 
     const result=await api("/api/payment/initiate",{
       method:"POST",
@@ -210,15 +210,27 @@ document.addEventListener("submit",async function(e){
         donor_name:$("#givingName")?.value.trim()||"",
         donor_email:email,
         donor_phone:$("#givingPhone")?.value.trim()||"",
-        payment_method:"Flutterwave"
+        payment_method:"Online Payment"
       })
     });
 
+    if(result.bank_transfer){
+      const bank=result.bank_transfer;
+      if(status)status.textContent=
+        "BANK TRANSFER DETAILS | Reference: "+result.reference+
+        " | Bank: "+bank.bank_name+
+        " | Account Name: "+bank.account_name+
+        " | Account Number: "+bank.account_number+
+        " | "+(bank.instructions||"Use the reference as your transfer narration.")+
+        " | Payment remains pending until Finance confirms receipt.";
+      if(btn)btn.disabled=false;
+      return;
+    }
     if(!result.authorization_url){
-      throw Error("Flutterwave did not return a checkout URL.");
+      throw Error("The selected payment provider did not return a checkout URL.");
     }
 
-    if(status)status.textContent="Opening secure Flutterwave checkout...";
+    if(status)status.textContent="Opening secure payment checkout...";
     window.location.href=result.authorization_url;
   }catch(err){
     if(status)status.textContent=err.message;
