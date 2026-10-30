@@ -9668,7 +9668,7 @@ def api_flutterwave_webhook():
 
 @app.get("/api/payment/verify/<reference>")
 def api_payment_verify(reference):
-    import os, requests
+    import os, requests, json
     reference = str(reference or "").strip()
     if not reference:
         return jsonify({"error":"Payment reference is required."}),400
