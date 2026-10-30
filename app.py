@@ -10351,10 +10351,15 @@ def api_payment_initiate():
 
     account_id = int(raw_account_id)
 
-    active_rows = db().execute(
-        "SELECT provider FROM payment_settings WHERE enabled=1 ORDER BY is_default DESC,id ASC"
-    ).fetchall()
-    configured_provider = next((str(r["provider"]).lower() for r in active_rows if str(r["provider"]).lower() in {"flutterwave","paystack","direct_bank_transfer"}), "")
+    default_row = db().execute(
+        "SELECT provider FROM payment_settings WHERE enabled=1 AND is_default=1 ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    configured_provider = str(default_row["provider"]).lower() if default_row else ""
+    if not configured_provider:
+        online_row = db().execute(
+            "SELECT provider FROM payment_settings WHERE enabled=1 AND LOWER(provider) IN ('flutterwave','paystack') ORDER BY id ASC LIMIT 1"
+        ).fetchone()
+        configured_provider = str(online_row["provider"]).lower() if online_row else ""
     provider = configured_provider or ("flutterwave" if os.environ.get("FLW_SECRET_KEY") else "")
     if not provider:
         return jsonify({"error":"No online payment provider is active. Please contact the Diocese finance office."}),503
