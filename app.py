@@ -9808,7 +9808,7 @@ def api_flutterwave_webhook():
     import base64
     import re
 
-    expected = os.environ.get("FLW_SECRET_HASH", "").strip()
+    expected = _payment_secret("flutterwave", "webhook_secret")
     if not expected:
         app.logger.error("Flutterwave webhook rejected: FLW_SECRET_HASH is not configured.")
         return jsonify({"error": "Webhook authentication is not configured."}), 503
@@ -9852,6 +9852,36 @@ def api_flutterwave_webhook():
     # currency, reference and transaction ID, and posts income idempotently.
     result, status = _flutterwave_verify_transaction(reference, int(transaction_id))
     return jsonify(result), status
+
+
+@app.post("/api/paystack/webhook")
+def api_paystack_webhook():
+    import hmac
+    import hashlib
+    secret = _payment_secret("paystack")
+    if not secret:
+        return jsonify({"error":"Paystack webhook authentication is not configured."}),503
+    raw_body = request.get_data(cache=True)
+    supplied = request.headers.get("x-paystack-signature","").strip()
+    expected = hmac.new(secret.encode("utf-8"),raw_body,hashlib.sha512).hexdigest()
+    if not supplied or not hmac.compare_digest(supplied,expected):
+        app.logger.warning("Paystack webhook rejected: signature validation failed.")
+        return jsonify({"error":"Unauthorized webhook."}),401
+    payload=request.get_json(silent=True)
+    if not isinstance(payload,dict) or payload.get("event") not in {"charge.success"}:
+        return jsonify({"ok":True,"ignored":True}),200
+    data=payload.get("data")
+    if not isinstance(data,dict):
+        return jsonify({"error":"Invalid Paystack webhook payload."}),400
+    reference=str(data.get("reference") or "").strip()
+    if not reference or len(reference)>120:
+        return jsonify({"error":"Invalid payment reference."}),400
+    # Always verify with Paystack's API before recording any income.
+    with app.test_request_context("/api/payment/verify/"+reference,method="GET"):
+        result,status=api_payment_verify(reference)
+    if status >= 500:
+        return jsonify({"error":"Payment verification could not be completed. Paystack may retry."}),503
+    return jsonify({"ok":status==200,"verification_status":status}),200 if status in (200,409) else 400
 
 
 @app.get("/api/payment/verify/<reference>")
@@ -10115,9 +10145,9 @@ def api_payment_diagnostics():
     if not user or user.get("role") != "Admin":
         return jsonify({"error": "Only Admin can view payment diagnostics."}), 403
 
-    flutterwave_secret = os.environ.get("FLW_SECRET_KEY", "").strip()
-    webhook_hash = os.environ.get("FLW_SECRET_HASH", "").strip()
-    paystack_secret = os.environ.get("PAYSTACK_SECRET_KEY", "").strip()
+    flutterwave_secret = _payment_secret("flutterwave")
+    webhook_hash = _payment_secret("flutterwave", "webhook_secret")
+    paystack_secret = _payment_secret("paystack")
 
     flutterwave_connection = {
         "tested": False,
