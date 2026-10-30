@@ -9785,19 +9785,66 @@ def api_payment_diagnostics():
     webhook_hash = os.environ.get("FLW_SECRET_HASH", "").strip()
     paystack_secret = os.environ.get("PAYSTACK_SECRET_KEY", "").strip()
 
+    flutterwave_connection = {
+        "tested": False,
+        "reachable": False,
+        "http_status": None,
+        "message": "Not tested because FLW_SECRET_KEY is not configured."
+    }
+
+    if flutterwave_secret:
+        try:
+            import requests
+            gateway_response = requests.get(
+                "https://api.flutterwave.com/v3/banks/NG",
+                headers={"Authorization": "Bearer " + flutterwave_secret},
+                timeout=15
+            )
+            try:
+                gateway_data = gateway_response.json()
+            except ValueError:
+                gateway_data = {}
+
+            gateway_message = (
+                gateway_data.get("message", "")
+                if isinstance(gateway_data, dict) else ""
+            )
+            flutterwave_connection = {
+                "tested": True,
+                "reachable": gateway_response.status_code < 500,
+                "http_status": gateway_response.status_code,
+                "message": str(gateway_message)[:240] or (
+                    "Flutterwave API responded."
+                    if gateway_response.status_code < 400
+                    else "Flutterwave rejected the connection or credentials."
+                )
+            }
+        except requests.RequestException as exc:
+            app.logger.warning(
+                "Flutterwave diagnostics connection test failed: %s",
+                type(exc).__name__
+            )
+            flutterwave_connection = {
+                "tested": True,
+                "reachable": False,
+                "http_status": None,
+                "message": "The application could not reach Flutterwave. Check outbound network access and try again."
+            }
+
     return jsonify({
         "ok": bool(flutterwave_secret),
         "database_backend": database_backend(),
         "providers": {
             "flutterwave": {
                 "secret_key_configured": bool(flutterwave_secret),
-                "webhook_hash_configured": bool(webhook_hash)
+                "webhook_hash_configured": bool(webhook_hash),
+                "connection_test": flutterwave_connection
             },
             "paystack": {
                 "secret_key_configured": bool(paystack_secret)
             }
         },
-        "note": "Only configuration status is returned. Secret values are never exposed."
+        "note": "Only configuration status and a safe gateway connectivity result are returned. Secret values are never exposed."
     })
 
 
