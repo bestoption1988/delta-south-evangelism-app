@@ -8195,6 +8195,8 @@ def _payment_secret(provider, field="secret_key"):
         (str(provider).lower(),)
     ).fetchone()
     encrypted = (row["webhook_secret_encrypted"] if field == "webhook_secret" else row["secret_encrypted"]) if row else ""
+    if field == "webhook_secret" and str(provider).lower() == "paystack" and not encrypted and row:
+        encrypted = row["secret_encrypted"]
     if encrypted:
         try:
             return _payment_fernet().decrypt(str(encrypted).encode("ascii")).decode("utf-8")
@@ -8227,6 +8229,8 @@ def api_payment_settings_save():
         return jsonify({"error":"Payment mode must be Test or Live."}),400
     enabled = 1 if d.get("enabled") else 0
     is_default = 1 if d.get("is_default") else 0
+    if is_default and not enabled:
+        return jsonify({"error":"Activate a provider before making it the default."}),400
     public_key = str(d.get("public_key") or "").strip()[:500]
     contract_code = str(d.get("contract_code") or "").strip()[:120]
     merchant_id = str(d.get("merchant_id") or "").strip()[:120]
