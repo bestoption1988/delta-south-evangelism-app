@@ -9797,7 +9797,11 @@ def api_payment_diagnostics():
             import requests
             gateway_response = requests.get(
                 "https://api.flutterwave.com/v3/banks/NG",
-                headers={"Authorization": "Bearer " + flutterwave_secret},
+                params={"include_provider_type": "1"},
+                headers={
+                    "Authorization": "Bearer " + flutterwave_secret,
+                    "Accept": "application/json"
+                },
                 timeout=15
             )
             try:
