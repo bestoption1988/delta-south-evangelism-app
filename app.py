@@ -10043,9 +10043,28 @@ def api_payment_initiate():
             gateway_message = (
                 result.get("message", "") if isinstance(result, dict) else ""
             )
+            gateway_status = (
+                result.get("status", "") if isinstance(result, dict) else ""
+            )
+            gateway_data = (
+                result.get("data") if isinstance(result, dict) else None
+            )
+            gateway_link_host = ""
+            if isinstance(payment_link, str):
+                try:
+                    gateway_link_host = urlparse(payment_link).hostname or ""
+                except Exception:
+                    gateway_link_host = "unparseable"
             app.logger.error(
-                "Flutterwave checkout rejected: reference=%s http_status=%s gateway_message=%s",
-                reference, response.status_code, str(gateway_message)[:300]
+                "Flutterwave checkout rejected: reference=%s http_status=%s gateway_status=%s gateway_message=%s data_type=%s link_present=%s link_host=%s valid_link=%s",
+                reference,
+                response.status_code,
+                str(gateway_status)[:40],
+                str(gateway_message)[:200],
+                type(gateway_data).__name__,
+                bool(payment_link),
+                gateway_link_host[:120],
+                valid_link
             )
             return jsonify({
                 "error": "Flutterwave checkout initialization failed.",
