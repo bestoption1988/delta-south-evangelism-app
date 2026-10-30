@@ -8217,7 +8217,7 @@ def _payment_provider_config(provider):
 def api_payment_settings_save():
     import re
     user = current_user()
-    if not user or user.get("role") != "Admin":
+    if not user or user["role"] != "Admin":
         return jsonify({"error":"Only Admin can change payment settings"}),403
     d = request.get_json(silent=True) or {}
     provider = str(d.get("provider") or "").strip().lower()
@@ -8378,7 +8378,7 @@ def api_confirm_bank_transfer(reference):
     from datetime import date, datetime
     from decimal import Decimal, InvalidOperation
     user=current_user()
-    if not user or user.get("role") not in {"Admin","Finance Officer","Evangelism Minister"}:
+    if not user or user["role"] not in {"Admin","Finance Officer","Evangelism Minister"}:
         return jsonify({"error":"Only authorized finance officers can confirm bank transfers."}),403
     reference=str(reference or "").strip()
     if not reference or len(reference)>120:
@@ -8413,7 +8413,7 @@ def api_confirm_bank_transfer(reference):
                 VALUES (?,?,?,?,?,?,?,?,?,?,?)
             """,(date.today().isoformat(),payment["donor_name"] or "Online Donor","Online Payment",
                  payment["purpose"] or "General Evangelism",float(amount),"Bank Transfer",reference,
-                 user.get("username","finance"),"Bank transfer manually confirmed by finance office.",
+                 user["username"],"Bank transfer manually confirmed by finance office.",
                  payment["member_id"],payment["church_account_id"]))
             income=conn.execute("SELECT id FROM income WHERE reference=? LIMIT 1",(reference,)).fetchone()
             if not income: raise RuntimeError("Income record was not created.")
@@ -8426,7 +8426,7 @@ def api_confirm_bank_transfer(reference):
         conn.execute("""
             INSERT INTO audit_log(happened_at,action,table_name,record_id,details,user_id,username)
             VALUES(?,?,?,?,?,?,?)
-        """,(datetime.now().isoformat(timespec="seconds"),"BANK_TRANSFER_CONFIRMED","income",income_id,details,user.get("id"),user.get("username","finance")))
+        """,(datetime.now().isoformat(timespec="seconds"),"BANK_TRANSFER_CONFIRMED","income",income_id,details,user["id"],user.get("username","finance")))
         conn.commit()
         return jsonify({"ok":True,"paid":True,"reference":reference,"income_id":income_id,"amount":float(amount)}),200
     except Exception:
