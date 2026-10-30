@@ -9796,10 +9796,10 @@ def api_payment_diagnostics():
         try:
             import requests
             gateway_response = requests.get(
-                "https://api.flutterwave.com/v3/banks/NG",
-                params={"include_provider_type": "1"},
+                "https://api.flutterwave.com/v3/balances",
                 headers={
                     "Authorization": "Bearer " + flutterwave_secret,
+                    "Content-Type": "application/json",
                     "Accept": "application/json"
                 },
                 timeout=15
@@ -9813,15 +9813,29 @@ def api_payment_diagnostics():
                 gateway_data.get("message", "")
                 if isinstance(gateway_data, dict) else ""
             )
+            gateway_status = (
+                gateway_data.get("status", "")
+                if isinstance(gateway_data, dict) else ""
+            )
+            if gateway_response.status_code == 200 and gateway_status == "success":
+                safe_message = "Flutterwave authenticated successfully."
+            elif gateway_response.status_code == 401:
+                safe_message = "Flutterwave rejected authentication. Check that FLW_SECRET_KEY is the correct secret key for the selected Test or Live mode."
+            elif gateway_response.status_code == 403:
+                safe_message = "Flutterwave authenticated the request but denied access to this account resource."
+            else:
+                safe_message = str(gateway_message)[:240] or (
+                    "Flutterwave returned an unexpected response. Check the HTTP status and gateway dashboard."
+                )
+
             flutterwave_connection = {
                 "tested": True,
-                "reachable": gateway_response.status_code < 500,
+                "reachable": True,
                 "http_status": gateway_response.status_code,
-                "message": str(gateway_message)[:240] or (
-                    "Flutterwave API responded."
-                    if gateway_response.status_code < 400
-                    else "Flutterwave rejected the connection or credentials."
-                )
+                "authenticated": bool(
+                    gateway_response.status_code == 200 and gateway_status == "success"
+                ),
+                "message": safe_message
             }
         except requests.RequestException as exc:
             app.logger.warning(
@@ -9832,6 +9846,7 @@ def api_payment_diagnostics():
                 "tested": True,
                 "reachable": False,
                 "http_status": None,
+                "authenticated": False,
                 "message": "The application could not reach Flutterwave. Check outbound network access and try again."
             }
 
@@ -9848,9 +9863,8 @@ def api_payment_diagnostics():
                 "secret_key_configured": bool(paystack_secret)
             }
         },
-        "note": "Only configuration status and a safe gateway connectivity result are returned. Secret values are never exposed."
+        "note": "Only configuration status and authentication status are returned. Wallet balances and secret values are never exposed."
     })
-
 
 @app.post("/api/payment/initiate")
 def api_payment_initiate():
