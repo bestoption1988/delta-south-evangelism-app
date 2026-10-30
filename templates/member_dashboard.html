@@ -1646,7 +1646,7 @@ loadMemberRecords();
           church_account_id:Number(church_account_id),
           purpose,
           amount,
-          payment_method:"Paystack"
+          payment_method:"Flutterwave"
         })
       });
 
@@ -1682,6 +1682,55 @@ loadMemberRecords();
     form.addEventListener("submit",startMemberPayment);
   }
 
+  async function verifyMemberFlutterwaveReturn(){
+    const params = new URLSearchParams(window.location.search);
+    const reference = params.get("tx_ref");
+    const transactionId = params.get("transaction_id");
+    const status = (params.get("status") || "").toLowerCase();
+
+    if(status === "cancelled"){
+      paymentMessage("Payment checkout was cancelled. No successful payment has been confirmed.",false);
+      return;
+    }
+
+    if(!reference) return;
+
+    if(!transactionId){
+      paymentMessage("Flutterwave returned without a transaction ID. Please contact the Finance Office with reference: " + reference,false);
+      return;
+    }
+
+    paymentMessage("Verifying your Flutterwave payment securely...",true);
+
+    try{
+      const response = await fetch(
+        "/api/payment/verify/" + encodeURIComponent(reference) +
+        "?transaction_id=" + encodeURIComponent(transactionId)
+      );
+
+      const result = await response.json();
+
+      if(!response.ok){
+        throw new Error(result.error || "Payment verification failed.");
+      }
+
+      if(result.paid){
+        paymentMessage(
+          "Payment successful! Your transaction has been verified and recorded. Reference: " + reference,
+          true
+        );
+      }else{
+        paymentMessage(
+          result.error || "Payment has not yet been confirmed. Please contact the Finance Office with reference: " + reference,
+          false
+        );
+      }
+    }catch(error){
+      paymentMessage(error.message || "Unable to verify your payment. Please contact the Finance Office.",false);
+    }
+  }
+
+  verifyMemberFlutterwaveReturn();
   loadMemberPaymentAccounts();
   loadMemberPaymentIdentity();
 

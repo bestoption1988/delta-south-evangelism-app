@@ -8242,132 +8242,175 @@ def api_payment_details(reference):
 @app.post("/api/payment-reconciliation/<reference>/reconcile")
 @login_required
 def api_payment_reconciliation_reconcile(reference):
-    u=current_user()
+    import json
+    from decimal import Decimal, InvalidOperation
+    from datetime import date, datetime
 
-    allowed={
-        "Admin",
-        "Finance Officer",
-        "Evangelism Minister",
-    }
+    u = current_user()
+    allowed = {"Admin", "Finance Officer", "Evangelism Minister"}
+    if not u or u["role"] not in allowed:
+        return jsonify({"error": "Only authorized finance officers can reconcile payments."}), 403
 
-    if u["role"] not in allowed:
-        return jsonify({"error":"Only authorized finance officers can reconcile payments."}),403
-
-    reference=str(reference or "").strip()
-
+    reference = str(reference or "").strip()
     if not reference:
-        return jsonify({"error":"Payment reference is required."}),400
+        return jsonify({"error": "Payment reference is required."}), 400
 
-    payment=db().execute(
-        "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
-        (reference,)
-    ).fetchone()
+    conn = db()
+    try:
+        if database_backend() == "postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
 
-    if not payment:
-        return jsonify({"error":"Payment transaction not found."}),404
+        payment = conn.execute(
+            "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
 
-    if str(payment["status"] or "").lower()!="paid":
-        return jsonify({
-            "error":"Only successful paid transactions can be reconciled.",
-            "status":payment["status"]
-        }),409
+        if not payment:
+            conn.rollback()
+            return jsonify({"error": "Payment transaction not found."}), 404
 
-    existing=db().execute(
-        "SELECT * FROM income WHERE reference=? LIMIT 1",
-        (reference,)
-    ).fetchone()
+        if str(payment["status"] or "").lower() != "paid":
+            conn.rollback()
+            return jsonify({
+                "error": "Only successful paid transactions can be reconciled.",
+                "status": payment["status"]
+            }), 409
 
-    if existing:
-        return jsonify({
-            "ok":True,
-            "already_reconciled":True,
-            "message":"This payment is already linked to an income record.",
-            "income_id":existing["id"],
-            "reference":reference
-        }),200
+        try:
+            amount_decimal = Decimal(str(payment["amount"]))
+            if (
+                not amount_decimal.is_finite()
+                or amount_decimal <= 0
+                or amount_decimal >= Decimal("1000000000")
+                or amount_decimal != amount_decimal.quantize(Decimal("0.01"))
+            ):
+                raise InvalidOperation()
+        except (TypeError, ValueError, InvalidOperation):
+            conn.rollback()
+            return jsonify({"error": "Payment amount is invalid."}), 409
 
-    amount=float(payment["amount"] or 0)
+        amount = float(amount_decimal)
 
-    if amount<=0:
-        return jsonify({"error":"Payment amount is invalid."}),409
+        existing = conn.execute(
+            """
+            SELECT id, amount, member_id, church_account_id
+            FROM income
+            WHERE reference=?
+            LIMIT 1
+            """,
+            (reference,)
+        ).fetchone()
 
-    donor_name=payment["donor_name"] or "Online Donor"
-    purpose=payment["purpose"] or "General Evangelism"
+        if existing:
+            try:
+                existing_amount = Decimal(str(existing["amount"]))
+                amount_matches = (
+                    existing_amount.is_finite()
+                    and existing_amount == amount_decimal
+                )
+            except (TypeError, ValueError, InvalidOperation):
+                amount_matches = False
 
-    db().execute(
-        """
-        INSERT INTO income
-        (
-            date,
-            donor_name,
-            source,
-            fund,
+            member_matches = (
+                existing["member_id"] == payment["member_id"]
+            )
+            account_matches = (
+                existing["church_account_id"] == payment["church_account_id"]
+            )
+
+            if not (amount_matches and member_matches and account_matches):
+                conn.rollback()
+                return jsonify({
+                    "error": (
+                        "An income record already uses this reference, "
+                        "but its amount or account details do not match "
+                        "the payment. Please investigate before proceeding."
+                    ),
+                    "reference": reference
+                }), 409
+
+            conn.rollback()
+            return jsonify({
+                "ok": True,
+                "already_reconciled": True,
+                "message": "This payment is already linked to a matching income record.",
+                "income_id": existing["id"],
+                "reference": reference
+            }), 200
+
+        gateway = str(payment["gateway"] or "").strip()
+        method = str(payment["payment_method"] or gateway or "Online Payment")
+
+        conn.execute("""
+            INSERT INTO income
+            (date, donor_name, source, fund, amount, method, reference,
+             received_by, notes, member_id, church_account_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            date.today().isoformat(),
+            payment["donor_name"] or "Online Donor",
+            "Online Payment",
+            payment["purpose"] or "General Evangelism",
             amount,
             method,
             reference,
-            received_by,
-            notes,
-            member_id,
-            church_account_id
-        )
-        VALUES(
-            date('now'),
-            ?,?,?,?,?,?,?,?,?,?
-        )
-        """,
-        (
-            donor_name,
-            "Online Payment",
-            purpose,
-            amount,
-            payment["payment_method"] or "Paystack",
-            reference,
-            u["username"] if "username" in u.keys() else u["role"],
+            u["username"] or u["role"] or "Finance Officer",
             "Manually reconciled online payment",
             payment["member_id"],
             payment["church_account_id"]
-        )
-    )
+        ))
 
-    db().commit()
+        new_income = conn.execute(
+            "SELECT id FROM income WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
 
-    new_income=db().execute(
-        "SELECT id FROM income WHERE reference=? LIMIT 1",
-        (reference,)
-    ).fetchone()
+        if not new_income:
+            raise RuntimeError("Income record was not created.")
 
-    audit_details = {
-        "payment_reference": reference,
-        "income_id": new_income["id"] if new_income else None,
-        "amount": amount,
-        "action": "Manual payment reconciliation"
-    }
+        details = json.dumps({
+            "payment_reference": reference,
+            "income_id": new_income["id"],
+            "amount": amount,
+            "gateway": gateway,
+            "action": "Manual payment reconciliation"
+        }, ensure_ascii=False)
 
-    db().execute(
-        """
-        INSERT INTO audit_log
-        (happened_at, action, table_name, record_id, details, user_id, username)
-        VALUES(datetime('now'),?,?,?,?,?,?)
-        """,
-        (
+        conn.execute("""
+            INSERT INTO audit_log
+            (happened_at, action, table_name, record_id, details, user_id, username)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.now().isoformat(timespec="seconds"),
             "MANUAL_RECONCILIATION",
             "income",
-            new_income["id"] if new_income else None,
-            str(audit_details),
-            u.get("id"),
-            u.get("username") or u.get("role")
-        )
-    )
-    db().commit()
+            new_income["id"],
+            details,
+            u["id"],
+            u["username"] or u["role"]
+        ))
 
-    return jsonify({
-        "ok":True,
-        "already_reconciled":False,
-        "message":"Payment successfully reconciled into income.",
-        "income_id":new_income["id"] if new_income else None,
-        "reference":reference,
-        "amount":amount
-    }),201
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "already_reconciled": False,
+            "message": "Payment successfully reconciled into income.",
+            "income_id": new_income["id"],
+            "reference": reference,
+            "amount": amount
+        }), 201
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Manual payment reconciliation failed.")
+        return jsonify({"error": "Reconciliation failed. No partial changes were committed."}), 500
+
 
 @app.get("/api/payment-reconciliation/<reference>")
 @login_required
@@ -9309,6 +9352,300 @@ def api_payment_history():
         }
     })
 
+
+
+def _flutterwave_verify_transaction(reference, transaction_id):
+    import os
+    import json
+    import requests
+    from datetime import date, datetime
+    from decimal import Decimal, InvalidOperation
+
+    secret = os.environ.get("FLW_SECRET_KEY", "").strip()
+    if not secret:
+        return {"error": "Flutterwave secret key is not configured."}, 503
+
+    reference = str(reference or "").strip()
+    transaction_id = str(transaction_id or "").strip()
+
+    if (
+        not reference
+        or len(reference) > 120
+        or not transaction_id.isascii()
+        or not transaction_id.isdigit()
+        or len(transaction_id) > 30
+        or int(transaction_id) <= 0
+    ):
+        return {"error": "A valid payment reference and transaction ID are required."}, 400
+
+    # Check the local transaction before contacting Flutterwave.
+    conn = db()
+    preliminary_row = conn.execute(
+        "SELECT gateway FROM payment_transactions WHERE reference=? LIMIT 1",
+        (reference,)
+    ).fetchone()
+
+    if not preliminary_row:
+        return {"error": "Payment transaction not found."}, 404
+
+    if str(preliminary_row["gateway"] or "").lower() != "flutterwave":
+        return {"error": "This is not a Flutterwave transaction."}, 400
+
+    try:
+        response = requests.get(
+            "https://api.flutterwave.com/v3/transactions/" + transaction_id + "/verify",
+            headers={"Authorization": "Bearer " + secret},
+            timeout=30
+        )
+        result = response.json()
+    except Exception:
+        app.logger.exception("Flutterwave API verification request failed.")
+        return {"error": "Unable to verify payment with Flutterwave."}, 502
+
+    if response.status_code != 200 or result.get("status") != "success":
+        return {"error": "Flutterwave verification failed."}, 502
+
+    data = result.get("data") or {}
+
+    if str(data.get("id") or "") != transaction_id:
+        return {"error": "Flutterwave transaction ID mismatch."}, 409
+
+    if str(data.get("tx_ref") or "") != reference:
+        return {"error": "Payment reference mismatch."}, 409
+
+    if str(data.get("currency") or "").upper() != "NGN":
+        return {"error": "Payment currency mismatch."}, 409
+
+    if str(data.get("status") or "").lower() != "successful":
+        return {
+            "ok": True,
+            "paid": False,
+            "reference": reference,
+            "status": data.get("status") or "pending"
+        }, 200
+
+    try:
+        paid_amount = Decimal(str(data.get("amount")))
+        if (
+            not paid_amount.is_finite()
+            or paid_amount <= Decimal("0")
+            or paid_amount >= Decimal("1000000000")
+            or paid_amount != paid_amount.quantize(Decimal("0.01"))
+        ):
+            raise InvalidOperation()
+    except (TypeError, ValueError, InvalidOperation):
+        return {"error": "Invalid payment amount."}, 409
+
+    try:
+        if database_backend() == "postgres":
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(?))",
+                (reference,)
+            )
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+
+        row = conn.execute(
+            "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+
+        if not row:
+            conn.rollback()
+            return {"error": "Payment transaction not found."}, 404
+
+        if str(row["gateway"] or "").lower() != "flutterwave":
+            conn.rollback()
+            return {"error": "This is not a Flutterwave transaction."}, 400
+
+        if str(row["currency"] or "").upper() != "NGN":
+            conn.rollback()
+            return {"error": "Stored payment currency is not NGN."}, 409
+
+        try:
+            expected_amount = Decimal(str(row["amount"]))
+            if (
+                not expected_amount.is_finite()
+                or expected_amount <= Decimal("0")
+                or expected_amount >= Decimal("1000000000")
+                or expected_amount != expected_amount.quantize(Decimal("0.01"))
+                or paid_amount != expected_amount
+            ):
+                raise InvalidOperation()
+        except (TypeError, ValueError, InvalidOperation):
+            conn.rollback()
+            return {"error": "Payment amount mismatch."}, 409
+
+        stored_gateway_id = str(row["gateway_transaction_id"] or "").strip()
+        if stored_gateway_id and stored_gateway_id != transaction_id:
+            conn.rollback()
+            return {"error": "A different gateway transaction is already recorded."}, 409
+
+        existing = conn.execute(
+            """
+            SELECT id, amount, member_id, church_account_id
+            FROM income
+            WHERE reference=?
+            LIMIT 1
+            """,
+            (reference,)
+        ).fetchone()
+
+        if existing:
+            try:
+                existing_amount = Decimal(str(existing["amount"]))
+                amount_matches = (
+                    existing_amount.is_finite()
+                    and existing_amount == paid_amount
+                )
+            except (TypeError, ValueError, InvalidOperation):
+                amount_matches = False
+
+            member_matches = (
+                existing["member_id"] == row["member_id"]
+            )
+            account_matches = (
+                existing["church_account_id"] == row["church_account_id"]
+            )
+
+            if not (amount_matches and member_matches and account_matches):
+                conn.rollback()
+                return {
+                    "error": (
+                        "An income record already uses this payment reference, "
+                        "but its amount or account details do not match. "
+                        "Please investigate before proceeding."
+                    ),
+                    "reference": reference
+                }, 409
+
+        income_id = existing["id"] if existing else None
+
+        if not existing:
+            conn.execute("""
+                INSERT INTO income
+                (date, donor_name, source, fund, amount, method, reference,
+                 received_by, notes, member_id, church_account_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                date.today().isoformat(),
+                row["donor_name"] or "Online Donor",
+                "Online Payment",
+                row["purpose"] or "General Evangelism",
+                float(paid_amount),
+                "Flutterwave",
+                reference,
+                "Flutterwave",
+                "Verified Flutterwave payment",
+                row["member_id"],
+                row["church_account_id"]
+            ))
+
+            income = conn.execute(
+                "SELECT id FROM income WHERE reference=? LIMIT 1",
+                (reference,)
+            ).fetchone()
+
+            if not income:
+                raise RuntimeError("Flutterwave income record was not created.")
+
+            income_id = income["id"]
+
+            audit_details = json.dumps({
+                "gateway": "Flutterwave",
+                "reference": reference,
+                "amount": str(paid_amount),
+                "transaction_id": transaction_id,
+                "action": "Automatic verified payment reconciliation"
+            }, ensure_ascii=False)
+
+            conn.execute("""
+                INSERT INTO audit_log
+                (happened_at, action, table_name, record_id, details, user_id, username)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                datetime.now().isoformat(timespec="seconds"),
+                "FLUTTERWAVE_AUTO_RECONCILIATION",
+                "income",
+                income_id,
+                audit_details,
+                None,
+                "system"
+            ))
+
+        # Always update payment status, even if income was already recorded.
+        conn.execute("""
+            UPDATE payment_transactions
+            SET status='Paid',
+                gateway_transaction_id=?,
+                gateway_response=?,
+                paid_at=CURRENT_TIMESTAMP
+            WHERE reference=?
+        """, (transaction_id, json.dumps(result), reference))
+
+        conn.commit()
+
+        return {
+            "ok": True,
+            "paid": True,
+            "already_reconciled": bool(existing),
+            "income_id": income_id,
+            "reference": reference,
+            "status": "Paid",
+            "amount": float(paid_amount)
+        }, 200
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Flutterwave verification or reconciliation failed.")
+        return {
+            "error": "Payment verification could not be recorded. Please retry."
+        }, 500
+
+
+@app.post("/api/flutterwave/webhook")
+def api_flutterwave_webhook():
+    import os
+    import hmac
+    import re
+
+    expected = os.environ.get("FLW_SECRET_HASH", "").strip()
+    supplied = request.headers.get("verif-hash", "")
+
+    if not expected or not hmac.compare_digest(supplied, expected):
+        return jsonify({"error": "Unauthorized webhook."}), 401
+
+    payload = request.get_json(silent=True)
+
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Invalid webhook payload."}), 400
+
+    data = payload.get("data")
+
+    if not isinstance(data, dict):
+        return jsonify({"error": "Webhook transaction data is missing."}), 400
+
+    reference = str(data.get("tx_ref") or "").strip()
+    transaction_id = data.get("id")
+
+    if not reference or len(reference) > 120:
+        return jsonify({"error": "Invalid payment reference."}), 400
+
+    if (
+        isinstance(transaction_id, bool)
+        or not re.fullmatch(r"[1-9][0-9]*", str(transaction_id or ""))
+    ):
+        return jsonify({"error": "Invalid Flutterwave transaction ID."}), 400
+
+    result, status = _flutterwave_verify_transaction(
+        reference, int(transaction_id)
+    )
+    return jsonify(result), status
+
+
 @app.get("/api/payment/verify/<reference>")
 def api_payment_verify(reference):
     import os, requests
@@ -9323,6 +9660,20 @@ def api_payment_verify(reference):
 
     if not row:
         return jsonify({"error":"Payment transaction not found."}),404
+
+    gateway = str(row["gateway"] or "").strip().lower()
+
+    if gateway == "flutterwave":
+        transaction_id = request.args.get("transaction_id", "")
+        result, status = _flutterwave_verify_transaction(reference, transaction_id)
+        return jsonify(result), status
+
+    if gateway != "paystack":
+        return jsonify({
+            "error": "This historical transaction belongs to another payment gateway.",
+            "gateway": row["gateway"],
+            "reference": reference
+        }), 409
 
     secret = os.environ.get("PAYSTACK_SECRET_KEY","").strip()
     if not secret:
@@ -9419,112 +9770,206 @@ def api_payment_verify(reference):
         "amount":amount
     }),200
 
+
 @app.post("/api/payment/initiate")
 def api_payment_initiate():
-    import os,uuid,requests
+    import os
+    import uuid
+    import json
+    import re
+    import requests
+    from urllib.parse import urlparse
+    from decimal import Decimal, InvalidOperation
 
-    d=request.get_json() or {}
-    email=(d.get("donor_email") or "").strip()
-    amount=float(d.get("amount",0))
-    account_id=d.get("church_account_id")
+    d = request.get_json(silent=True) or {}
 
-    if amount<=0 or not email:
-        return jsonify({"error":"Valid amount and email are required."}),400
+    email = str(d.get("donor_email") or "").strip()
+    name = str(d.get("donor_name") or "").strip()
+    phone = str(d.get("donor_phone") or "").strip()
+    purpose = str(d.get("purpose") or "General Evangelism").strip()
 
-    if not account_id:
-        return jsonify({"error":"A church account must be selected."}),400
+    if (
+        len(email) > 254
+        or not re.fullmatch(
+            r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+",
+            email
+        )
+    ):
+        return jsonify({"error": "A valid email address is required."}), 400
 
-    account=db().execute(
-        "SELECT * FROM church_accounts WHERE id=? AND active=1",
-        (account_id,)
-    ).fetchone()
-
-    if not account:
-        return jsonify({"error":"Selected church account was not found or is inactive."}),404
-
-    ref="DSD-"+uuid.uuid4().hex[:12].upper()
-
-    callback_url = request.url_root.rstrip("/") + "/?payment=return"
-
-    payload={
-        "email":email,
-        "amount":str(round(amount*100)),
-        "currency":"NGN",
-        "reference":ref,
-        "callback_url":callback_url,
-        "metadata":{
-            "purpose":d.get("purpose"),
-            "account_level":account["account_level"],
-            "circuit":account["circuit"],
-            "church_name":account["church_name"],
-            "church_account_id":account["id"],
-            "account_name":account["account_name"],
-            "bank_name":account["bank_name"],
-            "account_number":account["account_number"],
-            "donor_name":d.get("donor_name"),
-            "donor_phone":d.get("donor_phone")
-        }
-    }
-
-    secret=os.environ.get("PAYSTACK_SECRET_KEY","").strip()
-    if not secret:
-        return jsonify({"error":"Paystack secret key is not configured on the server."}),503
+    if len(name) > 160 or len(phone) > 40 or len(purpose) > 250:
+        return jsonify({"error": "Payment details are too long."}), 400
 
     try:
-        r=requests.post(
-            "https://api.paystack.co/transaction/initialize",
-            json=payload,
-            headers={
-                "Authorization":"Bearer "+secret,
-                "Content-Type":"application/json"
-            },
-            timeout=30
-        )
-        result=r.json()
-    except Exception as e:
-        return jsonify({"error":"Paystack connection failed.","detail":str(e)}),502
-
-    if not result.get("status"):
+        decimal_amount = Decimal(str(d.get("amount", "")))
+        if (
+            not decimal_amount.is_finite()
+            or decimal_amount < Decimal("100")
+            or decimal_amount >= Decimal("1000000000")
+            or decimal_amount != decimal_amount.quantize(Decimal("0.01"))
+        ):
+            raise InvalidOperation()
+        amount = float(decimal_amount)
+    except (InvalidOperation, ValueError, TypeError):
         return jsonify({
-            "error":result.get("message","Paystack initialization failed.")
-        }),502
+            "error": "Enter a valid NGN amount of at least ₦100, with no more than two decimal places."
+        }), 400
 
-    data=result["data"]
+    raw_account_id = d.get("church_account_id")
+    if (
+        isinstance(raw_account_id, bool)
+        or not re.fullmatch(r"[1-9][0-9]*", str(raw_account_id or ""))
+    ):
+        return jsonify({"error": "A valid church account must be selected."}), 400
 
-    db().execute(
-        """INSERT INTO payment_transactions(
-            reference,gateway,status,amount,currency,purpose,
-            account_level,circuit,church_name,church_account_id,
-            donor_name,donor_email,donor_phone,payment_method,
-            gateway_transaction_id,gateway_response
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (
-            ref,
-            "Paystack",
-            "Pending",
-            amount,
-            "NGN",
-            d.get("purpose"),
-            account["account_level"],
-            account["circuit"],
-            account["church_name"],
-            account["id"],
-            d.get("donor_name"),
-            email,
-            d.get("donor_phone"),
-            d.get("payment_method") or "Paystack",
-            str(data.get("access_code","")),
-            str(result)
+    account_id = int(raw_account_id)
+
+    secret = os.environ.get("FLW_SECRET_KEY", "").strip()
+    if not secret:
+        return jsonify({"error": "Flutterwave is not configured."}), 503
+
+    user = current_user()
+    member_id = user["member_id"] if user and user["member_id"] else None
+
+    reference = "DSD-" + uuid.uuid4().hex[:12].upper()
+    return_path = "/member-dashboard" if member_id else "/giving"
+    redirect_url = request.url_root.rstrip("/") + return_path
+
+    conn = db()
+
+    try:
+        account = conn.execute(
+            "SELECT * FROM church_accounts WHERE id=? AND active=1",
+            (account_id,)
+        ).fetchone()
+
+        if not account:
+            return jsonify({
+                "error": "Selected church account is unavailable."
+            }), 404
+
+        conn.execute(
+            """
+            INSERT INTO payment_transactions
+            (
+                reference, gateway, status, amount, currency, purpose,
+                account_level, circuit, church_name, church_account_id,
+                member_id, donor_name, donor_email, donor_phone,
+                payment_method, gateway_transaction_id, gateway_response
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                reference, "Flutterwave", "Pending", amount, "NGN",
+                purpose, account["account_level"], account["circuit"],
+                account["church_name"], account["id"], member_id,
+                name, email, phone, "Flutterwave", "",
+                "Checkout initialization pending"
+            )
         )
-    )
-    db().commit()
+        conn.commit()
 
-    return jsonify({
-        "reference":ref,
-        "status":"Pending",
-        "authorization_url":data.get("authorization_url"),
-        "access_code":data.get("access_code")
-    }),201
+        checkout_payload = {
+            "tx_ref": reference,
+            "amount": amount,
+            "currency": "NGN",
+            "redirect_url": redirect_url,
+            "customer": {
+                "email": email,
+                "name": name,
+                "phonenumber": phone
+            },
+            "customizations": {
+                "title": "MCN Delta South Diocese",
+                "description": purpose
+            }
+        }
+
+        try:
+            response = requests.post(
+                "https://api.flutterwave.com/v3/payments",
+                json=checkout_payload,
+                headers={"Authorization": "Bearer " + secret},
+                timeout=30
+            )
+            result = response.json()
+        except Exception:
+            app.logger.exception(
+                "Flutterwave checkout outcome uncertain: %s", reference
+            )
+            return jsonify({
+                "error": "Checkout initialization could not be confirmed. Contact the finance office before trying again.",
+                "reference": reference,
+                "status": "Pending"
+            }), 502
+
+        payment_link = (
+            (result.get("data") or {}).get("link")
+            if isinstance(result, dict) else None
+        )
+
+        valid_link = False
+        if isinstance(payment_link, str):
+            parsed = urlparse(payment_link)
+            valid_link = (
+                parsed.scheme == "https"
+                and parsed.hostname == "checkout.flutterwave.com"
+                and not parsed.username
+                and not parsed.password
+            )
+
+        if (
+            response.status_code not in (200, 201)
+            or not isinstance(result, dict)
+            or result.get("status") != "success"
+            or not valid_link
+        ):
+            conn.execute(
+                """
+                UPDATE payment_transactions
+                SET status='Failed', gateway_response=?
+                WHERE reference=? AND gateway='Flutterwave'
+                """,
+                (
+                    json.dumps(
+                        result if isinstance(result, dict)
+                        else {"message": "Invalid gateway response"}
+                    )[:12000],
+                    reference
+                )
+            )
+            conn.commit()
+            return jsonify({
+                "error": "Flutterwave checkout initialization failed.",
+                "reference": reference
+            }), 502
+
+        conn.execute(
+            """
+            UPDATE payment_transactions
+            SET gateway_response=?
+            WHERE reference=? AND gateway='Flutterwave'
+            """,
+            (json.dumps(result)[:12000], reference)
+        )
+        conn.commit()
+
+        return jsonify({
+            "reference": reference,
+            "status": "Pending",
+            "authorization_url": payment_link
+        }), 201
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Flutterwave payment initiation failed.")
+        return jsonify({
+            "error": "Payment initialization could not be completed."
+        }), 500
+
 
 
 @login_required

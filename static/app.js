@@ -63,10 +63,15 @@ church_plants:[["year","Target year","number"],["circuit","Circuit","select",["E
 let current="dashboard",records=[],me=null,circuitOptions=["Diocesan","Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"];
 const money=n=>n===null||n===undefined?"—":"₦"+Number(n||0).toLocaleString("en-NG",{maximumFractionDigits:0});
 function setStatus(s){$("#status").textContent=s}
-async function checkPaystackReturn(){
+async function checkPaymentReturn(){
   const params = new URLSearchParams(window.location.search);
-  const reference = params.get("reference") || params.get("trxref");
-  if(!reference) return;
+
+  const flutterwaveRef = params.get("tx_ref");
+  const transactionId = params.get("transaction_id");
+  const gatewayStatus = (params.get("status") || "").toLowerCase();
+
+  // Preserve historical Paystack callback verification.
+  const paystackReference = params.get("reference") || params.get("trxref");
 
   const box = $("#paymentResult");
   const title = $("#paymentResultTitle");
@@ -74,29 +79,66 @@ async function checkPaystackReturn(){
   const refEl = $("#paymentResultReference");
   const amountEl = $("#paymentResultAmount");
 
-  if(box) box.hidden = false;
-  if(title) title.textContent = "Verifying Payment";
-  if(message) message.textContent = "Please wait while we verify your Paystack transaction.";
-  if(refEl) refEl.textContent = reference;
+  if (!flutterwaveRef && !paystackReference && params.get("payment") !== "return") {
+    return;
+  }
 
-  try{
-    const result = await api("/api/payment/verify/" + encodeURIComponent(reference));
+  if (box) box.hidden = false;
 
-    if(result.paid){
-      if(title) title.textContent = "Payment Successful";
-      if(message) message.textContent = "Your payment has been verified and recorded successfully.";
-      if(amountEl) amountEl.textContent = result.amount != null ? money(result.amount) : "Verified";
-    }else{
-      if(title) title.textContent = "Payment Not Completed";
-      if(message) message.textContent = "Paystack has not marked this transaction as successful.";
-      if(amountEl) amountEl.textContent = result.amount != null ? money(result.amount) : "Pending";
+  if (gatewayStatus === "cancelled") {
+    if (title) title.textContent = "Payment Cancelled";
+    if (message) message.textContent = "The checkout was cancelled. No successful payment has been confirmed.";
+    if (refEl) refEl.textContent = flutterwaveRef || "";
+    if (amountEl) amountEl.textContent = "";
+    return;
+  }
+
+  if (title) title.textContent = "Verifying Payment";
+  if (message) message.textContent = "Please wait while we verify your transaction.";
+  if (refEl) refEl.textContent = flutterwaveRef || paystackReference || "";
+
+  try {
+    let result;
+
+    if (flutterwaveRef) {
+      if (!transactionId) {
+        throw Error("Flutterwave did not return a transaction ID. Please contact the church finance office with your payment reference.");
+      }
+
+      // Never trust the browser's status parameter.
+      // The backend independently verifies the transaction with Flutterwave.
+      result = await api(
+        "/api/payment/verify/" + encodeURIComponent(flutterwaveRef) +
+        "?transaction_id=" + encodeURIComponent(transactionId)
+      );
+    } else if (paystackReference) {
+      // Historical Paystack transactions continue using their existing route.
+      result = await api(
+        "/api/payment/verify/" + encodeURIComponent(paystackReference)
+      );
+    } else {
+      if (title) title.textContent = "Payment Verification";
+      if (message) message.textContent = "Your checkout has returned. If you have a payment reference, contact the church finance office for verification.";
+      return;
     }
-  }catch(err){
-    if(title) title.textContent = "Payment Verification Error";
-    if(message) message.textContent = err.message;
+
+    if (result.paid) {
+      if (title) title.textContent = "Payment Successful";
+      if (message) message.textContent = "Your payment has been verified and recorded successfully.";
+      if (amountEl) amountEl.textContent =
+        result.amount != null ? money(result.amount) : "Verified";
+    } else {
+      if (title) title.textContent = "Payment Not Confirmed";
+      if (message) message.textContent =
+        result.error || "The payment has not been confirmed as successful. Please do not make another payment until you check with the finance office.";
+      if (amountEl) amountEl.textContent =
+        result.amount != null ? money(result.amount) : "Pending";
+    }
+  } catch (err) {
+    if (title) title.textContent = "Payment Verification Error";
+    if (message) message.textContent = err.message;
   }
 }
-
 async function loadOnlineGiving(){
   try{
     const accounts=await api("/api/church-accounts");
@@ -123,7 +165,7 @@ async function loadOnlineGiving(){
   }
 }
 
-checkPaystackReturn();
+checkPaymentReturn();
 
 document.addEventListener("submit",async function(e){
   if(e.target.id!=="onlineGivingForm")return;
@@ -149,12 +191,12 @@ document.addEventListener("submit",async function(e){
     return;
   }
 
-  const btn=$("#paystackPayBtn");
+  const btn=$("#paystackPayBtn") || $("#flutterwavePayBtn");
   const status=$("#givingStatus");
 
   try{
     if(btn)btn.disabled=true;
-    if(status)status.textContent="Connecting securely to Paystack...";
+    if(status)status.textContent="Connecting securely to Flutterwave...";
 
     const result=await api("/api/payment/initiate",{
       method:"POST",
@@ -168,15 +210,15 @@ document.addEventListener("submit",async function(e){
         donor_name:$("#givingName")?.value.trim()||"",
         donor_email:email,
         donor_phone:$("#givingPhone")?.value.trim()||"",
-        payment_method:"Paystack"
+        payment_method:"Flutterwave"
       })
     });
 
     if(!result.authorization_url){
-      throw Error("Paystack did not return a checkout URL.");
+      throw Error("Flutterwave did not return a checkout URL.");
     }
 
-    if(status)status.textContent="Opening secure Paystack checkout...";
+    if(status)status.textContent="Opening secure Flutterwave checkout...";
     window.location.href=result.authorization_url;
   }catch(err){
     if(status)status.textContent=err.message;
