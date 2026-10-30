@@ -604,7 +604,9 @@ window.DS_TURN_CONFIG = {{ turn_config | tojson }};
   <div class="card">
     <h3>Provider availability</h3>
     <p><b>Flutterwave:</b> Online checkout and server-side verification.</p>
-    <p><b>Paystack:</b> Online checkout and server-side verification. Webhook signature verification is supported.</p>\n    <p><b>Webhook URLs:</b> Flutterwave: <code>https://mcn-delta-south.naijacloud.app/api/flutterwave/webhook</code> · Paystack: <code>https://mcn-delta-south.naijacloud.app/api/paystack/webhook</code></p>\n    <p>Configure the matching webhook secret in the provider dashboard. Never share secret keys in messages or screenshots.</p>
+    <p><b>Paystack:</b> Online checkout and server-side verification. Webhook signature verification is supported.</p>
+    <p><b>Webhook URLs:</b> Flutterwave: <code>https://mcn-delta-south.naijacloud.app/api/flutterwave/webhook</code> · Paystack: <code>https://mcn-delta-south.naijacloud.app/api/paystack/webhook</code></p>
+    <p>Configure the matching webhook secret in the provider dashboard. Never share secret keys in messages or screenshots.</p>
     <p><b>Direct Bank Transfer:</b> Publishes the configured bank details for manual finance-office confirmation. It does not automatically mark a transfer as paid.</p>
     <p><b>Monnify:</b> Settings can be saved, but checkout is not enabled until its API integration is completed. Do not activate it yet.</p>
   </div>
