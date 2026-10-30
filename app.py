@@ -8194,9 +8194,11 @@ def _payment_secret(provider, field="secret_key"):
         "SELECT secret_encrypted,webhook_secret_encrypted FROM payment_settings WHERE LOWER(provider)=? ORDER BY id DESC LIMIT 1",
         (str(provider).lower(),)
     ).fetchone()
-    encrypted = (row["webhook_secret_encrypted"] if field == "webhook_secret" else row["secret_encrypted"]) if row else ""
-    if field == "webhook_secret" and str(provider).lower() == "paystack" and not encrypted and row:
+    if row and field == "webhook_secret" and str(provider).lower() == "paystack":
+        # Paystack signs webhooks with the API secret key itself.
         encrypted = row["secret_encrypted"]
+    else:
+        encrypted = (row["webhook_secret_encrypted"] if field == "webhook_secret" else row["secret_encrypted"]) if row else ""
     if encrypted:
         try:
             return _payment_fernet().decrypt(str(encrypted).encode("ascii")).decode("utf-8")
