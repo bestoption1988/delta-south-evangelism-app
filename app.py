@@ -10014,7 +10014,10 @@ def api_payment_initiate():
             parsed = urlparse(payment_link)
             valid_link = (
                 parsed.scheme == "https"
-                and parsed.hostname == "checkout.flutterwave.com"
+                and parsed.hostname in {
+                    "checkout.flutterwave.com",
+                    "checkout-v2.dev-flutterwave.com"
+                }
                 and not parsed.username
                 and not parsed.password
             )
