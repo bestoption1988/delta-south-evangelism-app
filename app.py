@@ -8293,7 +8293,7 @@ def api_payment_settings_save():
 @login_required
 def api_payment_settings():
     user = current_user()
-    if not user or user.get("role") != "Admin":
+    if not user or user["role"] != "Admin":
         return jsonify({"error":"Only Admin can view payment settings"}),403
     rows = db().execute("""
         SELECT provider,enabled,public_key,contract_code,mode,merchant_id,
@@ -8327,7 +8327,7 @@ def api_payment_settings():
 def api_payment_settings_test():
     import requests
     user = current_user()
-    if not user or user.get("role") != "Admin":
+    if not user or user["role"] != "Admin":
         return jsonify({"error":"Only Admin can test payment connections."}),403
     d=request.get_json(silent=True) or {}
     provider=str(d.get("provider") or "").lower()
@@ -8421,12 +8421,12 @@ def api_confirm_bank_transfer(reference):
         conn.execute("""
             UPDATE payment_transactions SET status='Paid',gateway_response=?,
                 paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP) WHERE reference=?
-        """,(json.dumps({"confirmed_by":user.get("username","finance"),"confirmed_at":datetime.now().isoformat(timespec="seconds")})[:12000],reference))
+        """,(json.dumps({"confirmed_by":user["username"],"confirmed_at":datetime.now().isoformat(timespec="seconds")})[:12000],reference))
         details=json.dumps({"reference":reference,"amount":str(amount),"action":"Manual bank transfer confirmation"})
         conn.execute("""
             INSERT INTO audit_log(happened_at,action,table_name,record_id,details,user_id,username)
             VALUES(?,?,?,?,?,?,?)
-        """,(datetime.now().isoformat(timespec="seconds"),"BANK_TRANSFER_CONFIRMED","income",income_id,details,user["id"],user.get("username","finance")))
+        """,(datetime.now().isoformat(timespec="seconds"),"BANK_TRANSFER_CONFIRMED","income",income_id,details,user["id"],user["username"]))
         conn.commit()
         return jsonify({"ok":True,"paid":True,"reference":reference,"income_id":income_id,"amount":float(amount)}),200
     except Exception:
@@ -10210,7 +10210,7 @@ def api_payment_diagnostics():
     import os
 
     user = current_user()
-    if not user or user.get("role") != "Admin":
+    if not user or user["role"] != "Admin":
         return jsonify({"error": "Only Admin can view payment diagnostics."}), 403
 
     flutterwave_secret = _payment_secret("flutterwave")
