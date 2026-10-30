@@ -10524,6 +10524,104 @@ def media_library_admin():
     )
 # --- End media library ---
 
+
+@app.route("/admin/flutterwave-diagnostics", methods=["GET"])
+@page_login_required
+def admin_flutterwave_diagnostics():
+    """Temporary, read-only PostgreSQL schema diagnostic."""
+    user = current_user()
+    if not user or user["role"] != "Admin":
+        return "Administrator access required.", 403
+
+    if database_backend() != "postgres":
+        return jsonify({
+            "error": "This diagnostic requires the PostgreSQL backend."
+        }), 400
+
+    required_tables = ("income", "payment_transactions", "audit_log")
+
+    try:
+        from postgres_adapter import postgres_config
+
+        config = postgres_config()
+        schema = config.get("startup_params", {}).get(
+            "search_path", "public"
+        )
+        if isinstance(schema, dict):
+            schema = schema.get("search_path", "public")
+        if not isinstance(schema, str):
+            schema = "public"
+
+        conn = db()
+        result = {
+            "database_backend": "POSTGRESQL",
+            "schema": schema,
+            "tables": {},
+            "income_reference_indexes": [],
+            "duplicate_nonempty_income_reference_groups": None,
+        }
+
+        for table in required_tables:
+            columns = sorted(table_column_names(conn, table))
+            result["tables"][table] = {
+                "exists": bool(columns),
+                "columns": columns,
+            }
+
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                """
+                SELECT indexname, indexdef
+                FROM pg_indexes
+                WHERE schemaname = %s
+                  AND tablename = 'income'
+                ORDER BY indexname
+                """,
+                (schema,),
+            )
+            result["income_reference_indexes"] = [
+                {"name": row[0], "definition": row[1]}
+                for row in cursor.fetchall()
+            ]
+
+            income_columns = set(
+                result["tables"]["income"]["columns"]
+            )
+            if (
+                result["tables"]["income"]["exists"]
+                and "reference" in income_columns
+            ):
+                cursor.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM (
+                        SELECT reference
+                        FROM income
+                        WHERE reference IS NOT NULL
+                          AND TRIM(reference) <> ''
+                        GROUP BY reference
+                        HAVING COUNT(*) > 1
+                    ) AS duplicate_refs
+                    """
+                )
+                result[
+                    "duplicate_nonempty_income_reference_groups"
+                ] = cursor.fetchone()[0]
+        finally:
+            cursor.close()
+
+        return jsonify(result)
+
+    except Exception:
+        app.logger.exception(
+            "Flutterwave schema diagnostic failed"
+        )
+        return jsonify({
+            "error": "Diagnostic failed. Check application logs."
+        }), 500
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
