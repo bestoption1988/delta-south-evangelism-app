@@ -583,7 +583,7 @@ window.DS_TURN_CONFIG = {{ turn_config | tojson }};
     <div id="psOnlineFields" class="form-grid">
       <label>Public Key<input id="psPublicKey" autocomplete="off" placeholder="Public key (optional for checkout)"></label>
       <label>Secret Key<input id="psSecretKey" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved key"></label>
-      <label>Webhook Secret / Hash<input id="psWebhookSecret" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved webhook secret"></label>
+      <label>Webhook Secret / Hash (Flutterwave only; Paystack uses its Secret Key)<input id="psWebhookSecret" type="password" autocomplete="new-password" placeholder="Leave blank to keep the saved webhook secret"></label>
       <label>Contract Code<input id="psContractCode" autocomplete="off"></label>
       <label>Merchant ID<input id="psMerchantId" autocomplete="off"></label>
     </div>
