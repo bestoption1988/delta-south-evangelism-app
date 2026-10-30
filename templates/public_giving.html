@@ -269,7 +269,14 @@ form.addEventListener("submit", async function(event) {
             body: JSON.stringify(data)
         });
 
-        const result = await response.json();
+        const raw = await response.text();
+        let result;
+        try {
+            result = raw ? JSON.parse(raw) : {};
+        } catch (_) {
+            console.error("Payment initiation returned non-JSON:", response.status, raw.slice(0, 1000));
+            throw new Error("Payment server returned an unexpected response (HTTP " + response.status + ").");
+        }
 
         if (!response.ok) {
             throw new Error(result.error || "Payment could not be started.");
