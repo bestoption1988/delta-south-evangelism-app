@@ -183,7 +183,7 @@ function showMessage(text, type) {
 
 async function verifyFlutterwaveReturn() {
     const params = new URLSearchParams(window.location.search);
-    const reference = params.get("tx_ref");
+    const reference = params.get("tx_ref") || params.get("reference") || params.get("trxref");
     const transactionId = params.get("transaction_id");
     const status = (params.get("status") || "").toLowerCase();
 
@@ -199,9 +199,9 @@ async function verifyFlutterwaveReturn() {
         return;
     }
 
-    if (!reference || !transactionId) {
+    if (!reference || (!transactionId && params.get("payment") !== "return")) {
         showMessage(
-            "We could not obtain the transaction details from Flutterwave. Please contact the Diocese finance office before attempting another payment.",
+            "We could not obtain the payment reference. Please contact the Diocese finance office before attempting another payment.",
             "message-error"
         );
         return;
@@ -214,10 +214,9 @@ async function verifyFlutterwaveReturn() {
     );
 
     try {
-        const response = await fetch(
-            "/api/payment/verify/" + encodeURIComponent(reference) +
-            "?transaction_id=" + encodeURIComponent(transactionId)
-        );
+        const verifyUrl = "/api/payment/verify/" + encodeURIComponent(reference) +
+            (transactionId ? "?transaction_id=" + encodeURIComponent(transactionId) : "");
+        const response = await fetch(verifyUrl,{cache:"no-store"});
 
         const result = await response.json();
 
@@ -282,15 +281,25 @@ form.addEventListener("submit", async function(event) {
             throw new Error(result.error || "Payment could not be started.");
         }
 
-        if (!result.authorization_url) {
-            throw new Error("Flutterwave did not return a checkout address.");
+        if (result.bank_transfer) {
+            const bank=result.bank_transfer;
+            showMessage(
+                "BANK TRANSFER DETAILS\nReference: "+result.reference+
+                "\nBank: "+bank.bank_name+
+                "\nAccount Name: "+bank.account_name+
+                "\nAccount Number: "+bank.account_number+
+                "\n\n"+(bank.instructions||"Use the reference as your transfer narration.")+
+                "\n\nYour payment will remain pending until the Finance Office confirms receipt.",
+                "message-success"
+            );
+            button.disabled=false;
+            button.textContent="Transfer details displayed";
+            return;
         }
-
-        showMessage(
-            "Redirecting you to Flutterwave secure checkout...",
-            "message-success"
-        );
-
+        if (!result.authorization_url) {
+            throw new Error("The selected payment provider did not return a secure checkout address.");
+        }
+        showMessage("Redirecting you to secure payment checkout…","message-success");
         window.location.assign(result.authorization_url);
 
     } catch (error) {
