@@ -9402,10 +9402,16 @@ def _flutterwave_verify_transaction(reference, transaction_id):
         app.logger.exception("Flutterwave API verification request failed.")
         return {"error": "Unable to verify payment with Flutterwave."}, 502
 
-    if response.status_code != 200 or result.get("status") != "success":
+    if (
+        response.status_code != 200
+        or not isinstance(result, dict)
+        or result.get("status") != "success"
+    ):
         return {"error": "Flutterwave verification failed."}, 502
 
-    data = result.get("data") or {}
+    data = result.get("data")
+    if not isinstance(data, dict):
+        return {"error": "Flutterwave returned an invalid verification record."}, 502
 
     if str(data.get("id") or "") != transaction_id:
         return {"error": "Flutterwave transaction ID mismatch."}, 409
@@ -9610,39 +9616,53 @@ def _flutterwave_verify_transaction(reference, transaction_id):
 def api_flutterwave_webhook():
     import os
     import hmac
+    import hashlib
+    import base64
     import re
 
     expected = os.environ.get("FLW_SECRET_HASH", "").strip()
-    supplied = request.headers.get("verif-hash", "")
+    if not expected:
+        app.logger.error("Flutterwave webhook rejected: FLW_SECRET_HASH is not configured.")
+        return jsonify({"error": "Webhook authentication is not configured."}), 503
 
-    if not expected or not hmac.compare_digest(supplied, expected):
+    # Support the v3 verif-hash header and the newer HMAC-SHA256
+    # flutterwave-signature header. The raw body is retained for HMAC validation.
+    raw_body = request.get_data(cache=True)
+    supplied_v3 = request.headers.get("verif-hash", "").strip()
+    supplied_v4 = request.headers.get("flutterwave-signature", "").strip()
+    expected_v4 = base64.b64encode(
+        hmac.new(expected.encode("utf-8"), raw_body, hashlib.sha256).digest()
+    ).decode("ascii")
+
+    valid_v3 = bool(supplied_v3) and hmac.compare_digest(supplied_v3, expected)
+    valid_v4 = bool(supplied_v4) and hmac.compare_digest(supplied_v4, expected_v4)
+    if not (valid_v3 or valid_v4):
+        app.logger.warning("Flutterwave webhook rejected: signature validation failed.")
         return jsonify({"error": "Unauthorized webhook."}), 401
 
     payload = request.get_json(silent=True)
-
     if not isinstance(payload, dict):
         return jsonify({"error": "Invalid webhook payload."}), 400
 
     data = payload.get("data")
-
     if not isinstance(data, dict):
         return jsonify({"error": "Webhook transaction data is missing."}), 400
 
     reference = str(data.get("tx_ref") or "").strip()
     transaction_id = data.get("id")
-
     if not reference or len(reference) > 120:
         return jsonify({"error": "Invalid payment reference."}), 400
 
     if (
         isinstance(transaction_id, bool)
         or not re.fullmatch(r"[1-9][0-9]*", str(transaction_id or ""))
+        or len(str(transaction_id)) > 30
     ):
         return jsonify({"error": "Invalid Flutterwave transaction ID."}), 400
 
-    result, status = _flutterwave_verify_transaction(
-        reference, int(transaction_id)
-    )
+    # The shared verifier checks the final gateway status, exact amount,
+    # currency, reference and transaction ID, and posts income idempotently.
+    result, status = _flutterwave_verify_transaction(reference, int(transaction_id))
     return jsonify(result), status
 
 
@@ -9675,100 +9695,226 @@ def api_payment_verify(reference):
             "reference": reference
         }), 409
 
-    secret = os.environ.get("PAYSTACK_SECRET_KEY","").strip()
+    secret = os.environ.get("PAYSTACK_SECRET_KEY", "").strip()
     if not secret:
-        return jsonify({"error":"Paystack secret key is not configured on the server."}),503
+        return jsonify({"error": "Paystack secret key is not configured on the server."}), 503
 
     try:
         r = requests.get(
             "https://api.paystack.co/transaction/verify/" + reference,
             headers={
-                "Authorization":"Bearer " + secret,
-                "Content-Type":"application/json"
+                "Authorization": "Bearer " + secret,
+                "Content-Type": "application/json"
             },
             timeout=30
         )
         result = r.json()
-    except Exception as e:
-        return jsonify({"error":"Paystack verification failed.","detail":str(e)}),502
+    except Exception:
+        app.logger.exception("Paystack API verification request failed.")
+        return jsonify({"error": "Paystack verification failed."}), 502
 
-    if not result.get("status"):
+    if (
+        r.status_code != 200
+        or not isinstance(result, dict)
+        or not result.get("status")
+        or not isinstance(result.get("data"), dict)
+    ):
         return jsonify({
-            "error": result.get("message","Paystack verification failed."),
+            "error": (
+                result.get("message", "Paystack verification failed.")
+                if isinstance(result, dict)
+                else "Paystack returned an invalid verification response."
+            ),
             "reference": reference
-        }),502
+        }), 502
 
-    data = result.get("data") or {}
-    gateway_status = str(data.get("status") or "").lower()
-    amount = float(data.get("amount") or 0) / 100
-    expected_amount = float(row["amount"] or 0)
+    data = result["data"]
+    gateway_status = str(data.get("status") or "").strip().lower()
+    returned_reference = str(data.get("reference") or "").strip()
+    currency = str(data.get("currency") or "").strip().upper()
+    transaction_id = str(data.get("id") or "").strip()
 
-    if gateway_status == "success" and abs(amount - expected_amount) > 0.01:
-        return jsonify({
-            "error":"Payment amount mismatch.",
-            "reference":reference,
-            "expected_amount":expected_amount,
-            "paid_amount":amount
-        }),409
+    if returned_reference != reference:
+        return jsonify({"error": "Paystack payment reference mismatch."}), 409
+    if currency != "NGN" or str(row["currency"] or "").upper() != "NGN":
+        return jsonify({"error": "Paystack payment currency mismatch."}), 409
 
     if gateway_status != "success":
-        db().execute(
-            "UPDATE payment_transactions SET status=?,gateway_response=? WHERE reference=?",
-            (gateway_status.title() or "Pending", str(result), reference)
-        )
-        db().commit()
+        conn = db()
+        if database_backend() == "postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+        current = conn.execute(
+            "SELECT status FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+        if current and str(current["status"] or "").lower() != "paid":
+            safe_status = {
+                "failed": "Failed",
+                "abandoned": "Abandoned",
+                "ongoing": "Pending",
+                "pending": "Pending"
+            }.get(gateway_status, "Pending")
+            conn.execute(
+                "UPDATE payment_transactions SET status=?,gateway_response=? WHERE reference=?",
+                (safe_status, json.dumps(result)[:12000], reference)
+            )
+        conn.commit()
         return jsonify({
-            "ok":True,
-            "paid":False,
-            "reference":reference,
-            "status":gateway_status or "pending"
-        })
+            "ok": True,
+            "paid": False,
+            "reference": reference,
+            "status": gateway_status or "pending"
+        }), 200
 
-    existing = db().execute(
-        "SELECT id FROM income WHERE reference=? LIMIT 1",
-        (reference,)
-    ).fetchone()
+    from decimal import Decimal, InvalidOperation
+    from datetime import date, datetime
+    import json
 
-    if not existing:
-        db().execute(
-            """INSERT INTO income
-            (date,donor_name,source,fund,amount,method,reference,received_by,notes,church_account_id)
-            VALUES(date('now'),?,?,?,?,?,?,?,?,?)""",
-            (
-                row["donor_name"] or "",
+    try:
+        amount_minor = Decimal(str(data.get("amount")))
+        expected_amount = Decimal(str(row["amount"]))
+        if (
+            not amount_minor.is_finite()
+            or amount_minor <= 0
+            or amount_minor != amount_minor.to_integral_value()
+            or not expected_amount.is_finite()
+            or expected_amount <= 0
+            or amount_minor / Decimal("100") != expected_amount
+        ):
+            raise InvalidOperation()
+    except (TypeError, ValueError, InvalidOperation):
+        return jsonify({"error": "Paystack payment amount mismatch."}), 409
+
+    if not transaction_id or not transaction_id.isascii() or not transaction_id.isdigit():
+        return jsonify({"error": "Paystack transaction ID is invalid."}), 409
+
+    conn = db()
+    try:
+        if database_backend() == "postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+
+        payment = conn.execute(
+            "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+        if not payment or str(payment["gateway"] or "").lower() != "paystack":
+            conn.rollback()
+            return jsonify({"error": "Paystack payment record not found."}), 404
+
+        if str(payment["currency"] or "").upper() != "NGN":
+            conn.rollback()
+            return jsonify({"error": "Stored payment currency is not NGN."}), 409
+
+        try:
+            current_expected = Decimal(str(payment["amount"]))
+            if current_expected != amount_minor / Decimal("100"):
+                raise InvalidOperation()
+        except (TypeError, ValueError, InvalidOperation):
+            conn.rollback()
+            return jsonify({"error": "Paystack payment amount mismatch."}), 409
+
+        stored_id = str(payment["gateway_transaction_id"] or "").strip()
+        if stored_id and stored_id != transaction_id:
+            conn.rollback()
+            return jsonify({"error": "A different Paystack transaction is already recorded."}), 409
+
+        existing = conn.execute(
+            "SELECT id,amount,member_id,church_account_id FROM income WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+
+        if existing:
+            try:
+                same_amount = Decimal(str(existing["amount"])) == current_expected
+            except (TypeError, ValueError, InvalidOperation):
+                same_amount = False
+            if not (
+                same_amount
+                and existing["member_id"] == payment["member_id"]
+                and existing["church_account_id"] == payment["church_account_id"]
+            ):
+                conn.rollback()
+                return jsonify({
+                    "error": "An income record already uses this reference but its amount or account details do not match."
+                }), 409
+            income_id = existing["id"]
+        else:
+            conn.execute("""
+                INSERT INTO income
+                (date,donor_name,source,fund,amount,method,reference,
+                 received_by,notes,member_id,church_account_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                date.today().isoformat(),
+                payment["donor_name"] or "Online Donor",
                 "Online Payment",
-                row["purpose"] or "General Evangelism",
-                amount,
+                payment["purpose"] or "General Evangelism",
+                float(current_expected),
                 "Paystack",
                 reference,
                 "Paystack",
                 "Verified Paystack payment",
-                row["church_account_id"]
-            )
-        )
+                payment["member_id"],
+                payment["church_account_id"]
+            ))
+            income = conn.execute(
+                "SELECT id FROM income WHERE reference=? LIMIT 1",
+                (reference,)
+            ).fetchone()
+            if not income:
+                raise RuntimeError("Paystack income record was not created.")
+            income_id = income["id"]
 
-    db().execute(
-        """UPDATE payment_transactions
-           SET status='Paid',
-               gateway_transaction_id=?,
-               gateway_response=?,
-               paid_at=CURRENT_TIMESTAMP
-           WHERE reference=?""",
-        (
-            str(data.get("id") or ""),
-            str(result),
-            reference
-        )
-    )
-    db().commit()
+            audit_details = json.dumps({
+                "gateway": "Paystack",
+                "reference": reference,
+                "amount": str(current_expected),
+                "transaction_id": transaction_id,
+                "action": "Automatic verified payment reconciliation"
+            }, ensure_ascii=False)
+            conn.execute("""
+                INSERT INTO audit_log
+                (happened_at,action,table_name,record_id,details,user_id,username)
+                VALUES (?,?,?,?,?,?,?)
+            """, (
+                datetime.now().isoformat(timespec="seconds"),
+                "PAYSTACK_AUTO_RECONCILIATION",
+                "income",
+                income_id,
+                audit_details,
+                None,
+                "system"
+            ))
 
-    return jsonify({
-        "ok":True,
-        "paid":True,
-        "reference":reference,
-        "status":"Paid",
-        "amount":amount
-    }),200
+        conn.execute("""
+            UPDATE payment_transactions
+            SET status='Paid',gateway_transaction_id=?,gateway_response=?,
+                paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP)
+            WHERE reference=?
+        """, (transaction_id, json.dumps(result)[:12000], reference))
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "paid": True,
+            "already_reconciled": bool(existing),
+            "income_id": income_id,
+            "reference": reference,
+            "status": "Paid",
+            "amount": float(current_expected)
+        }), 200
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Paystack verification or reconciliation failed.")
+        return jsonify({"error": "Paystack payment verification could not be recorded. Please retry."}), 500
 
 
 @app.get("/api/payment/diagnostics")
