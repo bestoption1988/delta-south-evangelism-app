@@ -10557,6 +10557,7 @@ def admin_flutterwave_diagnostics():
             "database_backend": "POSTGRESQL",
             "schema": schema,
             "tables": {},
+            "column_metadata": {},
             "income_reference_indexes": [],
             "duplicate_nonempty_income_reference_groups": None,
         }
@@ -10570,6 +10571,31 @@ def admin_flutterwave_diagnostics():
 
         cursor = conn.cursor()
         try:
+            for table in required_tables:
+                cursor.execute(
+                    """
+                    SELECT column_name, data_type, is_nullable,
+                           character_maximum_length,
+                           numeric_precision, numeric_scale
+                    FROM information_schema.columns
+                    WHERE table_schema = %s
+                      AND table_name = %s
+                    ORDER BY ordinal_position
+                    """,
+                    (schema, table),
+                )
+                result["column_metadata"][table] = [
+                    {
+                        "column": row[0],
+                        "type": row[1],
+                        "nullable": row[2],
+                        "max_length": row[3],
+                        "numeric_precision": row[4],
+                        "numeric_scale": row[5],
+                    }
+                    for row in cursor.fetchall()
+                ]
+
             cursor.execute(
                 """
                 SELECT indexname, indexdef
