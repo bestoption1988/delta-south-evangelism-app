@@ -912,13 +912,6 @@ async function testPaymentProviderConnection(){
     const data=await r.json(); msg.textContent=data.message||data.error||"Connection test completed.";
   }catch(e){msg.textContent=e.message;}
 }
-document.addEventListener("DOMContentLoaded",function(){
-  const nav=document.getElementById("nav");
-  if(nav) nav.addEventListener("click",function(e){
-    const button=e.target.closest('button[data-page="payment_settings"]');
-    if(button) loadPaymentSettings();
-  });
-});
 </script>
 
 </body></html>
