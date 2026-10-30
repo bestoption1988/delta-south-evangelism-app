@@ -250,7 +250,7 @@ function canPage(page){
     Admin: [
       "dashboard","communications","conference","command_centre","churches","circuits",
       "members","mission_teams","mission_contacts","testimonies","appreciations",
-      "commitments","income","church_accounts","online_giving","payment_management",
+      "commitments","income","church_accounts","online_giving","payment_settings","payment_management",
       "payment_reconciliation","finance_summary","financial_accountability","expenses",
       "equipment","trust_fund","mission_budgets","procurement_requests","planting_prospects",
       "church_plants","outreach","mission_calendar","sponsors","report_periods",
