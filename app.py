@@ -8155,25 +8155,219 @@ with app.app_context():
         ensure_member_care_attachment_schema()
         ensure_member_care_case_assignment_schema()
         ensure_member_care_timeline_schema()
-        TABLES = build_table_map()
+    # Additive payment configuration migration for both SQLite and PostgreSQL.
+    _payment_conn = db()
+    for _column, _definition in {
+        "mode": "TEXT DEFAULT 'test'",
+        "secret_encrypted": "TEXT DEFAULT ''",
+        "webhook_secret_encrypted": "TEXT DEFAULT ''",
+        "merchant_id": "TEXT DEFAULT ''",
+        "bank_name": "TEXT DEFAULT ''",
+        "account_name": "TEXT DEFAULT ''",
+        "account_number": "TEXT DEFAULT ''",
+        "account_instructions": "TEXT DEFAULT ''",
+        "is_default": "INTEGER DEFAULT 0"
+    }.items():
+        ensure_column(_payment_conn, "payment_settings", _column, _definition)
+    _payment_conn.commit()
+    TABLES = build_table_map()
+def _payment_fernet():
+    """Derive an encryption key from the persistent Flask session secret."""
+    import base64
+    import hashlib
+    from cryptography.fernet import Fernet
+    digest = hashlib.sha256(("mcn-payment-settings:" + str(app.secret_key)).encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def _payment_secret(provider, field="secret_key"):
+    """Read a provider credential without ever returning it to the browser."""
+    import os
+    env_names = {
+        ("flutterwave", "secret_key"): "FLW_SECRET_KEY",
+        ("flutterwave", "webhook_secret"): "FLW_SECRET_HASH",
+        ("paystack", "secret_key"): "PAYSTACK_SECRET_KEY",
+        ("paystack", "webhook_secret"): "PAYSTACK_SECRET_KEY",
+    }
+    env_name = env_names.get((str(provider).lower(), field))
+    env_value = os.environ.get(env_name, "").strip() if env_name else ""
+    if env_value:
+        return env_value
+    row = db().execute(
+        "SELECT secret_encrypted,webhook_secret_encrypted FROM payment_settings WHERE LOWER(provider)=? ORDER BY id DESC LIMIT 1",
+        (str(provider).lower(),)
+    ).fetchone()
+    if not row:
+        return ""
+    encrypted = row["webhook_secret_encrypted"] if field == "webhook_secret" else row["secret_encrypted"]
+    if not encrypted:
+        return ""
+    try:
+        return _payment_fernet().decrypt(str(encrypted).encode("ascii")).decode("utf-8")
+    except Exception:
+        app.logger.error("Unable to decrypt saved payment credential for %s.", provider)
+        return ""
+
+
+def _payment_provider_config(provider):
+    return db().execute(
+        "SELECT * FROM payment_settings WHERE LOWER(provider)=? ORDER BY id DESC LIMIT 1",
+        (str(provider).lower(),)
+    ).fetchone()
+
+
 @app.post("/api/payment/settings")
 @login_required
 def api_payment_settings_save():
-    if current_user()["role"]!="Admin": return jsonify({"error":"Only Admin can change payment settings"}),403
-    d=request.get_json() or {}
-    provider=d.get("provider","Monnify")
-    enabled=1 if d.get("enabled") else 0
-    db().execute("DELETE FROM payment_settings")
-    db().execute("INSERT INTO payment_settings(provider,enabled,public_key,contract_code) VALUES(?,?,?,?)",(provider,enabled,d.get("public_key",""),d.get("contract_code","")))
-    db().commit()
-    return jsonify({"ok":True,"message":"Payment settings saved."})
+    import re
+    user = current_user()
+    if not user or user.get("role") != "Admin":
+        return jsonify({"error":"Only Admin can change payment settings"}),403
+    d = request.get_json(silent=True) or {}
+    provider = str(d.get("provider") or "").strip().lower()
+    allowed = {"flutterwave", "paystack", "monnify", "direct_bank_transfer"}
+    if provider not in allowed:
+        return jsonify({"error":"Select a supported payment provider."}),400
+    mode = str(d.get("mode") or "test").strip().lower()
+    if mode not in {"test", "live"}:
+        return jsonify({"error":"Payment mode must be Test or Live."}),400
+    enabled = 1 if d.get("enabled") else 0
+    is_default = 1 if d.get("is_default") else 0
+    public_key = str(d.get("public_key") or "").strip()[:500]
+    contract_code = str(d.get("contract_code") or "").strip()[:120]
+    merchant_id = str(d.get("merchant_id") or "").strip()[:120]
+    bank_name = str(d.get("bank_name") or "").strip()[:120]
+    account_name = str(d.get("account_name") or "").strip()[:160]
+    account_number = str(d.get("account_number") or "").strip()[:40]
+    instructions = str(d.get("account_instructions") or "").strip()[:2000]
+    secret = str(d.get("secret_key") or "").strip()
+    webhook_secret = str(d.get("webhook_secret") or "").strip()
+    if provider == "direct_bank_transfer":
+        if enabled and not (bank_name and account_name and account_number):
+            return jsonify({"error":"Enter bank name, account name and account number before enabling direct transfer."}),400
+        if account_number and not re.fullmatch(r"[0-9 -]{6,30}", account_number):
+            return jsonify({"error":"Enter a valid bank account number."}),400
+    elif enabled and provider in {"flutterwave", "paystack"}:
+        existing_secret = _payment_secret(provider)
+        if not (secret or existing_secret):
+            return jsonify({"error":"Enter the provider secret key before activating this provider."}),400
+    elif enabled and provider == "monnify":
+        return jsonify({"error":"Monnify checkout is not yet connected. Keep it disabled until its API integration is enabled."}),409
+
+    conn = db()
+    try:
+        old = _payment_provider_config(provider)
+        encrypted_secret = old["secret_encrypted"] if old and "secret_encrypted" in old.keys() else ""
+        encrypted_webhook = old["webhook_secret_encrypted"] if old and "webhook_secret_encrypted" in old.keys() else ""
+        if secret:
+            encrypted_secret = _payment_fernet().encrypt(secret.encode("utf-8")).decode("ascii")
+        if webhook_secret:
+            encrypted_webhook = _payment_fernet().encrypt(webhook_secret.encode("utf-8")).decode("ascii")
+        if is_default:
+            conn.execute("UPDATE payment_settings SET is_default=0")
+        if old:
+            conn.execute("""
+                UPDATE payment_settings SET enabled=?,public_key=?,contract_code=?,
+                    mode=?,secret_encrypted=?,webhook_secret_encrypted=?,merchant_id=?,
+                    bank_name=?,account_name=?,account_number=?,account_instructions=?,
+                    is_default=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+            """, (enabled,public_key,contract_code,mode,encrypted_secret,encrypted_webhook,
+                  merchant_id,bank_name,account_name,account_number,instructions,is_default,old["id"]))
+        else:
+            conn.execute("""
+                INSERT INTO payment_settings
+                (provider,enabled,public_key,contract_code,mode,secret_encrypted,
+                 webhook_secret_encrypted,merchant_id,bank_name,account_name,
+                 account_number,account_instructions,is_default)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (provider,enabled,public_key,contract_code,mode,encrypted_secret,
+                  encrypted_webhook,merchant_id,bank_name,account_name,account_number,
+                  instructions,is_default))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Payment provider settings could not be saved.")
+        return jsonify({"error":"Payment settings could not be saved. No existing settings were deleted."}),500
+    return jsonify({"ok":True,"message":"Payment provider settings saved securely."})
+
 
 @app.get("/api/payment/settings")
 @login_required
 def api_payment_settings():
-    if current_user()["role"]!="Admin": return jsonify({"error":"Only Admin can view payment settings"}),403
-    r=db().execute("SELECT provider,enabled,public_key,contract_code FROM payment_settings ORDER BY id DESC LIMIT 1").fetchone()
-    return jsonify(dict(r) if r else {"provider":"Monnify","enabled":0,"public_key":"","contract_code":""})
+    user = current_user()
+    if not user or user.get("role") != "Admin":
+        return jsonify({"error":"Only Admin can view payment settings"}),403
+    rows = db().execute("""
+        SELECT provider,enabled,public_key,contract_code,mode,merchant_id,
+               bank_name,account_name,account_number,account_instructions,is_default,
+               secret_encrypted,webhook_secret_encrypted
+        FROM payment_settings ORDER BY provider
+    """).fetchall()
+    providers = {}
+    for row in rows:
+        item = dict(row)
+        key = str(item["provider"]).lower()
+        item["secret_configured"] = bool(item.get("secret_encrypted")) or bool(_payment_secret(key))
+        item["webhook_secret_configured"] = bool(item.get("webhook_secret_encrypted")) or bool(_payment_secret(key,"webhook_secret"))
+        item.pop("secret_encrypted",None)
+        item.pop("webhook_secret_encrypted",None)
+        item["secret_key"] = ""
+        item["webhook_secret"] = ""
+        providers[key] = item
+    for key in ("flutterwave","paystack","monnify","direct_bank_transfer"):
+        providers.setdefault(key,{"provider":key,"enabled":0,"mode":"test","public_key":"",
+            "contract_code":"","merchant_id":"","bank_name":"","account_name":"",
+            "account_number":"","account_instructions":"","is_default":0,
+            "secret_configured":bool(_payment_secret(key)),
+            "webhook_secret_configured":bool(_payment_secret(key,"webhook_secret")),
+            "secret_key":"","webhook_secret":""})
+    return jsonify({"providers":providers,"default_provider":next((k for k,v in providers.items() if v.get("is_default") and v.get("enabled")), "")})
+
+
+@app.post("/api/payment/settings/test")
+@login_required
+def api_payment_settings_test():
+    import requests
+    user = current_user()
+    if not user or user.get("role") != "Admin":
+        return jsonify({"error":"Only Admin can test payment connections."}),403
+    d=request.get_json(silent=True) or {}
+    provider=str(d.get("provider") or "").lower()
+    secret=str(d.get("secret_key") or "").strip() or _payment_secret(provider)
+    if provider=="flutterwave":
+        if not secret: return jsonify({"ok":False,"message":"Flutterwave secret key is not configured."}),400
+        url="https://api.flutterwave.com/v3/balances"
+    elif provider=="paystack":
+        if not secret: return jsonify({"ok":False,"message":"Paystack secret key is not configured."}),400
+        url="https://api.paystack.co/bank"
+    elif provider=="direct_bank_transfer":
+        cfg=_payment_provider_config(provider)
+        ready=bool(cfg and cfg["enabled"] and cfg["bank_name"] and cfg["account_name"] and cfg["account_number"])
+        return jsonify({"ok":ready,"message":"Bank transfer details are complete." if ready else "Complete the bank account details first."})
+    else:
+        return jsonify({"ok":False,"message":"This provider's live connection test is not yet supported."}),409
+    try:
+        response=requests.get(url,headers={"Authorization":"Bearer "+secret,"Accept":"application/json"},timeout=15)
+        payload=response.json() if response.content else {}
+        ok=response.status_code==200 and isinstance(payload,dict) and bool(payload.get("status"))
+        return jsonify({"ok":ok,"http_status":response.status_code,
+            "message":("Connection authenticated successfully." if ok else str(payload.get("message") or "Provider rejected the credentials.")[:220])})
+    except requests.RequestException:
+        app.logger.warning("Payment provider connection test failed for %s.",provider)
+        return jsonify({"ok":False,"message":"Could not reach the provider. Check network access and credentials."}),502
+
+
+@app.get("/api/payment/public-config")
+def api_payment_public_config():
+    rows=db().execute("""
+        SELECT provider,enabled,bank_name,account_name,account_number,account_instructions,is_default
+        FROM payment_settings WHERE enabled=1
+    """).fetchall()
+    active=[dict(r) for r in rows]
+    default=next((r for r in active if r.get("is_default")),None)
+    return jsonify({"default_provider":(default or {}).get("provider","Flutterwave"),
+        "direct_bank_transfer":next((r for r in active if r.get("provider")=="direct_bank_transfer"),None)})
+
 
 
 
@@ -9361,7 +9555,7 @@ def _flutterwave_verify_transaction(reference, transaction_id):
     from datetime import date, datetime
     from decimal import Decimal, InvalidOperation
 
-    secret = os.environ.get("FLW_SECRET_KEY", "").strip()
+    secret = _payment_secret("flutterwave")
     if not secret:
         return {"error": "Flutterwave secret key is not configured."}, 503
 
@@ -9695,7 +9889,7 @@ def api_payment_verify(reference):
             "reference": reference
         }), 409
 
-    secret = os.environ.get("PAYSTACK_SECRET_KEY", "").strip()
+    secret = _payment_secret("paystack")
     if not secret:
         return jsonify({"error": "Paystack secret key is not configured on the server."}), 503
 
@@ -10065,7 +10259,7 @@ def api_payment_initiate():
 
     account_id = int(raw_account_id)
 
-    secret = os.environ.get("FLW_SECRET_KEY", "").strip()
+    secret = _payment_secret("flutterwave")
     if not secret:
         app.logger.error(
             "Flutterwave checkout blocked: FLW_SECRET_KEY is absent from this running application environment."
