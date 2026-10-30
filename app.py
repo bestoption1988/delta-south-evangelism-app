@@ -8190,23 +8190,17 @@ def _payment_secret(provider, field="secret_key"):
         ("paystack", "webhook_secret"): "PAYSTACK_SECRET_KEY",
     }
     env_name = env_names.get((str(provider).lower(), field))
-    env_value = os.environ.get(env_name, "").strip() if env_name else ""
-    if env_value:
-        return env_value
     row = db().execute(
         "SELECT secret_encrypted,webhook_secret_encrypted FROM payment_settings WHERE LOWER(provider)=? ORDER BY id DESC LIMIT 1",
         (str(provider).lower(),)
     ).fetchone()
-    if not row:
-        return ""
-    encrypted = row["webhook_secret_encrypted"] if field == "webhook_secret" else row["secret_encrypted"]
-    if not encrypted:
-        return ""
-    try:
-        return _payment_fernet().decrypt(str(encrypted).encode("ascii")).decode("utf-8")
-    except Exception:
-        app.logger.error("Unable to decrypt saved payment credential for %s.", provider)
-        return ""
+    encrypted = (row["webhook_secret_encrypted"] if field == "webhook_secret" else row["secret_encrypted"]) if row else ""
+    if encrypted:
+        try:
+            return _payment_fernet().decrypt(str(encrypted).encode("ascii")).decode("utf-8")
+        except Exception:
+            app.logger.error("Unable to decrypt saved payment credential for %s.", provider)
+    return os.environ.get(env_name, "").strip() if env_name else ""
 
 
 def _payment_provider_config(provider):
@@ -10259,15 +10253,17 @@ def api_payment_initiate():
 
     account_id = int(raw_account_id)
 
-    secret = _payment_secret("flutterwave")
+    active_rows = db().execute(
+        "SELECT provider FROM payment_settings WHERE enabled=1 ORDER BY is_default DESC,id ASC"
+    ).fetchall()
+    configured_provider = next((str(r["provider"]).lower() for r in active_rows if str(r["provider"]).lower() in {"flutterwave","paystack"}), "")
+    provider = configured_provider or ("flutterwave" if os.environ.get("FLW_SECRET_KEY") else "")
+    if not provider:
+        return jsonify({"error":"No online payment provider is active. Please contact the Diocese finance office."}),503
+    gateway_name = "Flutterwave" if provider == "flutterwave" else "Paystack"
+    secret = _payment_secret(provider)
     if not secret:
-        app.logger.error(
-            "Flutterwave checkout blocked: FLW_SECRET_KEY is absent from this running application environment."
-        )
-        return jsonify({
-            "error": "Flutterwave is not configured on the running server. An administrator should check Payment Diagnostics.",
-            "code": "FLUTTERWAVE_SECRET_MISSING"
-        }), 503
+        return jsonify({"error":gateway_name+" secret key is not configured. Please check Payment Settings."}),503
 
     user = current_user()
     member_id = user["member_id"] if user and user["member_id"] else None
@@ -10301,63 +10297,63 @@ def api_payment_initiate():
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                reference, "Flutterwave", "Pending", amount, "NGN",
+                reference, gateway_name, "Pending", amount, "NGN",
                 purpose, account["account_level"], account["circuit"],
                 account["church_name"], account["id"], member_id,
-                name, email, phone, "Flutterwave", "",
+                name, email, phone, gateway_name, "",
                 "Checkout initialization pending"
             )
         )
         conn.commit()
 
-        checkout_payload = {
-            "tx_ref": reference,
-            "amount": amount,
-            "currency": "NGN",
-            "redirect_url": redirect_url,
-            "customer": {
-                "email": email,
-                "name": name,
-                "phonenumber": phone
-            },
-            "customizations": {
-                "title": "MCN Delta South Diocese",
-                "description": purpose
-            }
-        }
-
         try:
-            response = requests.post(
-                "https://api.flutterwave.com/v3/payments",
-                json=checkout_payload,
-                headers={"Authorization": "Bearer " + secret},
-                timeout=30
-            )
-            result = response.json()
+            if provider == "paystack":
+                checkout_payload = {
+                    "email": email,
+                    "amount": int(decimal_amount * Decimal("100")),
+                    "reference": reference,
+                    "currency": "NGN",
+                    "callback_url": redirect_url + "?payment=return"
+                }
+                response = requests.post(
+                    "https://api.paystack.co/transaction/initialize",
+                    json=checkout_payload,
+                    headers={"Authorization":"Bearer "+secret,"Content-Type":"application/json"},
+                    timeout=30
+                )
+                result = response.json()
+                payment_link = ((result.get("data") or {}).get("authorization_url") if isinstance(result,dict) else None)
+            else:
+                checkout_payload = {
+                    "tx_ref": reference, "amount": amount, "currency": "NGN",
+                    "redirect_url": redirect_url,
+                    "customer": {"email":email,"name":name,"phonenumber":phone},
+                    "customizations": {"title":"MCN Delta South Diocese","description":purpose}
+                }
+                response = requests.post(
+                    "https://api.flutterwave.com/v3/payments",
+                    json=checkout_payload,
+                    headers={"Authorization":"Bearer "+secret},
+                    timeout=30
+                )
+                result = response.json()
+                payment_link = ((result.get("data") or {}).get("link") if isinstance(result,dict) else None)
         except Exception:
-            app.logger.exception(
-                "Flutterwave checkout outcome uncertain: %s", reference
-            )
+            app.logger.exception("%s checkout outcome uncertain: %s", gateway_name, reference)
             return jsonify({
-                "error": "Checkout initialization could not be confirmed. Contact the finance office before trying again.",
-                "reference": reference,
-                "status": "Pending"
-            }), 502
-
-        payment_link = (
-            (result.get("data") or {}).get("link")
-            if isinstance(result, dict) else None
-        )
+                "error":"Checkout initialization could not be confirmed. Contact the finance office before trying again.",
+                "reference":reference,"status":"Pending"
+            }),502
 
         valid_link = False
         if isinstance(payment_link, str):
             parsed = urlparse(payment_link)
             valid_link = (
                 parsed.scheme == "https"
-                and parsed.hostname in {
-                    "checkout.flutterwave.com",
-                    "checkout-v2.dev-flutterwave.com"
-                }
+                and (
+                    (provider == "flutterwave" and parsed.hostname in {"checkout.flutterwave.com","checkout-v2.dev-flutterwave.com"})
+                    or (provider == "paystack" and parsed.hostname in {"checkout.paystack.com","paystack.com"})
+                )
                 and not parsed.username
                 and not parsed.password
             )
@@ -10365,21 +10361,21 @@ def api_payment_initiate():
         if (
             response.status_code not in (200, 201)
             or not isinstance(result, dict)
-            or result.get("status") != "success"
+            or (result.get("status") != "success" if provider == "flutterwave" else result.get("status") is not True)
             or not valid_link
         ):
             conn.execute(
                 """
                 UPDATE payment_transactions
                 SET status='Failed', gateway_response=?
-                WHERE reference=? AND gateway='Flutterwave'
+                WHERE reference=? AND gateway=?
                 """,
                 (
                     json.dumps(
                         result if isinstance(result, dict)
                         else {"message": "Invalid gateway response"}
                     )[:12000],
-                    reference
+                    reference, gateway_name
                 )
             )
             conn.commit()
@@ -10399,7 +10395,8 @@ def api_payment_initiate():
                 except Exception:
                     gateway_link_host = "unparseable"
             app.logger.error(
-                "Flutterwave checkout rejected: reference=%s http_status=%s gateway_status=%s gateway_message=%s data_type=%s link_present=%s link_host=%s valid_link=%s",
+                "%s checkout rejected: reference=%s http_status=%s gateway_status=%s gateway_message=%s data_type=%s link_present=%s link_host=%s valid_link=%s",
+                gateway_name,
                 reference,
                 response.status_code,
                 str(gateway_status)[:40],
@@ -10410,7 +10407,7 @@ def api_payment_initiate():
                 valid_link
             )
             return jsonify({
-                "error": "Flutterwave checkout initialization failed.",
+                "error": gateway_name + " checkout initialization failed.",
                 "reference": reference
             }), 502
 
@@ -10418,9 +10415,9 @@ def api_payment_initiate():
             """
             UPDATE payment_transactions
             SET gateway_response=?
-            WHERE reference=? AND gateway='Flutterwave'
+            WHERE reference=? AND gateway=?
             """,
-            (json.dumps(result)[:12000], reference)
+            (json.dumps(result)[:12000], reference, gateway_name)
         )
         conn.commit()
 
