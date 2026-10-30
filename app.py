@@ -9771,6 +9771,36 @@ def api_payment_verify(reference):
     }),200
 
 
+@app.get("/api/payment/diagnostics")
+@login_required
+def api_payment_diagnostics():
+    """Admin-only, secret-safe checks for the configured payment environment."""
+    import os
+
+    user = current_user()
+    if not user or user.get("role") != "Admin":
+        return jsonify({"error": "Only Admin can view payment diagnostics."}), 403
+
+    flutterwave_secret = os.environ.get("FLW_SECRET_KEY", "").strip()
+    webhook_hash = os.environ.get("FLW_SECRET_HASH", "").strip()
+    paystack_secret = os.environ.get("PAYSTACK_SECRET_KEY", "").strip()
+
+    return jsonify({
+        "ok": bool(flutterwave_secret),
+        "database_backend": database_backend(),
+        "providers": {
+            "flutterwave": {
+                "secret_key_configured": bool(flutterwave_secret),
+                "webhook_hash_configured": bool(webhook_hash)
+            },
+            "paystack": {
+                "secret_key_configured": bool(paystack_secret)
+            }
+        },
+        "note": "Only configuration status is returned. Secret values are never exposed."
+    })
+
+
 @app.post("/api/payment/initiate")
 def api_payment_initiate():
     import os
@@ -9826,7 +9856,13 @@ def api_payment_initiate():
 
     secret = os.environ.get("FLW_SECRET_KEY", "").strip()
     if not secret:
-        return jsonify({"error": "Flutterwave is not configured."}), 503
+        app.logger.error(
+            "Flutterwave checkout blocked: FLW_SECRET_KEY is absent from this running application environment."
+        )
+        return jsonify({
+            "error": "Flutterwave is not configured on the running server. An administrator should check Payment Diagnostics.",
+            "code": "FLUTTERWAVE_SECRET_MISSING"
+        }), 503
 
     user = current_user()
     member_id = user["member_id"] if user and user["member_id"] else None
@@ -9939,6 +9975,13 @@ def api_payment_initiate():
                 )
             )
             conn.commit()
+            gateway_message = (
+                result.get("message", "") if isinstance(result, dict) else ""
+            )
+            app.logger.error(
+                "Flutterwave checkout rejected: reference=%s http_status=%s gateway_message=%s",
+                reference, response.status_code, str(gateway_message)[:300]
+            )
             return jsonify({
                 "error": "Flutterwave checkout initialization failed.",
                 "reference": reference
