@@ -8367,6 +8367,70 @@ def api_payment_public_config():
 
 
 
+@app.post("/api/payment/bank-transfer/<reference>/confirm")
+@login_required
+def api_confirm_bank_transfer(reference):
+    import json
+    from datetime import date, datetime
+    from decimal import Decimal, InvalidOperation
+    user=current_user()
+    if not user or user.get("role") not in {"Admin","Finance Officer","Evangelism Minister"}:
+        return jsonify({"error":"Only authorized finance officers can confirm bank transfers."}),403
+    reference=str(reference or "").strip()
+    if not reference or len(reference)>120:
+        return jsonify({"error":"A valid payment reference is required."}),400
+    conn=db()
+    try:
+        if database_backend()=="postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))",(reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+        payment=conn.execute("SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",(reference,)).fetchone()
+        if not payment or str(payment["gateway"] or "").lower()!="direct bank transfer":
+            conn.rollback()
+            return jsonify({"error":"Direct bank transfer record not found."}),404
+        try:
+            amount=Decimal(str(payment["amount"]))
+            if not amount.is_finite() or amount<=0 or amount>=Decimal("1000000000") or amount!=amount.quantize(Decimal("0.01")):
+                raise InvalidOperation()
+        except (TypeError,ValueError,InvalidOperation):
+            conn.rollback()
+            return jsonify({"error":"Stored payment amount is invalid."}),409
+        existing=conn.execute("SELECT id,amount,church_account_id,member_id FROM income WHERE reference=? LIMIT 1",(reference,)).fetchone()
+        if existing:
+            if Decimal(str(existing["amount"]))!=amount or existing["church_account_id"]!=payment["church_account_id"] or existing["member_id"]!=payment["member_id"]:
+                conn.rollback()
+                return jsonify({"error":"Existing income does not match this transfer."}),409
+            income_id=existing["id"]
+        else:
+            conn.execute("""
+                INSERT INTO income
+                (date,donor_name,source,fund,amount,method,reference,received_by,notes,member_id,church_account_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """,(date.today().isoformat(),payment["donor_name"] or "Online Donor","Online Payment",
+                 payment["purpose"] or "General Evangelism",float(amount),"Bank Transfer",reference,
+                 user.get("username","finance"),"Bank transfer manually confirmed by finance office.",
+                 payment["member_id"],payment["church_account_id"]))
+            income=conn.execute("SELECT id FROM income WHERE reference=? LIMIT 1",(reference,)).fetchone()
+            if not income: raise RuntimeError("Income record was not created.")
+            income_id=income["id"]
+        conn.execute("""
+            UPDATE payment_transactions SET status='Paid',gateway_response=?,
+                paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP) WHERE reference=?
+        """,(json.dumps({"confirmed_by":user.get("username","finance"),"confirmed_at":datetime.now().isoformat(timespec="seconds")})[:12000],reference))
+        details=json.dumps({"reference":reference,"amount":str(amount),"action":"Manual bank transfer confirmation"})
+        conn.execute("""
+            INSERT INTO audit_log(happened_at,action,table_name,record_id,details,user_id,username)
+            VALUES(?,?,?,?,?,?,?)
+        """,(datetime.now().isoformat(timespec="seconds"),"BANK_TRANSFER_CONFIRMED","income",income_id,details,user.get("id"),user.get("username","finance")))
+        conn.commit()
+        return jsonify({"ok":True,"paid":True,"reference":reference,"income_id":income_id,"amount":float(amount)}),200
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Manual bank transfer confirmation failed.")
+        return jsonify({"error":"Bank transfer could not be confirmed."}),500
+
+
 @app.get("/api/payment-history/<reference>")
 @login_required
 def api_payment_details(reference):
@@ -10286,13 +10350,13 @@ def api_payment_initiate():
     active_rows = db().execute(
         "SELECT provider FROM payment_settings WHERE enabled=1 ORDER BY is_default DESC,id ASC"
     ).fetchall()
-    configured_provider = next((str(r["provider"]).lower() for r in active_rows if str(r["provider"]).lower() in {"flutterwave","paystack"}), "")
+    configured_provider = next((str(r["provider"]).lower() for r in active_rows if str(r["provider"]).lower() in {"flutterwave","paystack","direct_bank_transfer"}), "")
     provider = configured_provider or ("flutterwave" if os.environ.get("FLW_SECRET_KEY") else "")
     if not provider:
         return jsonify({"error":"No online payment provider is active. Please contact the Diocese finance office."}),503
-    gateway_name = "Flutterwave" if provider == "flutterwave" else "Paystack"
-    secret = _payment_secret(provider)
-    if not secret:
+    gateway_name = {"flutterwave":"Flutterwave","paystack":"Paystack","direct_bank_transfer":"Direct Bank Transfer"}.get(provider,"")
+    secret = _payment_secret(provider) if provider != "direct_bank_transfer" else ""
+    if provider != "direct_bank_transfer" and not secret:
         return jsonify({"error":gateway_name+" secret key is not configured. Please check Payment Settings."}),503
 
     user = current_user()
@@ -10330,11 +10394,24 @@ def api_payment_initiate():
                 reference, gateway_name, "Pending", amount, "NGN",
                 purpose, account["account_level"], account["circuit"],
                 account["church_name"], account["id"], member_id,
-                name, email, phone, gateway_name, "",
-                "Checkout initialization pending"
+                name, email, phone, ("Bank Transfer" if provider == "direct_bank_transfer" else gateway_name), "",
+                ("Awaiting donor bank transfer" if provider == "direct_bank_transfer" else "Checkout initialization pending")
             )
         )
         conn.commit()
+
+        if provider == "direct_bank_transfer":
+            bank = _payment_provider_config("direct_bank_transfer")
+            if not bank or not bank["enabled"] or not bank["bank_name"] or not bank["account_name"] or not bank["account_number"]:
+                return jsonify({"error":"Direct bank transfer details are incomplete. Please contact the Diocese finance office."}),503
+            return jsonify({
+                "reference":reference,"status":"Pending",
+                "bank_transfer":{
+                    "bank_name":bank["bank_name"],"account_name":bank["account_name"],
+                    "account_number":bank["account_number"],
+                    "instructions":bank["account_instructions"] or "Use your payment reference as the transfer narration and keep your receipt."
+                }
+            }),201
 
         try:
             if provider == "paystack":
