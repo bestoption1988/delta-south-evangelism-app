@@ -8190,7 +8190,9 @@ def _payment_fernet():
     import base64
     import hashlib
     from cryptography.fernet import Fernet
-    digest = hashlib.sha256(("mcn-payment-settings:" + str(app.secret_key)).encode("utf-8")).digest()
+    import os
+    encryption_material = os.environ.get("PAYMENT_SETTINGS_ENCRYPTION_KEY", "").strip() or str(app.secret_key)
+    digest = hashlib.sha256(("mcn-payment-settings:" + encryption_material).encode("utf-8")).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
 
 
