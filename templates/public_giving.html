@@ -181,7 +181,7 @@ function showMessage(text, type) {
     msg.className = type;
 }
 
-async function verifyFlutterwaveReturn() {
+async function verifyPaymentReturn() {
     const params = new URLSearchParams(window.location.search);
     const reference = params.get("tx_ref") || params.get("reference") || params.get("trxref");
     const transactionId = params.get("transaction_id");
@@ -246,7 +246,7 @@ async function verifyFlutterwaveReturn() {
     }
 }
 
-verifyFlutterwaveReturn();
+verifyPaymentReturn();
 
 form.addEventListener("submit", async function(event) {
     event.preventDefault();
@@ -259,7 +259,7 @@ form.addEventListener("submit", async function(event) {
 
     const data = Object.fromEntries(new FormData(form).entries());
     data.amount = Number(data.amount);
-    data.payment_method = "Flutterwave";
+    data.payment_method = "Online Payment";
 
     try {
         const response = await fetch("/api/payment/initiate", {
