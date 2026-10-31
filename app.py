@@ -11765,6 +11765,19 @@ def media_library_admin():
                 if photo_files:
                     collection = "gallery"
 
+                # Allow text-only sermon, Bible lesson, or hymn uploads.
+                # The text is stored as a UTF-8 .txt object in Supabase Storage.
+                if not uploaded_files and description and collection in {"sermons", "bible-teachings", "choir-music"}:
+                    from werkzeug.datastructures import FileStorage
+                    text_name = (title or collection.replace("-", " ").title())[:150] + ".txt"
+                    text_file = FileStorage(
+                        stream=io.BytesIO(description.encode("utf-8")),
+                        filename=text_name,
+                        content_type="text/plain",
+                    )
+                    other_files = [text_file]
+                    uploaded_files = [(text_file, False)]
+
                 if collection not in allowed_collections and collection != "gallery":
                     error = "Choose a valid media section."
                 elif not uploaded_files:
@@ -11847,8 +11860,8 @@ def media_library_admin():
                                     "storage_path": storage_path,
                                     "mime_type": spec[0],
                                     "media_type": spec[1],
-                                    # Publish gallery photos immediately after a successful upload.
-                                    "published": bool(is_photo),
+                                    # Publish gallery photos and dedicated resource uploads immediately.
+                                    "published": bool(is_photo or collection in {"sermons", "bible-teachings", "choir-music"}),
                                     "created_by": str(user["id"]),
                                 },
                                 prefer="return=minimal",
