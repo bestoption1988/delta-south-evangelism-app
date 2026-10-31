@@ -8454,6 +8454,173 @@ def api_confirm_bank_transfer(reference):
         return jsonify({"error":"Bank transfer could not be confirmed."}),500
 
 
+@app.post("/api/payment/<reference>/confirm-received")
+@login_required
+def api_confirm_payment_received(reference):
+    """Manually confirm a pending payment only after funds are visible in the church bank account."""
+    import json
+    from datetime import datetime, date
+    from decimal import Decimal, InvalidOperation
+
+    user = current_user()
+    if not user or user["role"] not in {"Admin", "Finance Officer"}:
+        return jsonify({"error": "Only Admin or Finance Officer can confirm received funds."}), 403
+
+    reference = str(reference or "").strip()
+    data = request.get_json(silent=True) or {}
+    confirmation_note = str(data.get("confirmation_note") or "").strip()
+
+    if not reference or len(reference) > 120:
+        return jsonify({"error": "A valid payment reference is required."}), 400
+    if len(confirmation_note) < 8 or len(confirmation_note) > 1000:
+        return jsonify({"error": "Enter a brief bank-credit confirmation note (8–1000 characters)."}), 400
+
+    conn = db()
+    try:
+        if database_backend() == "postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+
+        payment = conn.execute(
+            "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+
+        if not payment:
+            conn.rollback()
+            return jsonify({"error": "Payment transaction not found."}), 404
+
+        if str(payment["status"] or "").strip().lower() != "pending":
+            conn.rollback()
+            return jsonify({
+                "error": "Only pending payments can be manually confirmed.",
+                "status": payment["status"]
+            }), 409
+
+        try:
+            amount = Decimal(str(payment["amount"]))
+            if (
+                not amount.is_finite() or amount <= 0
+                or amount >= Decimal("1000000000")
+                or amount != amount.quantize(Decimal("0.01"))
+            ):
+                raise InvalidOperation()
+        except (TypeError, ValueError, InvalidOperation):
+            conn.rollback()
+            return jsonify({"error": "Stored payment amount is invalid."}), 409
+
+        existing = conn.execute(
+            "SELECT id, amount, member_id, church_account_id FROM income WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+
+        if existing:
+            try:
+                existing_amount = Decimal(str(existing["amount"]))
+                matches = (
+                    existing_amount == amount
+                    and existing["member_id"] == payment["member_id"]
+                    and existing["church_account_id"] == payment["church_account_id"]
+                )
+            except (TypeError, ValueError, InvalidOperation):
+                matches = False
+
+            if not matches:
+                conn.rollback()
+                return jsonify({
+                    "error": "An income record already uses this reference but its amount or church account does not match. Please investigate; no changes were made."
+                }), 409
+            income_id = existing["id"]
+        else:
+            now = datetime.now().isoformat(timespec="seconds")
+            conn.execute("""
+                INSERT INTO income
+                (date, donor_name, source, fund, amount, method, reference,
+                 received_by, notes, member_id, church_account_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                date.today().isoformat(),
+                payment["donor_name"] or "Online Donor",
+                "Online Payment",
+                payment["purpose"] or "General Evangelism",
+                float(amount),
+                "Bank Credit - Manual Confirmation",
+                reference,
+                user["username"] or user["role"],
+                "Funds confirmed in church bank account by authorized officer. " + confirmation_note,
+                payment["member_id"],
+                payment["church_account_id"]
+            ))
+            income = conn.execute(
+                "SELECT id FROM income WHERE reference=? LIMIT 1", (reference,)
+            ).fetchone()
+            if not income:
+                raise RuntimeError("Income record was not created.")
+            income_id = income["id"]
+
+        confirmed_at = datetime.now().isoformat(timespec="seconds")
+        previous_response = str(payment["gateway_response"] or "")
+        confirmation_payload = json.dumps({
+            "manual_bank_credit_confirmation": True,
+            "confirmed_by": user["username"] or user["role"],
+            "confirmed_by_role": user["role"],
+            "confirmed_at": confirmed_at,
+            "confirmation_note": confirmation_note,
+            "previous_gateway_response": previous_response[:6000]
+        }, ensure_ascii=False)[:12000]
+
+        conn.execute("""
+            UPDATE payment_transactions
+            SET status='Paid', paid_at=?, gateway_response=?
+            WHERE reference=? AND LOWER(status)='pending'
+        """, (confirmed_at, confirmation_payload, reference))
+
+        details = json.dumps({
+            "reference": reference,
+            "income_id": income_id,
+            "amount": str(amount),
+            "church_name": payment["church_name"],
+            "church_account_id": payment["church_account_id"],
+            "gateway": payment["gateway"],
+            "action": "Manual confirmation of funds received in church bank account",
+            "confirmation_note": confirmation_note
+        }, ensure_ascii=False)
+
+        conn.execute("""
+            INSERT INTO audit_log
+            (happened_at, action, table_name, record_id, details, user_id, username)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            confirmed_at,
+            "PAYMENT_FUNDS_MANUALLY_CONFIRMED",
+            "income",
+            income_id,
+            details,
+            user["id"],
+            user["username"] or user["role"]
+        ))
+
+        conn.commit()
+        return jsonify({
+            "ok": True,
+            "paid": True,
+            "reference": reference,
+            "income_id": income_id,
+            "amount": float(amount),
+            "confirmed_by": user["username"] or user["role"],
+            "message": "Funds marked as received and linked to the church income record."
+        }), 200
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Manual payment receipt confirmation failed.")
+        return jsonify({"error": "Payment could not be confirmed. No partial changes were committed."}), 500
+
+
 @app.get("/api/payment-history/<reference>")
 @login_required
 def api_payment_details(reference):
