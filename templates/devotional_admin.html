@@ -36,18 +36,51 @@
 <script>
 (function(){
  const form=document.getElementById("devotional-upload-form"),button=document.getElementById("start-import"),box=document.getElementById("upload-progress");
- if(form){form.addEventListener("submit",function(ev){
+ const label=document.getElementById("upload-label"),bar=document.getElementById("upload-bar"),percent=document.getElementById("upload-percent");
+ const list=document.getElementById("job-list");let jobs=[...document.querySelectorAll("[data-job]")];
+ function showUpload(pct,msg){box.classList.add("show");bar.style.width=pct+"%";percent.textContent=pct+"%";label.textContent=msg;}
+ function addJob(id){
+  const empty=document.getElementById("no-jobs");if(empty)empty.remove();
+  const el=document.createElement("div");el.className="job";el.dataset.job=id;
+  const head=document.createElement("div");head.className="job-head";
+  const title=document.createElement("strong");title.textContent="Import "+id.slice(0,8);
+  const status=document.createElement("span");status.className="status queued";status.textContent="Queued";head.append(title,status);
+  const msg=document.createElement("div");msg.className="stage job-message";msg.textContent="ZIP uploaded. Waiting for import worker…";
+  const track=document.createElement("div");track.className="bar";const fill=document.createElement("span");fill.style.width="0%";track.append(fill);
+  const foot=document.createElement("div");foot.className="job-foot";const pct=document.createElement("span");pct.className="percent";pct.textContent="0%";
+  const stats=document.createElement("div");stats.className="stats";const records=document.createElement("span");records.className="records";records.textContent="Records: 0";const assets=document.createElement("span");assets.className="assets";assets.textContent="Media files: 0";stats.append(records,assets);foot.append(pct,stats);
+  el.append(head,msg,track,foot);list.prepend(el);jobs.unshift(el);return el;
+ }
+ if(form){form.addEventListener("submit",async function(ev){
   ev.preventDefault();const file=form.querySelector('input[type="file"]').files[0];if(!file){alert("Please choose the Devotional Kits ZIP file.");return;}
-  const xhr=new XMLHttpRequest();const data=new FormData(form);button.disabled=true;button.textContent="Uploading…";box.classList.add("show");
-  xhr.open("POST",form.action||window.location.href,true);
-  xhr.upload.addEventListener("progress",function(e){if(e.lengthComputable){const pct=Math.round(e.loaded/e.total*100);document.getElementById("upload-bar").style.width=pct+"%";document.getElementById("upload-percent").textContent=pct+"%";document.getElementById("upload-label").textContent="Uploading ZIP package… "+pct+"%";}});
-  xhr.onload=function(){if(xhr.status>=200&&xhr.status<400){document.open();document.write(xhr.responseText);document.close();}else{button.disabled=false;button.textContent="Start Full Import";document.getElementById("upload-label").textContent="Upload failed (HTTP "+xhr.status+"). Please retry.";}}
-  xhr.onerror=function(){button.disabled=false;button.textContent="Start Full Import";document.getElementById("upload-label").textContent="Network error during upload. Check your connection and retry.";};
-  xhr.send(data);
+  button.disabled=true;button.textContent="Uploading in small parts…";showUpload(0,"Preparing secure upload for "+file.name+" ("+(file.size/1048576).toFixed(1)+" MB)…");
+  try{
+   const init=await fetch("/admin/devotional-centre/upload/init",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,size:file.size})});
+   const initData=await init.json().catch(()=>({}));if(!init.ok)throw new Error(initData.error||"Could not start upload (HTTP "+init.status+").");
+   const id=initData.upload_id,chunkSize=initData.chunk_size||4194304,total=Math.ceil(file.size/chunkSize);let offset=0;
+   for(let index=0;index<total;index++){
+    const chunk=file.slice(offset,Math.min(offset+chunkSize,file.size));let response=null,lastError=null;
+    showUpload(Math.floor(offset/file.size*100),"Uploading part "+(index+1)+" of "+total+"… "+Math.floor(offset/file.size*100)+"%");
+    for(let attempt=1;attempt<=3;attempt++){
+     try{
+      response=await fetch("/admin/devotional-centre/upload/"+id+"/chunk",{method:"POST",headers:{"Content-Type":"application/octet-stream","X-Chunk-Index":String(index),"X-Chunk-Offset":String(offset)},body:chunk});
+      if(response.ok)break;
+      const err=await response.json().catch(()=>({}));throw new Error(err.error||"Chunk "+(index+1)+" failed (HTTP "+response.status+").");
+     }catch(e){lastError=e;if(attempt<3){showUpload(Math.floor(offset/file.size*100),"Connection interrupted. Retrying part "+(index+1)+" ("+attempt+"/3)…");await new Promise(resolve=>setTimeout(resolve,900*attempt));}}
+    }
+    if(!response||!response.ok)throw lastError||new Error("Could not upload part "+(index+1)+".");
+    const result=await response.json();offset=result.received;
+    showUpload(Math.floor(offset/file.size*100),"Uploaded part "+(index+1)+" of "+total+" — "+Math.floor(offset/file.size*100)+"%");
+   }
+   showUpload(100,"Upload complete. Checking ZIP integrity and starting import…");
+   const done=await fetch("/admin/devotional-centre/upload/"+id+"/complete",{method:"POST"});
+   const doneData=await done.json().catch(()=>({}));if(!done.ok)throw new Error(doneData.error||"Could not start import (HTTP "+done.status+").");
+   showUpload(100,"ZIP received successfully. Import is now running; see the progress panel below.");
+   addJob(doneData.job_id);refresh();
+  }catch(err){showUpload(0,"Upload stopped: "+(err&&err.message?err.message:String(err)));label.classList.add("error");}
+  finally{button.disabled=false;button.textContent="Start Full Import";}
  });}
- const jobs=[...document.querySelectorAll("[data-job]")];
- async function refresh(){for(const el of jobs){try{const r=await fetch("/admin/devotional-centre/jobs/"+encodeURIComponent(el.dataset.job),{cache:"no-store"});if(!r.ok)continue;const j=await r.json();el.querySelector(".status").textContent=j.status;el.querySelector(".status").className="status "+j.status;el.querySelector(".job-message").textContent=j.message;el.querySelector(".bar span").style.width=(j.progress||0)+"%";el.querySelector(".percent").textContent=(j.progress||0)+"%";el.querySelector(".records").textContent="Records: "+(j.imported_records||0);el.querySelector(".assets").textContent="Media files: "+(j.uploaded_assets||0);}catch(e){}}
-  }
+ async function refresh(){for(const el of jobs){try{const r=await fetch("/admin/devotional-centre/jobs/"+encodeURIComponent(el.dataset.job),{cache:"no-store"});if(!r.ok)continue;const j=await r.json();const status=el.querySelector(".status");status.textContent=j.status;status.className="status "+j.status;el.querySelector(".job-message").textContent=j.message;el.querySelector(".bar span").style.width=(j.progress||0)+"%";el.querySelector(".percent").textContent=(j.progress||0)+"%";el.querySelector(".records").textContent="Records: "+(j.imported_records||0);el.querySelector(".assets").textContent="Media files: "+(j.uploaded_assets||0);}catch(e){}}}
  if(jobs.length){refresh();setInterval(refresh,2500);}
 })();
 </script></body></html>
