@@ -9860,9 +9860,14 @@ def _flutterwave_verify_transaction(reference, transaction_id):
             SET status='Paid',
                 gateway_transaction_id=?,
                 gateway_response=?,
-                paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP)
+                paid_at=COALESCE(NULLIF(paid_at, ''), ?)
             WHERE reference=?
-        """, (transaction_id, json.dumps(result), reference))
+        """, (
+            transaction_id,
+            json.dumps(result),
+            datetime.now().isoformat(timespec="seconds"),
+            reference
+        ))
 
         conn.commit()
 
