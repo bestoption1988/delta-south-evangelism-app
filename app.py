@@ -12136,6 +12136,120 @@ def devotional_centre_item(resource_id):
     return render_template("devotional_item.html", item=item)
 
 
+@app.post("/admin/devotional-centre/upload/init")
+@page_login_required
+def admin_devotional_upload_init():
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    try:
+        data = request.get_json(silent=True) or {}
+        filename = secure_filename(str(data.get("filename") or "devotional.zip"))
+        total_size = int(data.get("size") or 0)
+        if not filename.lower().endswith(".zip"):
+            return jsonify({"error": "Please select a ZIP package."}), 400
+        if total_size <= 0 or total_size > 150 * 1024 * 1024:
+            return jsonify({"error": "ZIP size must be between 1 byte and 150 MB."}), 400
+        upload_id = secrets.token_hex(20)
+        upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        upload_path = os.path.join(upload_dir, upload_id + ".part")
+        meta_path = os.path.join(upload_dir, upload_id + ".json")
+        with open(upload_path, "wb"):
+            pass
+        with open(meta_path, "w", encoding="utf-8") as meta:
+            json.dump({"filename": filename, "size": total_size, "received": 0}, meta)
+        return jsonify({"upload_id": upload_id, "chunk_size": 4 * 1024 * 1024})
+    except Exception as exc:
+        app.logger.exception("Could not initialise devotional upload")
+        return jsonify({"error": "Could not initialise upload: " + str(exc)[:200]}), 500
+
+
+@app.post("/admin/devotional-centre/upload/<upload_id>/chunk")
+@page_login_required
+def admin_devotional_upload_chunk(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    request.max_content_length = 5 * 1024 * 1024
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    upload_path = os.path.join(upload_dir, upload_id + ".part")
+    meta_path = os.path.join(upload_dir, upload_id + ".json")
+    try:
+        with open(meta_path, "r", encoding="utf-8") as meta:
+            state = json.load(meta)
+        chunk_index = int(request.headers.get("X-Chunk-Index", "-1"))
+        offset = int(request.headers.get("X-Chunk-Offset", "-1"))
+        chunk = request.get_data(cache=False)
+        if not chunk or len(chunk) > 4 * 1024 * 1024:
+            return jsonify({"error": "Chunk must be between 1 byte and 4 MB."}), 400
+        if offset != int(state.get("received", 0)) or os.path.getsize(upload_path) != offset:
+            return jsonify({"error": "Upload position mismatch. Please restart the upload."}), 409
+        if offset + len(chunk) > int(state["size"]):
+            return jsonify({"error": "Chunk exceeds the declared ZIP size."}), 400
+        with open(upload_path, "ab") as output:
+            output.write(chunk)
+        state["received"] = offset + len(chunk)
+        with open(meta_path, "w", encoding="utf-8") as meta:
+            json.dump(state, meta)
+        return jsonify({"received": state["received"], "size": state["size"],
+                        "chunk_index": chunk_index,
+                        "progress": int(state["received"] * 100 / state["size"])})
+    except FileNotFoundError:
+        return jsonify({"error": "Upload session expired. Please start again."}), 404
+    except Exception as exc:
+        app.logger.exception("Devotional upload chunk failed")
+        return jsonify({"error": "Chunk upload failed: " + str(exc)[:200]}), 500
+
+
+@app.post("/admin/devotional-centre/upload/<upload_id>/complete")
+@page_login_required
+def admin_devotional_upload_complete(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    upload_path = os.path.join(upload_dir, upload_id + ".part")
+    meta_path = os.path.join(upload_dir, upload_id + ".json")
+    try:
+        with open(meta_path, "r", encoding="utf-8") as meta:
+            state = json.load(meta)
+        if int(state.get("received", 0)) != int(state.get("size", -1)):
+            return jsonify({"error": "Upload is incomplete. Received " +
+                            str(state.get("received", 0)) + " of " +
+                            str(state.get("size", 0)) + " bytes."}), 400
+        import zipfile as _zipfile
+        with _zipfile.ZipFile(upload_path, "r") as archive:
+            names = archive.namelist()
+            if len(names) > 2500 or not any(n.endswith("/hymns.json") for n in names):
+                raise ValueError("This does not appear to be the expected Devotional Kits ZIP package.")
+            if any(n.startswith("/") or ".." in n.split("/") for n in names):
+                raise ValueError("The ZIP contains an unsafe file path.")
+            bad_member = archive.testzip()
+            if bad_member:
+                raise ValueError("ZIP integrity check failed at " + str(bad_member)[:120])
+        job_id = secrets.token_hex(12)
+        db().execute(
+            "INSERT INTO devotional_import_jobs (job_id,status,progress,message) VALUES (?,?,?,?)",
+            (job_id, "queued", 0, "ZIP uploaded successfully. Import is queued.")
+        )
+        db().commit()
+        import threading as _threading
+        worker = _threading.Thread(
+            target=_dc_run_import, args=(upload_path, job_id), daemon=True
+        )
+        worker.start()
+        try:
+            os.remove(meta_path)
+        except OSError:
+            pass
+        return jsonify({"job_id": job_id, "message": "Upload complete. Import has started."})
+    except Exception as exc:
+        app.logger.exception("Could not finalise devotional upload")
+        return jsonify({"error": "Could not start import: " + str(exc)[:250]}), 400
+
+
 @app.route("/admin/devotional-centre", methods=["GET", "POST"])
 @page_login_required
 def admin_devotional_centre():
