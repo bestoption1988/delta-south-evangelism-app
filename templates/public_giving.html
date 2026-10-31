@@ -319,6 +319,7 @@ form.addEventListener("submit", async function(event) {
                 amount:checkout.amount,
                 currency:checkout.currency,
                 payment_options:checkout.payment_options,
+                redirect_url: window.location.origin + "/payment/complete",
                 customer:checkout.customer,
                 customizations:checkout.customizations,
                 callback: async function(payment) {
