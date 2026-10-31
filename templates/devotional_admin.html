@@ -1,13 +1,53 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Devotional Centre Administration</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f1f5f3;color:#17352a;font:15px/1.5 system-ui}.wrap{max-width:900px;margin:24px auto;padding:18px}.panel{background:white;border:1px solid #dce7e1;border-radius:14px;padding:20px;margin:14px 0}.button{display:inline-block;border:0;background:#116b4b;color:white;padding:12px 17px;border-radius:8px;font-weight:800;font:inherit}.error{color:#a21c1c}.success{color:#116b4b}.bar{height:12px;background:#e6ece8;border-radius:20px;overflow:hidden}.bar span{display:block;height:100%;background:#14704e;width:0}.job{border-top:1px solid #e6ece8;padding:12px 0}.muted{color:#69788a;font-size:13px}input[type=file]{width:100%;padding:12px;border:1px solid #d4ded8;border-radius:8px}
-</style></head><body><main class="wrap"><p><a href="/devotional-centre">← Public Devotional Centre</a> · <a href="/">Homepage</a></p><h1>Devotional Centre Administration</h1><p>Import the Devotional Kits ZIP. The importer places searchable content in Naijacloud PostgreSQL and music/author images in Supabase Storage.</p>
+*{box-sizing:border-box}body{margin:0;background:#f1f5f3;color:#17352a;font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}.wrap{max-width:900px;margin:20px auto;padding:16px}.panel{background:#fff;border:1px solid #dce7e1;border-radius:14px;padding:18px;margin:14px 0;box-shadow:0 5px 18px #17352a08}.button{display:inline-block;border:0;background:#116b4b;color:#fff;padding:12px 17px;border-radius:8px;font-weight:800;font:inherit;text-decoration:none}.error{color:#a21c1c}.success{color:#116b4b}.muted{color:#69788a;font-size:13px}input[type=file]{width:100%;padding:12px;border:1px solid #d4ded8;border-radius:8px;background:#fff}.job{border:1px solid #e2eae5;border-radius:12px;padding:14px;margin:12px 0;background:#fbfdfc}.job-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.status{font-size:12px;text-transform:uppercase;font-weight:800;letter-spacing:.5px;padding:4px 9px;border-radius:30px;background:#eaf0ec}.status.processing,.status.queued{background:#fff2cf;color:#785400}.status.completed{background:#dcf6e8;color:#116b4b}.status.failed{background:#ffe3e3;color:#a21c1c}.bar{height:15px;background:#e6ece8;border-radius:20px;overflow:hidden;margin:12px 0 7px}.bar span{display:block;height:100%;background:linear-gradient(90deg,#116b4b,#38a879);width:0;transition:width .35s}.percent{font-size:22px;font-weight:850;color:#116b4b;font-variant-numeric:tabular-nums}.stage{font-weight:700;margin:8px 0;color:#263f35}.stats{display:flex;gap:15px;flex-wrap:wrap;font-size:12px;color:#69788a}.upload-progress{display:none;background:#f0f7f3;border:1px solid #cfe3d8;border-radius:12px;padding:14px;margin-top:14px}.upload-progress.show{display:block}.spin{display:inline-block;width:14px;height:14px;border:2px solid #b6d2c3;border-top-color:#116b4b;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-right:7px}@keyframes spin{to{transform:rotate(360deg)}}button:disabled{opacity:.6}
+</style></head><body><main class="wrap">
+<p><a href="/devotional-centre">← Public Devotional Centre</a> · <a href="/">Homepage</a></p>
+<h1>Devotional Centre Administration</h1>
+<p>Import the Devotional Kits ZIP. Content records are saved in Naijacloud PostgreSQL and media files are uploaded to Supabase Storage.</p>
 {% if message %}<p class="success">{{ message }}</p>{% endif %}{% if error %}<p class="error">{{ error }}</p>{% endif %}
-<p><a class="button" href="/admin/devotional-centre/resources">Manage Imported Resources</a></p><section class="panel"><h2>Import Devotional Kits</h2><p class="muted">Choose the original Devotional Kits ZIP file. Do not extract it first. The upload is processed in the background; keep the website available while the import runs.</p>
-<form method="post" enctype="multipart/form-data"><input type="file" name="package" accept=".zip,application/zip" required><p class="muted">The package contains hymn books, Bible verses, canticles, Communion materials, creeds, music recordings and author photographs.</p><button class="button" type="submit">Start Full Import</button></form></section>
-<section class="panel"><h2>Recent Import Jobs</h2>{% for job in jobs %}<div class="job" data-job="{{ job.job_id }}"><strong>{{ job.status|title }}</strong><p class="muted job-message">{{ job.message }}</p><div class="bar"><span style="width:{{ job.progress }}%"></span></div><p class="muted">Progress: {{ job.progress }}% · Records: {{ job.imported_records }} · Media files: {{ job.uploaded_assets }}</p></div>{% else %}<p class="muted">No import jobs yet.</p>{% endfor %}</section>
+<p><a class="button" href="/admin/devotional-centre/resources">Manage Imported Resources</a></p>
+<section class="panel"><h2>Import Devotional Kits</h2>
+<p class="muted">Choose the prepared ZIP package. Do not extract it first. Upload progress will be shown first, followed by unpacking, media upload and database import stages.</p>
+<form id="devotional-upload-form" method="post" enctype="multipart/form-data">
+<input type="file" name="package" accept=".zip,application/zip" required>
+<p class="muted">Includes hymn books, Bible verses, canticles, Communion materials, creeds, music recordings and author photographs.</p>
+<button id="start-import" class="button" type="submit">Start Full Import</button>
+<div id="upload-progress" class="upload-progress" aria-live="polite">
+<strong><span class="spin"></span><span id="upload-label">Uploading ZIP package…</span></strong>
+<div class="bar"><span id="upload-bar"></span></div><div class="percent" id="upload-percent">0%</div>
+<p class="muted">Please keep this page open until the package has been received by the server.</p>
+</div>
+</form></section>
+<section class="panel"><h2>Import Progress & Recent Jobs</h2>
+<p class="muted">The stage description and percentage update automatically every few seconds. Large media uploads may take time depending on your network.</p>
+<div id="job-list">
+{% for job in jobs %}
+<div class="job" data-job="{{ job.job_id }}">
+<div class="job-head"><strong>Import {{ job.job_id[:8] }}</strong><span class="status {{ job.status }}">{{ job.status|title }}</span></div>
+<div class="stage job-message">{{ job.message }}</div>
+<div class="bar"><span style="width:{{ job.progress }}%"></span></div>
+<div class="job-foot"><span class="percent">{{ job.progress }}%</span><div class="stats"><span class="records">Records: {{ job.imported_records }}</span><span class="assets">Media files: {{ job.uploaded_assets }}</span></div></div>
+</div>
+{% else %}<p class="muted" id="no-jobs">No import jobs yet. Select the ZIP package above to begin.</p>{% endfor %}
+</div></section>
 </main>
 <script>
-(function(){const jobs=[...document.querySelectorAll("[data-job]")];if(!jobs.length)return;async function refresh(){for(const el of jobs){try{const r=await fetch("/admin/devotional-centre/jobs/"+encodeURIComponent(el.dataset.job));if(!r.ok)continue;const j=await r.json();el.querySelector("strong").textContent=j.status;el.querySelector(".job-message").textContent=j.message;el.querySelector(".bar span").style.width=(j.progress||0)+"%";const p=el.querySelectorAll("p.muted")[1];if(p)p.textContent="Progress: "+j.progress+"% · Records: "+j.imported_records+" · Media files: "+j.uploaded_assets;}catch(e){}}}refresh();setInterval(refresh,5000);})();
-</script></main></body></html>
+(function(){
+ const form=document.getElementById("devotional-upload-form"),button=document.getElementById("start-import"),box=document.getElementById("upload-progress");
+ if(form){form.addEventListener("submit",function(ev){
+  ev.preventDefault();const file=form.querySelector('input[type="file"]').files[0];if(!file){alert("Please choose the Devotional Kits ZIP file.");return;}
+  const xhr=new XMLHttpRequest();const data=new FormData(form);button.disabled=true;button.textContent="Uploading…";box.classList.add("show");
+  xhr.open("POST",form.action||window.location.href,true);
+  xhr.upload.addEventListener("progress",function(e){if(e.lengthComputable){const pct=Math.round(e.loaded/e.total*100);document.getElementById("upload-bar").style.width=pct+"%";document.getElementById("upload-percent").textContent=pct+"%";document.getElementById("upload-label").textContent="Uploading ZIP package… "+pct+"%";}});
+  xhr.onload=function(){if(xhr.status>=200&&xhr.status<400){document.open();document.write(xhr.responseText);document.close();}else{button.disabled=false;button.textContent="Start Full Import";document.getElementById("upload-label").textContent="Upload failed (HTTP "+xhr.status+"). Please retry.";}}
+  xhr.onerror=function(){button.disabled=false;button.textContent="Start Full Import";document.getElementById("upload-label").textContent="Network error during upload. Check your connection and retry.";};
+  xhr.send(data);
+ });}
+ const jobs=[...document.querySelectorAll("[data-job]")];
+ async function refresh(){for(const el of jobs){try{const r=await fetch("/admin/devotional-centre/jobs/"+encodeURIComponent(el.dataset.job),{cache:"no-store"});if(!r.ok)continue;const j=await r.json();el.querySelector(".status").textContent=j.status;el.querySelector(".status").className="status "+j.status;el.querySelector(".job-message").textContent=j.message;el.querySelector(".bar span").style.width=(j.progress||0)+"%";el.querySelector(".percent").textContent=(j.progress||0)+"%";el.querySelector(".records").textContent="Records: "+(j.imported_records||0);el.querySelector(".assets").textContent="Media files: "+(j.uploaded_assets||0);}catch(e){}}
+  }
+ if(jobs.length){refresh();setInterval(refresh,2500);}
+})();
+</script></body></html>
