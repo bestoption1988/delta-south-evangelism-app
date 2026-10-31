@@ -12159,7 +12159,7 @@ def admin_devotional_upload_init():
             pass
         with open(meta_path, "w", encoding="utf-8") as meta:
             json.dump({"filename": filename, "size": total_size, "received": 0}, meta)
-        return jsonify({"upload_id": upload_id, "chunk_size": 4 * 1024 * 1024})
+        return jsonify({"upload_id": upload_id, "chunk_size": 2 * 1024 * 1024})
     except Exception as exc:
         app.logger.exception("Could not initialise devotional upload")
         return jsonify({"error": "Could not initialise upload: " + str(exc)[:200]}), 500
@@ -12172,7 +12172,7 @@ def admin_devotional_upload_chunk(upload_id):
         return jsonify({"error": "Administrator access required."}), 403
     if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
         return jsonify({"error": "Invalid upload identifier."}), 400
-    request.max_content_length = 5 * 1024 * 1024
+    request.max_content_length = 3 * 1024 * 1024
     upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
     upload_path = os.path.join(upload_dir, upload_id + ".part")
     meta_path = os.path.join(upload_dir, upload_id + ".json")
@@ -12182,8 +12182,8 @@ def admin_devotional_upload_chunk(upload_id):
         chunk_index = int(request.headers.get("X-Chunk-Index", "-1"))
         offset = int(request.headers.get("X-Chunk-Offset", "-1"))
         chunk = request.get_data(cache=False)
-        if not chunk or len(chunk) > 4 * 1024 * 1024:
-            return jsonify({"error": "Chunk must be between 1 byte and 4 MB."}), 400
+        if not chunk or len(chunk) > 2 * 1024 * 1024:
+            return jsonify({"error": "Chunk must be between 1 byte and 2 MB."}), 400
         if offset != int(state.get("received", 0)) or os.path.getsize(upload_path) != offset:
             return jsonify({"error": "Upload position mismatch. Please restart the upload."}), 409
         if offset + len(chunk) > int(state["size"]):
