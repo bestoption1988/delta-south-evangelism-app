@@ -2987,7 +2987,7 @@ async function loadPaymentManagement(){
         <td>${money(p.amount||0)}</td>
         <td><span class="status-badge ${esc(status)}">${esc(p.status||"")}</span></td>
         <td>${esc(p.gateway||"")}</td>
-        <td><button type="button" class="secondary payment-details-btn" data-reference="${esc(p.reference||"")}">View</button> ${String(p.gateway||"").toLowerCase()==="direct bank transfer" && status!=="paid" ? `<button type="button" class="primary confirm-bank-transfer-btn" data-reference="${esc(p.reference||"")}">Confirm Transfer</button>` : ""}</td>
+        <td><button type="button" class="secondary payment-details-btn" data-reference="${esc(p.reference||"")}">View</button> ${["Admin","Finance Officer"].includes(me?.role) && status==="pending" ? `<button type="button" class="primary confirm-payment-received-btn" data-reference="${esc(p.reference||"")}">Confirm Funds Received</button>` : ""}</td>
       </tr>`;
     }).join("");
 
@@ -3157,6 +3157,34 @@ async function viewPaymentDetails(reference){
 }
 
 document.addEventListener("click",async function(e){
+  const receivedBtn=e.target.closest(".confirm-payment-received-btn");
+  if(receivedBtn){
+    e.preventDefault();
+    const reference=receivedBtn.dataset.reference||"";
+    if(!reference)return;
+    const note=prompt("Confirm that the money has appeared in the selected church bank account. Enter the bank statement narration, deposit date, or other confirmation details:");
+    if(note===null)return;
+    if(note.trim().length<8){
+      alert("Please enter at least 8 characters describing how the bank credit was confirmed.");
+      return;
+    }
+    if(!confirm("FINAL CONFIRMATION\n\nYou are about to mark this payment as PAID and create/link its income record. Continue only after checking the actual church bank account.\n\nReference: "+reference+"\nConfirmation: "+note.trim()))return;
+    receivedBtn.disabled=true;
+    try{
+      const result=await api("/api/payment/"+encodeURIComponent(reference)+"/confirm-received",{
+        method:"POST",
+        body:JSON.stringify({confirmation_note:note.trim()})
+      });
+      alert("Funds confirmed and recorded successfully.\nReference: "+reference+"\nAmount: "+money(result.amount)+"\nConfirmed by: "+(result.confirmed_by||"Finance Office"));
+      loadPaymentManagement();
+      if(typeof loadPaymentReconciliation==="function")loadPaymentReconciliation();
+    }catch(err){
+      alert("Payment was not confirmed: "+err.message);
+      receivedBtn.disabled=false;
+    }
+    return;
+  }
+
   const confirmBtn=e.target.closest(".confirm-bank-transfer-btn");
   if(confirmBtn){
     e.preventDefault();
