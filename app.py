@@ -2932,6 +2932,7 @@ def public_home():
 
     # Published media comes from the persistent Supabase catalogue.
     homepage_media_items = []
+    homepage_gallery_items = []
     try:
         media_rows = _ml_supabase_request(
             "GET",
@@ -2952,6 +2953,25 @@ def public_home():
             homepage_media_items.append(item)
     except Exception:
         app.logger.exception("Homepage Supabase media preview could not be loaded")
+
+    # The public photo gallery includes every published image in the catalogue.
+    try:
+        gallery_rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
+                "published": "eq.true",
+                "mime_type": "like.image/*",
+                "order": "created_at.desc",
+                "limit": "100",
+            },
+        )
+        homepage_gallery_items = [
+            dict(item) for item in gallery_rows
+            if str(item.get("mime_type") or "").lower().startswith("image/")
+        ]
+    except Exception:
+        app.logger.exception("Homepage photo gallery could not be loaded")
 
 
     # Birthday celebrations use Nigeria's local calendar date.
@@ -3045,6 +3065,7 @@ def public_home():
         homepage_events=events,
         homepage_churches=churches,
         homepage_media_items=homepage_media_items,
+        homepage_gallery_items=homepage_gallery_items,
         daily_devotion=daily_devotion,
         birthday_celebration_members=birthday_celebration_members
     )
