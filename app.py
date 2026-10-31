@@ -1048,7 +1048,8 @@ def ensure_runtime_schema():
     """)
     migrations = {
       'income': {
-        'church_account_id': 'INTEGER DEFAULT NULL'
+        'church_account_id': 'INTEGER DEFAULT NULL',
+        'member_id': 'INTEGER DEFAULT NULL'
       },
       'expenses': {
         'church_name': "TEXT DEFAULT ''"
