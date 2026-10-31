@@ -11721,78 +11721,101 @@ def media_library_admin():
                         )
 
             else:
-                uploaded_file = request.files.get("file")
+                uploaded_files = [
+                    item for item in request.files.getlist("file")
+                    if item and item.filename
+                ]
                 title = (request.form.get("title") or "").strip()
                 description = (request.form.get("description") or "").strip()
 
-                if not uploaded_file or not uploaded_file.filename:
-                    error = "Choose a file."
+                if not uploaded_files:
+                    error = "Choose one or more files."
+                elif len(uploaded_files) > 10:
+                    error = "You can upload a maximum of 10 files at a time. Select the next batch afterwards."
                 elif not title:
-                    error = "Enter a title."
+                    error = "Enter a title for the upload."
+                elif len(title) > 180 or len(description) > 2000:
+                    error = "The title or description is too long."
                 else:
-                    name = uploaded_file.filename.split("/")[-1].split(chr(92))[-1]
-                    ext = ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
-                    spec = _ML_TYPES.get(ext)
+                    allowed_text = "Allowed: PDF, DOC, DOCX, JPG, JPEG, PNG, GIF, WEBP, MP3, WAV, OGG, M4A, AAC, MP4, WEBM, MOV."
+                    checks_by_ext = {
+                        ".pdf": lambda data: data.startswith(b"%PDF-"),
+                        ".docx": lambda data: data.startswith(b"PK"),
+                        ".doc": lambda data: data.startswith(bytes.fromhex("D0CF11E0A1B11AE1")),
+                        ".jpg": lambda data: data.startswith(bytes.fromhex("FFD8FF")),
+                        ".jpeg": lambda data: data.startswith(bytes.fromhex("FFD8FF")),
+                        ".png": lambda data: data.startswith(bytes.fromhex("89504E470D0A1A0A")),
+                        ".gif": lambda data: data.startswith((b"GIF87a", b"GIF89a")),
+                        ".webp": lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP",
+                        ".mp3": lambda data: data.startswith(b"ID3") or data.startswith(bytes([255, 251])) or data.startswith(bytes([255, 243])) or data.startswith(bytes([255, 242])),
+                        ".wav": lambda data: data.startswith(b"RIFF") and data[8:12] == b"WAVE",
+                        ".ogg": lambda data: data.startswith(b"OggS"),
+                        ".m4a": lambda data: len(data) > 12 and data[4:8] == b"ftyp",
+                        ".mp4": lambda data: len(data) > 12 and data[4:8] == b"ftyp",
+                        ".mov": lambda data: len(data) > 12 and data[4:8] == b"ftyp",
+                        ".aac": lambda data: data.startswith(bytes([255, 241])) or data.startswith(bytes([255, 249])),
+                        ".webm": lambda data: data.startswith(bytes([26, 69, 223, 163])),
+                    }
+                    uploaded_count = 0
+                    failures = []
+                    for uploaded_file in uploaded_files:
+                        original_name = uploaded_file.filename.split("/")[-1].split(chr(92))[-1]
+                        ext = ("." + original_name.rsplit(".", 1)[-1].lower()) if "." in original_name else ""
+                        spec = _ML_TYPES.get(ext)
+                        if not spec:
+                            failures.append(f"{original_name}: unsupported file type. {allowed_text}")
+                            continue
 
-                    if not spec:
-                        error = "Allowed: PDF, DOC, DOCX, JPG, JPEG, PNG, GIF, WEBP, MP3, WAV, OGG, M4A, AAC, MP4, WEBM, MOV."
-                    else:
                         data = uploaded_file.stream.read(_ML_MAX + 1)
                         if not data:
-                            error = "The file is empty."
-                        elif len(data) > _ML_MAX:
-                            error = "Maximum file size is 50 MB."
-                        else:
-                            checks = {
-                                ".pdf": data.startswith(b"%PDF-"),
-                                ".docx": data.startswith(b"PK"),
-                                ".doc": data.startswith(bytes.fromhex("D0CF11E0A1B11AE1")),
-                                ".jpg": data.startswith(bytes.fromhex("FFD8FF")),
-                                ".jpeg": data.startswith(bytes.fromhex("FFD8FF")),
-                                ".png": data.startswith(bytes.fromhex("89504E470D0A1A0A")),
-                                ".gif": data.startswith((b"GIF87a", b"GIF89a")),
-                                ".webp": len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP",
-                                ".mp3": data.startswith(b"ID3") or data.startswith(bytes([255, 251])) or data.startswith(bytes([255, 243])) or data.startswith(bytes([255, 242])),
-                                ".wav": data.startswith(b"RIFF") and data[8:12] == b"WAVE",
-                                ".ogg": data.startswith(b"OggS"),
-                                ".m4a": len(data) > 12 and data[4:8] == b"ftyp",
-                                ".mp4": len(data) > 12 and data[4:8] == b"ftyp",
-                                ".mov": len(data) > 12 and data[4:8] == b"ftyp",
-                                ".aac": data.startswith(bytes([255, 241])) or data.startswith(bytes([255, 249])),
-                                ".webm": data.startswith(bytes([26, 69, 223, 163])),
-                            }
-                            if not checks.get(ext, False):
-                                error = "File content does not match its extension."
-                            else:
-                                storage_path = f"library/{_ml_uuid.uuid4().hex}{ext}"
-                                try:
-                                    response = _ml_storage_request(
-                                        "POST", storage_path, data, spec[0]
-                                    )
-                                    if not response.ok:
-                                        raise RuntimeError(
-                                            "Supabase upload failed "
-                                            f"(HTTP {response.status_code})."
-                                        )
+                            failures.append(f"{original_name}: file is empty.")
+                            continue
+                        if len(data) > _ML_MAX:
+                            failures.append(f"{original_name}: maximum file size is 50 MB.")
+                            continue
+                        if not checks_by_ext.get(ext, lambda _data: False)(data):
+                            failures.append(f"{original_name}: file content does not match its extension.")
+                            continue
 
-                                    _ml_supabase_request(
-                                        "POST",
-                                        payload={
-                                            "title": title,
-                                            "description": description,
-                                            "storage_path": storage_path,
-                                            "mime_type": spec[0],
-                                            "media_type": spec[1],
-                                            "published": False,
-                                            "created_by": str(user["id"]),
-                                        },
-                                        prefer="return=minimal",
-                                    )
-                                    message = "Upload complete. Publish it below when ready."
-                                except Exception as exc:
-                                    # Do not delete the uploaded object automatically:
-                                    # preserve it for safe recovery if metadata insert fails.
-                                    error = str(exc)
+                        storage_path = f"library/{_ml_uuid.uuid4().hex}{ext}"
+                        display_title = title
+                        if len(uploaded_files) > 1:
+                            filename_title = original_name.rsplit(".", 1)[0].strip()
+                            display_title = f"{title} - {filename_title}"[:180]
+                        try:
+                            response = _ml_storage_request(
+                                "POST", storage_path, data, spec[0]
+                            )
+                            if not response.ok:
+                                raise RuntimeError(
+                                    f"Supabase upload failed (HTTP {response.status_code})."
+                                )
+                            _ml_supabase_request(
+                                "POST",
+                                payload={
+                                    "title": display_title,
+                                    "description": description,
+                                    "storage_path": storage_path,
+                                    "mime_type": spec[0],
+                                    "media_type": spec[1],
+                                    "published": False,
+                                    "created_by": str(user["id"]),
+                                },
+                                prefer="return=minimal",
+                            )
+                            uploaded_count += 1
+                        except Exception as exc:
+                            app.logger.exception("Media upload failed for %s", original_name)
+                            failures.append(f"{original_name}: {exc}")
+
+                    if uploaded_count:
+                        message = (
+                            f"{uploaded_count} file(s) uploaded successfully. "
+                            "Publish each photo below to show it in the homepage gallery."
+                        )
+                    if failures:
+                        error = " ".join(failures)
+
 
         rows = _ml_supabase_request(
             "GET",
