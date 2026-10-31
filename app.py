@@ -11829,10 +11829,15 @@ def _dc_run_import(zip_path, job_id):
                 }
                 raw_collections = {}
                 missing_json = []
+                json_total = len(json_names)
+                json_done = 0
+                _dc_update_job(job_id, progress=3,
+                               message="Unpacking ZIP contents and locating hymn books, Scripture and worship files…")
                 for filename, spec in json_names.items():
                     member = decoded_lookup.get(asset_root + filename)
                     if not member:
                         missing_json.append(filename)
+                        json_done += 1
                         continue
                     try:
                         raw_collections[filename] = _json.loads(
@@ -11840,6 +11845,12 @@ def _dc_run_import(zip_path, job_id):
                         )
                     except Exception as exc:
                         raise ValueError("Could not read " + filename + ": " + str(exc))
+                    json_done += 1
+                    _dc_update_job(
+                        job_id, progress=3 + int((json_done / max(json_total, 1)) * 2),
+                        message="Unpacking and reading content files (" +
+                                str(json_done) + "/" + str(json_total) + "): " + filename
+                    )
                 required = {"hymns.json", "yorubaHymns.json", "akokun.json", "verses.json"}
                 if not required.issubset(raw_collections):
                     raise ValueError("The package is missing required data: " +
@@ -11865,9 +11876,10 @@ def _dc_run_import(zip_path, job_id):
                         resolved_assets[source] = member
 
                 _dc_update_job(job_id, progress=5,
-                               message="Preparing " + str(len(resolved_assets)) + " music and author-image files…")
+                               message="Unpacking " + str(len(resolved_assets)) + " music and author-image files…")
                 asset_jobs = []
-                for source, member in resolved_assets.items():
+                unpack_total = len(resolved_assets)
+                for unpack_index, (source, member) in enumerate(resolved_assets.items(), 1):
                     raw = archive.read(member)
                     digest = _hashlib.sha256(source.encode("utf-8")).hexdigest()[:24]
                     ext = os.path.splitext(member)[1].lower()
@@ -11875,10 +11887,18 @@ def _dc_run_import(zip_path, job_id):
                     destination = "devotional-centre/" + folder + "/" + digest + ext
                     mime = _mimetypes.guess_type(member)[0] or "application/octet-stream"
                     asset_jobs.append((source, destination, raw, mime))
+                    if unpack_index % 10 == 0 or unpack_index == unpack_total:
+                        _dc_update_job(
+                            job_id, progress=5 + int((unpack_index / max(unpack_total, 1)) * 3),
+                            message="Unpacking media files (" + str(unpack_index) +
+                                    "/" + str(unpack_total) + ")…"
+                        )
 
                 path_map = {}
                 total_assets = len(asset_jobs)
                 if total_assets:
+                    _dc_update_job(job_id, progress=8,
+                                   message="Preparing to upload " + str(total_assets) + " media files to Supabase Storage…")
                     with _futures.ThreadPoolExecutor(max_workers=8) as pool:
                         futures = {
                             pool.submit(_ml_storage_request, "POST", dest, raw, mime, True):
@@ -11898,7 +11918,7 @@ def _dc_run_import(zip_path, job_id):
                             path_map[source] = destination
                             done += 1
                             if done % 10 == 0 or done == total_assets:
-                                progress = 5 + int((done / max(total_assets, 1)) * 60)
+                                progress = 8 + int((done / max(total_assets, 1)) * 57)
                                 _dc_update_job(
                                     job_id, progress=progress,
                                     message="Uploading devotional music and author images (" +
@@ -11906,7 +11926,7 @@ def _dc_run_import(zip_path, job_id):
                                     uploaded_assets=done
                                 )
                 _dc_update_job(job_id, progress=68,
-                               message="Importing hymn, Scripture and worship records…",
+                               message="Media upload complete. Preparing hymn, Scripture, canticle, Communion and creed records…",
                                uploaded_assets=len(path_map))
 
                 def replace_media_paths(item):
@@ -11937,6 +11957,9 @@ def _dc_run_import(zip_path, job_id):
                     return item
 
                 records = []
+                _dc_update_job(job_id, progress=69,
+                               message="Converting imported content into searchable library entries…",
+                               uploaded_assets=len(path_map))
                 for filename, (collection, label) in json_names.items():
                     data = raw_collections.get(filename)
                     if data is None:
