@@ -5,7 +5,7 @@
 </style></head><body><main class="wrap">
 <p><a href="/devotional-centre">← Public Devotional Centre</a> · <a href="/">Homepage</a></p>
 <h1>Devotional Centre Administration</h1>
-<p>Import the Devotional Kits ZIP. Content records are saved in Naijacloud PostgreSQL and media files are uploaded to Supabase Storage.</p>
+<p>Import the Devotional Kits ZIP. The package is saved in Supabase Storage, while searchable content and job progress are saved in Naijacloud PostgreSQL. The import queue can pick up saved jobs again after a web-service restart.</p>
 {% if message %}<p class="success">{{ message }}</p>{% endif %}{% if error %}<p class="error">{{ error }}</p>{% endif %}
 <p><a class="button" href="/admin/devotional-centre/resources">Manage Imported Resources</a></p>
 <section class="panel"><h2>Import Devotional Kits</h2>
@@ -45,7 +45,7 @@
   const head=document.createElement("div");head.className="job-head";
   const title=document.createElement("strong");title.textContent="Import "+id.slice(0,8);
   const status=document.createElement("span");status.className="status queued";status.textContent="Queued";head.append(title,status);
-  const msg=document.createElement("div");msg.className="stage job-message";msg.textContent="ZIP uploaded. Waiting for import worker…";
+  const msg=document.createElement("div");msg.className="stage job-message";msg.textContent="ZIP saved. Waiting for the background import worker…";
   const track=document.createElement("div");track.className="bar";const fill=document.createElement("span");fill.style.width="0%";track.append(fill);
   const foot=document.createElement("div");foot.className="job-foot";const pct=document.createElement("span");pct.className="percent";pct.textContent="0%";
   const stats=document.createElement("div");stats.className="stats";const records=document.createElement("span");records.className="records";records.textContent="Records: 0";const assets=document.createElement("span");assets.className="assets";assets.textContent="Media files: 0";stats.append(records,assets);foot.append(pct,stats);
@@ -75,7 +75,7 @@
    showUpload(100,"Upload complete. Checking ZIP integrity and starting import…");
    const done=await fetch("/admin/devotional-centre/upload/"+id+"/complete",{method:"POST"});
    const doneData=await done.json().catch(()=>({}));if(!done.ok)throw new Error(doneData.error||"Could not start import (HTTP "+done.status+").");
-   showUpload(100,"ZIP received successfully. Import is now running; see the progress panel below.");
+   showUpload(100,"ZIP received and saved securely. The background worker will process it; see the progress panel below.");
    addJob(doneData.job_id);refresh();
   }catch(err){showUpload(0,"Upload stopped: "+(err&&err.message?err.message:String(err)));label.classList.add("error");}
   finally{button.disabled=false;button.textContent="Start Full Import";}
