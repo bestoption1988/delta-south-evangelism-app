@@ -148,13 +148,19 @@ Payments are processed securely in Nigerian Naira (NGN).
 <option value="Donation">General Donation</option>
 </select>
 
+<label for="payment_method">Payment Method</label>
+<select id="payment_method" name="payment_method" required>
+<option value="online">Online Card / Gateway Payment</option>
+<option value="direct_bank_transfer">Direct Bank Transfer to Church Account</option>
+</select>
+
 <label for="amount">Amount (₦)</label>
 <input id="amount" name="amount"
        type="number" min="100" max="999999999"
        step="1" inputmode="numeric" required>
 
 <button id="payButton" type="submit">
-Continue to Secure Payment
+Continue to Payment
 </button>
 
 <div id="message" role="status" aria-live="polite"></div>
@@ -296,10 +302,63 @@ form.addEventListener("submit", async function(event) {
             button.textContent="Transfer details displayed";
             return;
         }
-        if (!result.authorization_url) {
-            throw new Error("The selected payment provider did not return a secure checkout address.");
+        if (result.checkout && result.checkout.provider === "flutterwave") {
+            if (typeof window.FlutterwaveCheckout !== "function") {
+                await new Promise((resolve,reject) => {
+                    const script=document.createElement("script");
+                    script.src="https://checkout.flutterwave.com/v3.js";
+                    script.onload=resolve;
+                    script.onerror=()=>reject(new Error("Secure payment window could not be loaded. Check your internet connection and try again."));
+                    document.head.appendChild(script);
+                });
+            }
+            const checkout=result.checkout;
+            showMessage("Opening secure payment window on this page…","message-success");
+            window.FlutterwaveCheckout({
+                public_key:checkout.public_key,
+                tx_ref:checkout.tx_ref,
+                amount:checkout.amount,
+                currency:checkout.currency,
+                payment_options:checkout.payment_options,
+                customer:checkout.customer,
+                customizations:checkout.customizations,
+                callback: async function(payment) {
+                    const transactionId=payment && payment.transaction_id;
+                    if (!transactionId) {
+                        showMessage("Payment was not confirmed by the provider. Reference: "+checkout.tx_ref,"message-error");
+                        button.disabled=false;
+                        button.textContent="Try Again";
+                        return;
+                    }
+                    showMessage("Payment received. Verifying and recording it securely…","message-success");
+                    try {
+                        const verify=await fetch("/api/payment/verify/"+encodeURIComponent(checkout.tx_ref)+"?transaction_id="+encodeURIComponent(transactionId),{cache:"no-store"});
+                        const verified=await verify.json();
+                        if (!verify.ok || !verified.paid) {
+                            throw new Error(verified.error || "Payment is not yet confirmed. Keep your reference and contact the Finance Office.");
+                        }
+                        showMessage("PAYMENT SUCCESSFUL\nYour payment has been verified and recorded by the Diocese.\nReference: "+checkout.tx_ref,"message-success");
+                        form.reset();
+                    } catch (verificationError) {
+                        showMessage((verificationError.message || "Payment verification is pending.")+"\nReference: "+checkout.tx_ref+"\nPlease do not pay again until the Finance Office checks this reference.","message-error");
+                    } finally {
+                        button.disabled=false;
+                        button.textContent="Continue to Payment";
+                    }
+                },
+                onclose: function() {
+                    if (button.disabled) {
+                        button.disabled=false;
+                        button.textContent="Continue to Payment";
+                    }
+                }
+            });
+            return;
         }
-        showMessage("Redirecting you to secure payment checkout…","message-success");
+        if (!result.authorization_url) {
+            throw new Error("The selected online provider did not return a supported checkout response.");
+        }
+        showMessage("Opening the provider's secure checkout…","message-success");
         window.location.assign(result.authorization_url);
 
     } catch (error) {
