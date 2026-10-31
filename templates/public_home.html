@@ -294,6 +294,55 @@
 </div>
 </section>
 
+<section class="photo-gallery-section" id="photo-gallery" aria-label="Diocesan photo gallery">
+  <div class="photo-gallery-heading">
+    <p class="eyebrow">LIFE IN OUR DIOCESE</p>
+    <h2>📸 Our Church Gallery</h2>
+    <p>Moments of worship, fellowship, outreach and service across Delta South Diocese.</p>
+  </div>
+  {% if homepage_gallery_items %}
+  <div class="photo-gallery-shell" data-gallery>
+    <div class="photo-gallery-stage">
+      {% for photo in homepage_gallery_items %}
+      <figure class="photo-gallery-slide{% if loop.first %} is-active{% endif %}" data-gallery-slide aria-hidden="{{ 'false' if loop.first else 'true' }}">
+        <button class="photo-gallery-open" type="button" data-gallery-open aria-label="View {{ photo.title }}">
+          <img src="{{ url_for('media_document_view', media_id=photo.id) }}"
+               alt="{{ photo.title }}" loading="{{ 'eager' if loop.first else 'lazy' }}">
+        </button>
+        <figcaption>
+          <strong>{{ photo.title }}</strong>
+          {% if photo.description %}<span>{{ photo.description }}</span>{% endif %}
+          <small>{{ loop.index }} of {{ homepage_gallery_items|length }}</small>
+        </figcaption>
+      </figure>
+      {% endfor %}
+    </div>
+    {% if homepage_gallery_items|length > 1 %}
+    <div class="photo-gallery-controls">
+      <button type="button" data-gallery-prev aria-label="Previous photo">‹</button>
+      <div class="photo-gallery-dots" aria-label="Choose a photo">
+        {% for photo in homepage_gallery_items %}
+        <button type="button" data-gallery-dot="{{ loop.index0 }}" class="{% if loop.first %}is-active{% endif %}" aria-label="Show photo {{ loop.index }}"></button>
+        {% endfor %}
+      </div>
+      <button type="button" data-gallery-next aria-label="Next photo">›</button>
+    </div>
+    {% endif %}
+  </div>
+  <dialog class="photo-gallery-lightbox" data-gallery-lightbox>
+    <button type="button" data-gallery-close aria-label="Close photo">×</button>
+    <img data-gallery-lightbox-image alt="">
+    <p data-gallery-lightbox-caption></p>
+  </dialog>
+  {% else %}
+  <div class="photo-gallery-empty">
+    <span>✦</span>
+    <h3>Our diocesan memories will appear here</h3>
+    <p>Church photographs will be added to the gallery as they are published.</p>
+  </div>
+  {% endif %}
+</section>
+
 <section class="watch-section" id="watch">
   <div class="section-title"><h2>WATCH & LISTEN</h2><p>Live streaming, sermons, teachings and more</p></div>
   <div class="media-grid">
@@ -980,5 +1029,65 @@
 
 
 {% endif %}
+<script>
+(function () {
+  var gallery = document.querySelector("[data-gallery]");
+  if (!gallery) return;
+  var slides = Array.from(gallery.querySelectorAll("[data-gallery-slide]"));
+  var dots = Array.from(gallery.querySelectorAll("[data-gallery-dot]"));
+  var index = 0;
+  var timer = null;
+  var stage = gallery.querySelector(".photo-gallery-stage");
+  var lightbox = document.querySelector("[data-gallery-lightbox]");
+  var lightboxImage = lightbox && lightbox.querySelector("[data-gallery-lightbox-image]");
+  var lightboxCaption = lightbox && lightbox.querySelector("[data-gallery-lightbox-caption]");
+
+  function show(next) {
+    if (!slides.length) return;
+    index = (next + slides.length) % slides.length;
+    slides.forEach(function (slide, i) {
+      slide.classList.toggle("is-active", i === index);
+      slide.setAttribute("aria-hidden", i === index ? "false" : "true");
+    });
+    dots.forEach(function (dot, i) {
+      dot.classList.toggle("is-active", i === index);
+      dot.setAttribute("aria-current", i === index ? "true" : "false");
+    });
+  }
+  function stop() { if (timer) window.clearInterval(timer); timer = null; }
+  function start() {
+    stop();
+    if (slides.length > 1 && !document.hidden) {
+      timer = window.setInterval(function () { show(index + 1); }, 5000);
+    }
+  }
+  gallery.querySelector("[data-gallery-prev]")?.addEventListener("click", function () { show(index - 1); start(); });
+  gallery.querySelector("[data-gallery-next]")?.addEventListener("click", function () { show(index + 1); start(); });
+  dots.forEach(function (dot) {
+    dot.addEventListener("click", function () { show(Number(dot.dataset.galleryDot)); start(); });
+  });
+  gallery.addEventListener("mouseenter", stop);
+  gallery.addEventListener("mouseleave", start);
+  gallery.addEventListener("focusin", stop);
+  gallery.addEventListener("focusout", start);
+  document.addEventListener("visibilitychange", function () { document.hidden ? stop() : start(); });
+
+  gallery.querySelectorAll("[data-gallery-open]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (!lightbox || !lightboxImage) return;
+      var image = button.querySelector("img");
+      lightboxImage.src = image.src;
+      lightboxImage.alt = image.alt;
+      if (lightboxCaption) lightboxCaption.textContent = image.alt;
+      if (typeof lightbox.showModal === "function") lightbox.showModal();
+    });
+  });
+  lightbox?.querySelector("[data-gallery-close]")?.addEventListener("click", function () { lightbox.close(); });
+  lightbox?.addEventListener("click", function (event) {
+    if (event.target === lightbox) lightbox.close();
+  });
+  start();
+})();
+</script>
 </body>
 </html>
