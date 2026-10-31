@@ -11961,57 +11961,43 @@ def _dc_run_import(zip_path, job_id):
                     if member:
                         resolved_assets[source] = member
 
-                _dc_update_job(job_id, progress=5,
-                               message="Unpacking " + str(len(resolved_assets)) + " music and author-image files…")
-                asset_jobs = []
-                unpack_total = len(resolved_assets)
-                for unpack_index, (source, member) in enumerate(resolved_assets.items(), 1):
-                    raw = archive.read(member)
+                # Process one ZIP member at a time. The previous implementation
+                # retained every extracted media file in RAM before uploading.
+                # Large hymn packages could therefore stall or exhaust memory
+                # around the middle of the 670-file asset set.
+                path_map = {}
+                total_assets = len(resolved_assets)
+                _dc_update_job(
+                    job_id, progress=5,
+                    message="Preparing " + str(total_assets) +
+                            " music and author-image files for persistent storage…"
+                )
+                for asset_index, (source, member) in enumerate(resolved_assets.items(), 1):
                     digest = _hashlib.sha256(source.encode("utf-8")).hexdigest()[:24]
                     ext = os.path.splitext(member)[1].lower()
                     folder = "music" if "/music/" in source else "authors"
                     destination = "devotional-centre/" + folder + "/" + digest + ext
                     mime = _mimetypes.guess_type(member)[0] or "application/octet-stream"
-                    asset_jobs.append((source, destination, raw, mime))
-                    if unpack_index % 10 == 0 or unpack_index == unpack_total:
-                        _dc_update_job(
-                            job_id, progress=5 + int((unpack_index / max(unpack_total, 1)) * 3),
-                            message="Unpacking media files (" + str(unpack_index) +
-                                    "/" + str(unpack_total) + ")…"
+                    try:
+                        raw = archive.read(member)
+                        _dc_s3_put(destination, raw, mime)
+                        del raw
+                    except Exception as storage_error:
+                        raise RuntimeError(
+                            "Naijacloud media upload failed for " +
+                            os.path.basename(destination) + ": " +
+                            str(storage_error)[:180]
                         )
-
-                path_map = {}
-                total_assets = len(asset_jobs)
-                if total_assets:
-                    _dc_update_job(job_id, progress=8,
-                                   message="Preparing to upload " + str(total_assets) + " media files to Naijacloud Object Storage…")
-                    with _futures.ThreadPoolExecutor(max_workers=8) as pool:
-                        futures = {
-                            pool.submit(_dc_s3_put, dest, raw, mime):
-                                (source, dest)
-                            for source, dest, raw, mime in asset_jobs
-                        }
-                        done = 0
-                        for future in _futures.as_completed(futures):
-                            source, destination = futures[future]
-                            try:
-                                future.result()
-                            except Exception as storage_error:
-                                raise RuntimeError(
-                                    "Naijacloud media upload failed for " +
-                                    os.path.basename(destination) + ": " +
-                                    str(storage_error)[:180]
-                                )
-                            path_map[source] = destination
-                            done += 1
-                            if done % 10 == 0 or done == total_assets:
-                                progress = 8 + int((done / max(total_assets, 1)) * 57)
-                                _dc_update_job(
-                                    job_id, progress=progress,
-                                    message="Uploading devotional music and author images (" +
-                                            str(done) + "/" + str(total_assets) + ")…",
-                                    uploaded_assets=done
-                                )
+                    path_map[source] = destination
+                    # Update every file so the administrator can see that the
+                    # importer is alive, even when a large individual file takes time.
+                    progress = 5 + int((asset_index / max(total_assets, 1)) * 60)
+                    _dc_update_job(
+                        job_id, progress=progress,
+                        message="Saving devotional media to Naijacloud Object Storage (" +
+                                str(asset_index) + "/" + str(total_assets) + ")…",
+                        uploaded_assets=asset_index
+                    )
                 _dc_update_job(job_id, progress=68,
                                message="Media upload complete. Preparing hymn, Scripture, canticle, Communion and creed records…",
                                uploaded_assets=len(path_map))
