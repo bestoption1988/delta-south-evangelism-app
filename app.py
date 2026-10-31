@@ -8197,6 +8197,43 @@ register_fellowship_routes(app, db_getter=db, user_getter=current_user)
 with app.app_context():
     if database_backend() == "postgres":
         TABLES = validate_postgres_startup_schema()
+
+        # Additive schema for the public Devotional & Worship Centre.
+        # The main PostgreSQL validator intentionally avoids SQLite migrations;
+        # create these feature tables explicitly so public/admin routes work
+        # on Naijacloud without touching existing church records.
+        _devotional_conn = db()
+        _devotional_conn.execute("""
+            CREATE TABLE IF NOT EXISTS devotional_resources (
+                resource_id TEXT PRIMARY KEY,
+                collection TEXT NOT NULL,
+                item_number TEXT DEFAULT '',
+                title TEXT NOT NULL DEFAULT '',
+                content_json TEXT NOT NULL DEFAULT '{}',
+                search_text TEXT NOT NULL DEFAULT '',
+                audio_path TEXT DEFAULT '',
+                author_path TEXT DEFAULT '',
+                published INTEGER NOT NULL DEFAULT 1,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        _devotional_conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_devotional_resources_collection
+            ON devotional_resources(collection, published)
+        """)
+        _devotional_conn.execute("""
+            CREATE TABLE IF NOT EXISTS devotional_import_jobs (
+                job_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'queued',
+                progress INTEGER NOT NULL DEFAULT 0,
+                message TEXT DEFAULT '',
+                imported_records INTEGER NOT NULL DEFAULT 0,
+                uploaded_assets INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        _devotional_conn.commit()
     else:
         init_db()
         ensure_runtime_schema()
