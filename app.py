@@ -12132,41 +12132,50 @@ def _dc_queue_worker():
     # Gunicorn runs multiple OS processes. A Python threading.Lock only
     # coordinates threads inside one process, so use a PostgreSQL session
     # advisory lock to guarantee that only one process consumes the queue.
+    # IMPORTANT: losing the first lock race must not permanently kill this
+    # worker. Keep retrying so a process can take over after the current owner
+    # exits, including after a deployment or worker restart.
     worker_lock_conn = None
     if database_backend() == "postgres":
-        try:
-            worker_lock_conn = connect_database(DB_PATH)
-            lock_row = worker_lock_conn.execute(
-                "SELECT pg_try_advisory_lock(734219860124) AS locked"
-            ).fetchone()
-            if not lock_row or not bool(lock_row["locked"]):
+        import time as _lock_time
+        while True:
+            try:
+                if worker_lock_conn is None:
+                    worker_lock_conn = connect_database(DB_PATH)
+                lock_row = worker_lock_conn.execute(
+                    "SELECT pg_try_advisory_lock(734219860124) AS locked"
+                ).fetchone()
+                if lock_row and bool(lock_row["locked"]):
+                    break
                 app.logger.info(
-                    "Devotional import worker is already owned by another Gunicorn process."
+                    "Devotional import queue is owned by another process; retrying lock in 10 seconds."
                 )
-                worker_lock_conn.close()
-                return
+                _lock_time.sleep(10)
+            except Exception:
+                app.logger.exception(
+                    "Could not acquire devotional queue lock; retrying in 10 seconds."
+                )
+                if worker_lock_conn:
+                    try:
+                        worker_lock_conn.close()
+                    except Exception:
+                        pass
+                    worker_lock_conn = None
+                _lock_time.sleep(10)
 
-            # A process may have been restarted while an import was running.
-            # Once this process owns the global lock, safely requeue resumable jobs.
-            with app.app_context():
-                db().execute(
-                    """UPDATE devotional_import_jobs
-                       SET status='queued',
-                           message='Resuming after a web-service restart.',
-                           updated_at=CURRENT_TIMESTAMP
-                       WHERE status='processing'
-                         AND COALESCE(storage_path,'')<>''"""
-                )
-                db().commit()
-            app.logger.info("This process acquired the devotional import queue lock.")
-        except Exception:
-            app.logger.exception("Could not acquire the PostgreSQL devotional queue lock.")
-            if worker_lock_conn:
-                try:
-                    worker_lock_conn.close()
-                except Exception:
-                    pass
-            return
+        # A process may have been restarted while an import was running.
+        # Once this process owns the global lock, safely requeue resumable jobs.
+        with app.app_context():
+            db().execute(
+                """UPDATE devotional_import_jobs
+                   SET status='queued',
+                       message='Resuming after a web-service restart.',
+                       updated_at=CURRENT_TIMESTAMP
+                   WHERE status='processing'
+                     AND COALESCE(storage_path,'')<>''"""
+            )
+            db().commit()
+        app.logger.info("This process acquired the devotional import queue lock.")
 
     while True:
         active_job_id = None
