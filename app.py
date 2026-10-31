@@ -12157,6 +12157,19 @@ def _dc_start_queue_worker():
     with _DC_WORKER_LOCK:
         if _DC_WORKER_STARTED:
             return
+        # Old jobs from the temporary-disk importer cannot be resumed because
+        # their ZIP was never persisted. Mark them clearly instead of leaving
+        # the dashboard showing a permanent "processing" state.
+        with app.app_context():
+            db().execute(
+                """UPDATE devotional_import_jobs
+                   SET status='failed',
+                       message='This earlier import was interrupted before its ZIP was saved persistently. Please upload the package again.',
+                       updated_at=CURRENT_TIMESTAMP
+                   WHERE status IN ('queued','processing')
+                     AND (storage_path IS NULL OR storage_path='')"""
+            )
+            db().commit()
         thread = _dc_threading.Thread(
             target=_dc_queue_worker,
             name="devotional-import-queue",
