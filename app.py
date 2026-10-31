@@ -1,4 +1,5 @@
 import time
+import re
 import os, sqlite3, json, io, socket, secrets, shutil, hashlib
 from pathlib import Path
 from dotenv import load_dotenv as _load_dotenv
