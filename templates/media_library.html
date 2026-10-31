@@ -19,9 +19,15 @@ p{line-height:1.55;overflow-wrap:anywhere}a{color:#126b4b}.media{width:100%;max-
 <div class="grid">{% for x in items %}
 <article class="card"><h2>{{ x.title }}</h2>{% if x.description %}<p>{{ x.description }}</p>{% endif %}
 {% if x.media_type == 'audio' %}
-  {% if x.signed_url %}<audio class="media" controls preload="none" src="{{ x.signed_url }}"></audio>{% else %}<p>Audio temporarily unavailable. Please try again later.</p>{% endif %}
+  {% if x.signed_url %}
+    {% if x.mime_type == 'audio/midi' %}<p>🎼 MIDI music file</p>
+    {% else %}<audio class="media" controls preload="none" src="{{ x.signed_url }}"></audio>{% endif %}
+    <div class="actions"><a href="{{ x.signed_url }}" target="_blank" rel="noopener">Open / Download Audio</a></div>
+  {% else %}<p>Audio temporarily unavailable. Please try again later.</p>{% endif %}
 {% elif x.media_type == 'video' %}
-  {% if x.signed_url %}<video class="media" controls playsinline preload="metadata" src="{{ x.signed_url }}"></video>{% else %}<p>Video temporarily unavailable. Please try again later.</p>{% endif %}
+  {% if x.signed_url %}<video class="media" controls playsinline preload="metadata" src="{{ x.signed_url }}"></video>
+    <div class="actions"><a href="{{ x.signed_url }}" target="_blank" rel="noopener">Open / Download Video</a></div>
+  {% else %}<p>Video temporarily unavailable. Please try again later.</p>{% endif %}
 {% elif x.mime_type and x.mime_type.startswith('image/') %}
   <a href="{{ url_for('media_document_view', media_id=x.id) }}"><img class="media" src="{{ url_for('media_document_view', media_id=x.id) }}" alt="{{ x.title }}" loading="lazy" style="object-fit:contain;max-height:320px"></a>
 {% elif x.mime_type == 'application/pdf' %}
@@ -31,10 +37,12 @@ p{line-height:1.55;overflow-wrap:anywhere}a{color:#126b4b}.media{width:100%;max-
 {% else %}
   <div style="margin-top:12px;padding:22px;text-align:center;background:#f5f7fb;border-radius:8px"><span style="font-size:42px">📘</span><p>{{ 'Word document' if x.mime_type in ['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'] else 'Downloadable resource' }}</p></div>
 {% endif %}
+{% if x.media_type not in ['audio','video'] %}
 <div class="actions">
 <a href="{{ url_for('media_document_view', media_id=x.id) }}">View / Open</a>
 <a href="{{ url_for('media_document_download', media_id=x.id) }}">Download</a>
 </div>
+{% endif %}
 </article>{% endfor %}</div></main>
 <script type="module">
 (async function(){
