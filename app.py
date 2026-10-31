@@ -11723,7 +11723,7 @@ _DEVOTIONAL_COLLECTIONS = {
 
 def _dc_admin_required():
     user = current_user()
-    return bool(user and user.get("role") == "Admin")
+    return bool(user and user["role"] == "Admin")
 
 
 def _dc_signed(path):
@@ -11974,7 +11974,7 @@ def _dc_run_import(zip_path, job_id):
                 _dc_update_job(job_id, status="failed",
                                message="Import stopped: " + str(exc)[:350],
                                imported_records=record_count,
-                               uploaded_assets=uploaded_count)
+                               uploaded_assets=uploaded_count or len(locals().get("path_map", {})))
             except Exception:
                 app.logger.exception("Could not update devotional import job")
         finally:
