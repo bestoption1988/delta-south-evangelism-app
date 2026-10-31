@@ -2961,7 +2961,7 @@ def public_home():
             params={
                 "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
                 "published": "eq.true",
-                "mime_type": "like.image/*",
+                "mime_type": "like.image/%",
                 "order": "created_at.desc",
                 "limit": "100",
             },
