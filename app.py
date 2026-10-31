@@ -11880,7 +11880,7 @@ def _dc_store_zip_chunks(local_path, storage_prefix):
 
 
 def _dc_run_import(zip_path, job_id):
-    """Import structured devotional records into PostgreSQL and media into Supabase."""
+    """Import structured devotional records into PostgreSQL and media into Naijacloud Object Storage."""
     import zipfile as _zipfile
     import json as _json
     import hashlib as _hashlib
@@ -11984,7 +11984,7 @@ def _dc_run_import(zip_path, job_id):
                 total_assets = len(asset_jobs)
                 if total_assets:
                     _dc_update_job(job_id, progress=8,
-                                   message="Preparing to upload " + str(total_assets) + " media files to Supabase Storage…")
+                                   message="Preparing to upload " + str(total_assets) + " media files to Naijacloud Object Storage…")
                     with _futures.ThreadPoolExecutor(max_workers=8) as pool:
                         futures = {
                             pool.submit(_dc_s3_put, dest, raw, mime):
@@ -12133,7 +12133,7 @@ def _dc_run_import(zip_path, job_id):
 
 
 # Durable Devotional Centre import queue.
-# ZIP packages are persisted in Supabase Storage; PostgreSQL remains the job queue.
+# ZIP packages and devotional media are persisted in Naijacloud Object Storage; PostgreSQL remains the job queue.
 import threading as _dc_threading
 _DC_WORKER_LOCK = _dc_threading.Lock()
 _DC_WORKER_STARTED = False
