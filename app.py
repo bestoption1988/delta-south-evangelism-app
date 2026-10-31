@@ -246,6 +246,7 @@ def init_db():
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    ensure_column(db(), "devotional_import_jobs", "storage_path", "TEXT DEFAULT ''")
     db().execute("CREATE TABLE IF NOT EXISTS prayer_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT NOT NULL, phone TEXT DEFAULT '', email TEXT DEFAULT '', request_text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'New', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
     db().commit()
 
@@ -12045,6 +12046,93 @@ def _dc_run_import(zip_path, job_id):
                 pass
 
 
+
+# Durable Devotional Centre import queue.
+# ZIP packages are persisted in Supabase Storage; PostgreSQL remains the job queue.
+import threading as _dc_threading
+_DC_WORKER_LOCK = _dc_threading.Lock()
+_DC_WORKER_STARTED = False
+
+
+def _dc_queue_worker():
+    import tempfile as _dc_tempfile
+    import time as _dc_time
+
+    while True:
+        try:
+            with app.app_context():
+                row = db().execute(
+                    """SELECT job_id,storage_path FROM devotional_import_jobs
+                       WHERE status='queued' AND COALESCE(storage_path,'')<>''
+                       ORDER BY created_at ASC LIMIT 1"""
+                ).fetchone()
+                if not row:
+                    pass
+                else:
+                    job_id = row["job_id"]
+                    storage_path = row["storage_path"]
+                    claim = db().execute(
+                        """UPDATE devotional_import_jobs
+                           SET status='processing',message='Import worker has picked up the saved package.',
+                               updated_at=CURRENT_TIMESTAMP
+                           WHERE job_id=? AND status='queued'""",
+                        (job_id,)
+                    )
+                    db().commit()
+                    if getattr(claim, "rowcount", 0) == 1:
+                        response = _ml_storage_request("GET", storage_path)
+                        if not response.ok:
+                            raise RuntimeError(
+                                "Could not retrieve saved ZIP from Supabase Storage (HTTP "
+                                + str(response.status_code) + ")."
+                            )
+                        with _dc_tempfile.NamedTemporaryFile(
+                            prefix="mcn-devotional-", suffix=".zip", delete=False
+                        ) as handle:
+                            handle.write(response.content)
+                            zip_path = handle.name
+                        _dc_run_import(zip_path, job_id)
+            _dc_time.sleep(3)
+        except Exception as exc:
+            app.logger.exception("Devotional Centre queue worker encountered an error")
+            try:
+                with app.app_context():
+                    row = db().execute(
+                        """SELECT job_id FROM devotional_import_jobs
+                           WHERE status='processing' ORDER BY updated_at DESC LIMIT 1"""
+                    ).fetchone()
+                    if row:
+                        _dc_update_job(
+                            row["job_id"], status="failed",
+                            message="Import worker error: " + str(exc)[:300]
+                        )
+            except Exception:
+                app.logger.exception("Could not record devotional queue worker error")
+            _dc_time.sleep(8)
+
+
+def _dc_start_queue_worker():
+    global _DC_WORKER_STARTED
+    if _DC_WORKER_STARTED:
+        return
+    with _DC_WORKER_LOCK:
+        if _DC_WORKER_STARTED:
+            return
+        thread = _dc_threading.Thread(
+            target=_dc_queue_worker,
+            name="devotional-import-queue",
+            daemon=True,
+        )
+        thread.start()
+        _DC_WORKER_STARTED = True
+
+
+@app.before_request
+def start_devotional_queue_worker():
+    # Start once per live web process; queued jobs survive process restarts in PostgreSQL.
+    _dc_start_queue_worker()
+
+
 @app.get("/devotional-centre")
 def devotional_centre_home():
     counts = {}
@@ -12231,16 +12319,25 @@ def admin_devotional_upload_complete(upload_id):
             if bad_member:
                 raise ValueError("ZIP integrity check failed at " + str(bad_member)[:120])
         job_id = secrets.token_hex(12)
+        storage_path = "devotional-imports/" + job_id + ".zip"
+        with open(upload_path, "rb") as package_file:
+            saved = _ml_storage_request(
+                "POST", storage_path, package_file.read(),
+                "application/zip", True
+            )
+        if not saved.ok:
+            raise RuntimeError(
+                "Could not save the ZIP package to Supabase Storage (HTTP "
+                + str(saved.status_code) + ")."
+            )
         db().execute(
-            "INSERT INTO devotional_import_jobs (job_id,status,progress,message) VALUES (?,?,?,?)",
-            (job_id, "queued", 0, "ZIP uploaded successfully. Import is queued.")
+            """INSERT INTO devotional_import_jobs
+               (job_id,status,progress,message,storage_path)
+               VALUES (?,?,?,?,?)""",
+            (job_id, "queued", 0,
+             "ZIP saved securely. Waiting for the import worker.", storage_path)
         )
         db().commit()
-        import threading as _threading
-        worker = _threading.Thread(
-            target=_dc_run_import, args=(upload_path, job_id), daemon=True
-        )
-        worker.start()
         try:
             os.remove(meta_path)
         except OSError:
@@ -12283,11 +12380,22 @@ def admin_devotional_centre():
                     (job_id, "queued", 0, "Your import has been queued.")
                 )
                 db().commit()
-                import threading as _threading
-                worker = _threading.Thread(
-                    target=_dc_run_import, args=(temp_path, job_id), daemon=True
+                storage_path = "devotional-imports/" + job_id + ".zip"
+                with open(temp_path, "rb") as package_file:
+                    saved = _ml_storage_request(
+                        "POST", storage_path, package_file.read(),
+                        "application/zip", True
+                    )
+                if not saved.ok:
+                    raise RuntimeError(
+                        "Could not save the ZIP package to Supabase Storage (HTTP "
+                        + str(saved.status_code) + ")."
+                    )
+                db().execute(
+                    "UPDATE devotional_import_jobs SET storage_path=? WHERE job_id=?",
+                    (storage_path, job_id)
                 )
-                worker.start()
+                db().commit()
                 temp_path = None
                 message = "Import started. Keep this page open to follow progress."
             except Exception as exc:
