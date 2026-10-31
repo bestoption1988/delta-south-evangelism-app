@@ -5,7 +5,7 @@
 </style></head><body><main class="wrap">
 <p><a href="/devotional-centre">← Public Devotional Centre</a> · <a href="/">Homepage</a></p>
 <h1>Devotional Centre Administration</h1>
-<p>Import the Devotional Kits ZIP. The package is saved in Supabase Storage, while searchable content and job progress are saved in Naijacloud PostgreSQL. The import queue can pick up saved jobs again after a web-service restart.</p>
+<p>Import the Devotional Kits ZIP. The package and imported media are saved in Naijacloud Object Storage, while searchable content and job progress are saved in Naijacloud PostgreSQL. The import queue can pick up saved jobs again after a web-service restart.</p>
 {% if message %}<p class="success">{{ message }}</p>{% endif %}{% if error %}<p class="error">{{ error }}</p>{% endif %}
 <p><a class="button" href="/admin/devotional-centre/resources">Manage Imported Resources</a></p>
 <section class="panel"><h2>Import Devotional Kits</h2>
