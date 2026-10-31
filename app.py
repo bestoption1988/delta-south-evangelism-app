@@ -11873,7 +11873,6 @@ def _dc_store_zip_chunks(local_path, storage_prefix):
             chunk = source.read(chunk_size)
             if not chunk:
                 break
-            chunk = source.read(chunk_size) if False else chunk
             object_path = storage_prefix.rstrip("/") + "/" + str(count).zfill(6) + ".part"
             _dc_s3_put(object_path, chunk, "application/octet-stream")
             count += 1
