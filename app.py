@@ -9887,6 +9887,43 @@ def _flutterwave_verify_transaction(reference, transaction_id):
         }, 500
 
 
+@app.get("/payment/complete")
+def payment_complete_page():
+    """Verify Flutterwave return and show a Diocese-branded thank-you page."""
+    reference = str(request.args.get("tx_ref") or request.args.get("reference") or "").strip()
+    transaction_id = str(request.args.get("transaction_id") or "").strip()
+    gateway_status = str(request.args.get("status") or "").strip().lower()
+    payment = None
+    result = {"paid": False}
+    if reference:
+        payment = db().execute(
+            "SELECT reference, amount, currency, purpose, donor_name, member_id, status, church_name FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+    if payment and gateway_status == "successful" and transaction_id:
+        result, http_status = _flutterwave_verify_transaction(reference, transaction_id)
+        if http_status != 200:
+            app.logger.error(
+                "Payment return verification failed for reference %s (HTTP %s): %s",
+                reference, http_status, result.get("error", "unknown verification error")
+            )
+    elif payment and str(payment["status"] or "").lower() == "paid":
+        result = {"paid": True, "status": "Paid"}
+    is_member = bool(payment and payment["member_id"])
+    return render_template(
+        "payment_result.html",
+        paid=bool(result.get("paid")),
+        reference=reference,
+        donor_name=(payment["donor_name"] if payment else ""),
+        amount=(payment["amount"] if payment else None),
+        purpose=(payment["purpose"] if payment else ""),
+        church_name=(payment["church_name"] if payment else ""),
+        is_member=is_member,
+        error=(result.get("error") or ""),
+        gateway_status=gateway_status
+    )
+
+
 @app.post("/api/flutterwave/webhook")
 def api_flutterwave_webhook():
     import os
