@@ -10369,16 +10369,25 @@ def api_payment_initiate():
 
     account_id = int(raw_account_id)
 
-    default_row = db().execute(
-        "SELECT provider FROM payment_settings WHERE enabled=1 AND is_default=1 ORDER BY id DESC LIMIT 1"
-    ).fetchone()
-    configured_provider = str(default_row["provider"]).lower() if default_row else ""
-    if not configured_provider:
-        online_row = db().execute(
-            "SELECT provider FROM payment_settings WHERE enabled=1 AND LOWER(provider) IN ('flutterwave','paystack') ORDER BY id ASC LIMIT 1"
+    # The donor chooses the payment route. Direct bank transfer is a
+    # Diocese-managed flow and must never be sent to a gateway checkout.
+    requested_method = str(d.get("payment_method") or "online").strip().lower()
+    direct_requested = requested_method in {
+        "direct bank transfer", "bank transfer", "direct_bank_transfer", "transfer"
+    }
+    if direct_requested:
+        provider = "direct_bank_transfer"
+    else:
+        default_row = db().execute(
+            "SELECT provider FROM payment_settings WHERE enabled=1 AND is_default=1 AND LOWER(provider) IN ('flutterwave','paystack') ORDER BY id DESC LIMIT 1"
         ).fetchone()
-        configured_provider = str(online_row["provider"]).lower() if online_row else ""
-    provider = configured_provider or ("flutterwave" if os.environ.get("FLW_SECRET_KEY") else "")
+        configured_provider = str(default_row["provider"]).lower() if default_row else ""
+        if not configured_provider:
+            online_row = db().execute(
+                "SELECT provider FROM payment_settings WHERE enabled=1 AND LOWER(provider) IN ('flutterwave','paystack') ORDER BY CASE LOWER(provider) WHEN 'flutterwave' THEN 1 ELSE 2 END, id ASC LIMIT 1"
+            ).fetchone()
+            configured_provider = str(online_row["provider"]).lower() if online_row else ""
+        provider = configured_provider or ("flutterwave" if os.environ.get("FLW_SECRET_KEY") else "")
     if not provider:
         return jsonify({"error":"No online payment provider is active. Please contact the Diocese finance office."}),503
     gateway_name = {"flutterwave":"Flutterwave","paystack":"Paystack","direct_bank_transfer":"Direct Bank Transfer"}.get(provider,"")
@@ -10428,15 +10437,15 @@ def api_payment_initiate():
         conn.commit()
 
         if provider == "direct_bank_transfer":
-            bank = _payment_provider_config("direct_bank_transfer")
-            if not bank or not bank["enabled"] or not bank["bank_name"] or not bank["account_name"] or not bank["account_number"]:
-                return jsonify({"error":"Direct bank transfer details are incomplete. Please contact the Diocese finance office."}),503
+            # Use the bank details of the church/giving account selected by
+            # the donor. No Flutterwave/Paystack request is made for transfers.
+            if not account["bank_name"] or not account["account_name"] or not account["account_number"]:
+                return jsonify({"error":"The selected church giving account does not yet have complete bank details. Please contact the Diocese finance office."}),503
             return jsonify({
-                "reference":reference,"status":"Pending",
-                "bank_transfer":{
-                    "bank_name":bank["bank_name"],"account_name":bank["account_name"],
-                    "account_number":bank["account_number"],
-                    "instructions":bank["account_instructions"] or "Use your payment reference as the transfer narration and keep your receipt."
+                "reference":reference,"status":"Pending","bank_transfer":{
+                    "bank_name":account["bank_name"],"account_name":account["account_name"],
+                    "account_number":account["account_number"],
+                    "instructions":"Transfer the exact amount to this account. Use the payment reference as your narration. After transferring, keep your receipt. The payment will remain pending until the Finance Office confirms receipt."
                 }
             }),201
 
@@ -10458,24 +10467,34 @@ def api_payment_initiate():
                 result = response.json()
                 payment_link = ((result.get("data") or {}).get("authorization_url") if isinstance(result,dict) else None)
             else:
-                checkout_payload = {
-                    "tx_ref": reference, "amount": amount, "currency": "NGN",
-                    "redirect_url": redirect_url,
-                    "customer": {"email":email,"name":name,"phonenumber":phone},
-                    "customizations": {"title":"MCN Delta South Diocese","description":purpose},
-                    # Explicit Nigerian NGN checkout methods. In Flutterwave dashboard,
-                    # disable "Enable Dashboard Payment Options" for these per-payment
-                    # options to take effect, and enable Card under Business Preferences.
-                    "payment_options": "card, banktransfer, ussd, account, opay"
-                }
-                response = requests.post(
-                    "https://api.flutterwave.com/v3/payments",
-                    json=checkout_payload,
-                    headers={"Authorization":"Bearer "+secret},
-                    timeout=30
+                # Flutterwave Inline keeps the donor on the Diocese app.
+                # The browser receives only the public key; the secret stays server-side.
+                flutterwave_config = _payment_provider_config("flutterwave")
+                public_key = (
+                    str(flutterwave_config["public_key"] or "").strip()
+                    if flutterwave_config else ""
+                ) or os.environ.get("FLW_PUBLIC_KEY", "").strip()
+                if not public_key:
+                    return jsonify({"error":"Flutterwave public key is not configured. Add it in Admin → Payment Settings."}),503
+                conn.execute(
+                    "UPDATE payment_transactions SET gateway_response=? WHERE reference=?",
+                    ("Flutterwave Inline checkout prepared", reference)
                 )
-                result = response.json()
-                payment_link = ((result.get("data") or {}).get("link") if isinstance(result,dict) else None)
+                conn.commit()
+                return jsonify({
+                    "reference":reference,
+                    "status":"Pending",
+                    "checkout":{
+                        "provider":"flutterwave",
+                        "public_key":public_key,
+                        "tx_ref":reference,
+                        "amount":amount,
+                        "currency":"NGN",
+                        "customer":{"email":email,"name":name,"phone_number":phone},
+                        "payment_options":"card,banktransfer,ussd,account,opay",
+                        "customizations":{"title":"MCN Delta South Diocese","description":purpose}
+                    }
+                }),201
         except Exception:
             app.logger.exception("%s checkout outcome uncertain: %s", gateway_name, reference)
             return jsonify({
