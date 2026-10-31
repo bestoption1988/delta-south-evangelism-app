@@ -11774,13 +11774,73 @@ def _dc_admin_required():
     return bool(user and user["role"] == "Admin")
 
 
+def _dc_s3_client():
+    """Return an S3-compatible client for Naijacloud Object Storage."""
+    import boto3
+    from botocore.config import Config
+
+    endpoint = (os.environ.get("S3_ENDPOINT") or "").strip().rstrip("/")
+    region = (os.environ.get("S3_REGION") or "").strip()
+    bucket = (os.environ.get("S3_BUCKET") or "").strip()
+    access_key = (os.environ.get("S3_ACCESS_KEY_ID") or "").strip()
+    secret_key = (os.environ.get("S3_SECRET_ACCESS_KEY") or "").strip()
+    missing = [
+        name for name, value in (
+            ("S3_ENDPOINT", endpoint), ("S3_REGION", region),
+            ("S3_BUCKET", bucket), ("S3_ACCESS_KEY_ID", access_key),
+            ("S3_SECRET_ACCESS_KEY", secret_key)
+        ) if not value
+    ]
+    if missing:
+        raise RuntimeError(
+            "Naijacloud Object Storage is not configured. Missing: " +
+            ", ".join(missing)
+        )
+    return boto3.client(
+        "s3", endpoint_url=endpoint, region_name=region,
+        aws_access_key_id=access_key, aws_secret_access_key=secret_key,
+        config=Config(signature_version="s3v4",
+                      s3={"addressing_style": "path"},
+                      retries={"max_attempts": 4, "mode": "standard"})
+    )
+
+
+def _dc_s3_bucket():
+    return (os.environ.get("S3_BUCKET") or "").strip()
+
+
+def _dc_s3_put(path, data, content_type="application/octet-stream"):
+    """Persist one devotional object in the private Naijacloud bucket."""
+    _dc_s3_client().put_object(
+        Bucket=_dc_s3_bucket(), Key=str(path).lstrip("/"),
+        Body=data, ContentType=content_type or "application/octet-stream"
+    )
+    return True
+
+
+def _dc_s3_get(path):
+    """Read one devotional object from Naijacloud Object Storage."""
+    result = _dc_s3_client().get_object(
+        Bucket=_dc_s3_bucket(), Key=str(path).lstrip("/")
+    )
+    body = result["Body"]
+    try:
+        return body.read()
+    finally:
+        body.close()
+
+
 def _dc_signed(path):
     if not path:
         return ""
     try:
-        return _ml_signed(path)
+        return _dc_s3_client().generate_presigned_url(
+            "get_object",
+            Params={"Bucket": _dc_s3_bucket(), "Key": str(path).lstrip("/")},
+            ExpiresIn=3600
+        )
     except Exception:
-        app.logger.exception("Could not sign devotional media path")
+        app.logger.exception("Could not sign Naijacloud devotional media path")
         return ""
 
 
@@ -11805,7 +11865,7 @@ def _dc_update_job(job_id, status=None, progress=None, message=None,
 
 
 def _dc_store_zip_chunks(local_path, storage_prefix):
-    """Persist a ZIP as small independent objects to avoid single-object size limits."""
+    """Persist a ZIP as small independent objects in Naijacloud Object Storage."""
     chunk_size = 2 * 1024 * 1024
     count = 0
     with open(local_path, "rb") as source:
@@ -11813,15 +11873,9 @@ def _dc_store_zip_chunks(local_path, storage_prefix):
             chunk = source.read(chunk_size)
             if not chunk:
                 break
+            chunk = source.read(chunk_size) if False else chunk
             object_path = storage_prefix.rstrip("/") + "/" + str(count).zfill(6) + ".part"
-            response = _ml_storage_request(
-                "POST", object_path, chunk, "application/octet-stream", True
-            )
-            if not response.ok:
-                raise RuntimeError(
-                    "Could not save devotional ZIP part " + str(count + 1) +
-                    " to Supabase Storage (HTTP " + str(response.status_code) + ")."
-                )
+            _dc_s3_put(object_path, chunk, "application/octet-stream")
             count += 1
     return count
 
@@ -11934,19 +11988,20 @@ def _dc_run_import(zip_path, job_id):
                                    message="Preparing to upload " + str(total_assets) + " media files to Supabase Storage…")
                     with _futures.ThreadPoolExecutor(max_workers=8) as pool:
                         futures = {
-                            pool.submit(_ml_storage_request, "POST", dest, raw, mime, True):
+                            pool.submit(_dc_s3_put, dest, raw, mime):
                                 (source, dest)
                             for source, dest, raw, mime in asset_jobs
                         }
                         done = 0
                         for future in _futures.as_completed(futures):
                             source, destination = futures[future]
-                            response = future.result()
-                            if not response.ok:
+                            try:
+                                future.result()
+                            except Exception as storage_error:
                                 raise RuntimeError(
-                                    "Supabase media upload failed (HTTP " +
-                                    str(response.status_code) + ") for " +
-                                    os.path.basename(destination)
+                                    "Naijacloud media upload failed for " +
+                                    os.path.basename(destination) + ": " +
+                                    str(storage_error)[:180]
                                 )
                             path_map[source] = destination
                             done += 1
@@ -12123,16 +12178,17 @@ def _dc_queue_worker():
                             received = 0
                             for chunk_index in range(chunk_count):
                                 object_path = storage_path.rstrip("/") + "/" + str(chunk_index).zfill(6) + ".part"
-                                response = _ml_storage_request("GET", object_path)
-                                if not response.ok:
+                                try:
+                                    part_data = _dc_s3_get(object_path)
+                                except Exception as storage_error:
                                     raise RuntimeError(
                                         "Could not retrieve saved ZIP part " +
                                         str(chunk_index + 1) + " of " + str(chunk_count) +
-                                        " from Supabase Storage (HTTP " +
-                                        str(response.status_code) + ")."
+                                        " from Naijacloud Object Storage: " +
+                                        str(storage_error)[:180]
                                     )
-                                handle.write(response.content)
-                                received += len(response.content)
+                                handle.write(part_data)
+                                received += len(part_data)
                         if received != package_size:
                             raise RuntimeError(
                                 "Saved ZIP is incomplete: received " + str(received) +
@@ -12338,13 +12394,12 @@ def admin_devotional_upload_chunk(upload_id):
             return jsonify({"error": "Chunk exceeds the declared ZIP size."}), 400
         storage_prefix = "devotional-imports/uploads/" + upload_id
         object_path = storage_prefix + "/" + str(chunk_index).zfill(6) + ".part"
-        saved = _ml_storage_request(
-            "POST", object_path, chunk, "application/octet-stream", True
-        )
-        if not saved.ok:
+        try:
+            _dc_s3_put(object_path, chunk, "application/octet-stream")
+        except Exception:
+            app.logger.exception("Could not persist devotional upload chunk in Naijacloud Object Storage")
             return jsonify({
-                "error": "Could not persist upload part in Supabase Storage (HTTP " +
-                         str(saved.status_code) + "). Please retry this part."
+                "error": "Could not save this upload part in Naijacloud Object Storage. Please retry this part."
             }), 503
         with open(upload_path, "ab") as output:
             output.write(chunk)
