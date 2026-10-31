@@ -265,7 +265,6 @@ form.addEventListener("submit", async function(event) {
 
     const data = Object.fromEntries(new FormData(form).entries());
     data.amount = Number(data.amount);
-    data.payment_method = "Online Payment";
 
     try {
         const response = await fetch("/api/payment/initiate", {
