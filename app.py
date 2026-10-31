@@ -12130,6 +12130,75 @@ def admin_devotional_centre():
                            error=error, jobs=jobs)
 
 
+
+@app.route("/admin/devotional-centre/resources", methods=["GET", "POST"])
+@page_login_required
+def admin_devotional_resources():
+    if not _dc_admin_required():
+        return "Administrator access required.", 403
+    message = ""
+    error = ""
+    if request.method == "POST":
+        resource_id = (request.form.get("resource_id") or "").strip()
+        action = (request.form.get("action") or "save").strip()
+        row = db().execute(
+            "SELECT resource_id,title,content_json,published FROM devotional_resources WHERE resource_id=? LIMIT 1",
+            (resource_id,)
+        ).fetchone() if resource_id else None
+        if not row:
+            error = "Resource not found."
+        elif action == "toggle":
+            db().execute(
+                "UPDATE devotional_resources SET published=?,updated_at=CURRENT_TIMESTAMP WHERE resource_id=?",
+                (0 if bool(row["published"]) else 1, resource_id)
+            )
+            db().commit()
+            message = "Publication status updated."
+        elif action == "delete":
+            db().execute("DELETE FROM devotional_resources WHERE resource_id=?", (resource_id,))
+            db().commit()
+            message = "Resource deleted."
+        else:
+            title = (request.form.get("title") or "").strip()[:220]
+            raw_payload = request.form.get("content_json") or "{}"
+            try:
+                payload = json.loads(raw_payload)
+                if not isinstance(payload, (dict, list)):
+                    raise ValueError("Resource content must be a JSON object or list.")
+                if not title:
+                    raise ValueError("A title is required.")
+                search_text = title + " " + json.dumps(payload, ensure_ascii=False)
+                db().execute(
+                    """UPDATE devotional_resources
+                       SET title=?,content_json=?,search_text=?,updated_at=CURRENT_TIMESTAMP
+                       WHERE resource_id=?""",
+                    (title, json.dumps(payload, ensure_ascii=False), search_text, resource_id)
+                )
+                db().commit()
+                message = "Resource updated successfully."
+            except Exception as exc:
+                error = "Could not save resource: " + str(exc)[:220]
+    query = (request.args.get("q") or "").strip()[:120]
+    collection = (request.args.get("collection") or "").strip()[:60]
+    where = "1=1"
+    args = []
+    if query:
+        where += " AND lower(search_text) LIKE ?"
+        args.append("%" + query.lower() + "%")
+    if collection:
+        where += " AND collection=?"
+        args.append(collection)
+    rows = db().execute(
+        "SELECT resource_id,collection,item_number,title,content_json,published FROM devotional_resources WHERE " +
+        where + " ORDER BY collection,item_number LIMIT 60",
+        tuple(args)
+    ).fetchall()
+    return render_template("devotional_manage.html", resources=rows,
+                           query=query, collection=collection,
+                           collections=sorted({row["collection"] for row in rows}),
+                           message=message, error=error)
+
+
 @app.get("/admin/devotional-centre/jobs/<job_id>")
 @page_login_required
 def admin_devotional_job_status(job_id):
