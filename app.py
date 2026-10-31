@@ -217,6 +217,34 @@ def init_db():
         ON customer_care_typing (last_seen)
     """)
 
+    # Public Methodist Devotional & Worship Centre catalogue and import progress.
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS devotional_resources (
+            resource_id TEXT PRIMARY KEY,
+            collection TEXT NOT NULL,
+            item_number TEXT DEFAULT '',
+            title TEXT NOT NULL DEFAULT '',
+            content_json TEXT NOT NULL DEFAULT '{}',
+            search_text TEXT NOT NULL DEFAULT '',
+            audio_path TEXT DEFAULT '',
+            author_path TEXT DEFAULT '',
+            published INTEGER NOT NULL DEFAULT 1,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    db().execute("CREATE INDEX IF NOT EXISTS idx_devotional_resources_collection ON devotional_resources(collection, published)")
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS devotional_import_jobs (
+            job_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'queued',
+            progress INTEGER NOT NULL DEFAULT 0,
+            message TEXT DEFAULT '',
+            imported_records INTEGER NOT NULL DEFAULT 0,
+            uploaded_assets INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
     db().execute("CREATE TABLE IF NOT EXISTS prayer_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT NOT NULL, phone TEXT DEFAULT '', email TEXT DEFAULT '', request_text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'New', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
     db().commit()
 
@@ -11427,7 +11455,7 @@ def _ml_signed(path):
     return signed
 
 
-def _ml_storage_request(method, path, data=None, content_type=None):
+def _ml_storage_request(method, path, data=None, content_type=None, upsert=False):
     import requests as _requests
 
     base, key = _ml_credentials()
@@ -11439,7 +11467,7 @@ def _ml_storage_request(method, path, data=None, content_type=None):
     if content_type:
         headers["Content-Type"] = content_type
     if method == "POST":
-        headers["x-upsert"] = "false"
+        headers["x-upsert"] = "true" if upsert else "false"
 
     response = _requests.request(
         method, url, headers=headers, data=data, timeout=120
@@ -11677,6 +11705,444 @@ def media_library_public(collection=None):
             "media_library.html", items=[], selected_type=category,
             collection=collection, collection_title=collection_titles.get(collection, "Church Media Library")
         )
+
+
+
+# --- Public Methodist Devotional & Worship Centre ---
+_DEVOTIONAL_COLLECTIONS = {
+    "english-hymns": ("english_hymns", "English Methodist Hymns"),
+    "yoruba-hymns": ("yoruba_hymns", "Yoruba Methodist Hymns"),
+    "akokun": ("akokun", "Akokun Hymns"),
+    "bible-verses": ("bible_verses", "Bible Verses"),
+    "canticles": ("canticles", "Canticles"),
+    "communion": ("communion_english", "English Communion"),
+    "yoruba-communion": ("communion_yoruba", "Yoruba Communion"),
+    "creeds": ("creeds", "Creeds & Confessions"),
+}
+
+
+def _dc_admin_required():
+    user = current_user()
+    return bool(user and user.get("role") == "Admin")
+
+
+def _dc_signed(path):
+    if not path:
+        return ""
+    try:
+        return _ml_signed(path)
+    except Exception:
+        app.logger.exception("Could not sign devotional media path")
+        return ""
+
+
+def _dc_update_job(job_id, status=None, progress=None, message=None,
+                   imported_records=None, uploaded_assets=None):
+    fields = []
+    values = []
+    for name, value in (
+        ("status", status), ("progress", progress), ("message", message),
+        ("imported_records", imported_records), ("uploaded_assets", uploaded_assets)
+    ):
+        if value is not None:
+            fields.append(name + "=?")
+            values.append(value)
+    fields.append("updated_at=CURRENT_TIMESTAMP")
+    values.append(job_id)
+    db().execute(
+        "UPDATE devotional_import_jobs SET " + ", ".join(fields) + " WHERE job_id=?",
+        tuple(values),
+    )
+    db().commit()
+
+
+def _dc_run_import(zip_path, job_id):
+    """Import structured devotional records into PostgreSQL and media into Supabase."""
+    import zipfile as _zipfile
+    import json as _json
+    import hashlib as _hashlib
+    import mimetypes as _mimetypes
+    import urllib.parse as _urlparse
+    import concurrent.futures as _futures
+
+    with app.app_context():
+        uploaded_count = 0
+        record_count = 0
+        try:
+            _dc_update_job(job_id, status="processing", progress=2,
+                           message="Checking the devotional package…")
+            with _zipfile.ZipFile(zip_path, "r") as archive:
+                members = archive.namelist()
+                if len(members) > 2500:
+                    raise ValueError("The package contains too many files.")
+                decoded_lookup = {_urlparse.unquote(n): n for n in members}
+                asset_root = "assets/flutter_assets/assets/"
+                json_names = {
+                    "hymns.json": ("english_hymns", "English Methodist Hymns"),
+                    "yorubaHymns.json": ("yoruba_hymns", "Yoruba Methodist Hymns"),
+                    "akokun.json": ("akokun", "Akokun Hymns"),
+                    "verses.json": ("bible_verses", "Bible Verses"),
+                    "canticles.json": ("canticles", "Canticles"),
+                    "communion.json": ("communion_english", "English Communion"),
+                    "yoruba_communion.json": ("communion_yoruba", "Yoruba Communion"),
+                    "apostles_creed.json": ("creeds", "Apostles Creed"),
+                    "ijewo_igbagbo.json": ("creeds", "Yoruba Apostles Creed"),
+                    "nicene_creed.json": ("creeds", "Nicene Creed"),
+                    "nicene_creed_yoruba.json": ("creeds", "Yoruba Nicene Creed"),
+                }
+                raw_collections = {}
+                missing_json = []
+                for filename, spec in json_names.items():
+                    member = decoded_lookup.get(asset_root + filename)
+                    if not member:
+                        missing_json.append(filename)
+                        continue
+                    try:
+                        raw_collections[filename] = _json.loads(
+                            archive.read(member).decode("utf-8-sig")
+                        )
+                    except Exception as exc:
+                        raise ValueError("Could not read " + filename + ": " + str(exc))
+                required = {"hymns.json", "yorubaHymns.json", "akokun.json", "verses.json"}
+                if not required.issubset(raw_collections):
+                    raise ValueError("The package is missing required data: " +
+                                     ", ".join(sorted(required - set(raw_collections))))
+
+                source_paths = set()
+                for filename in ("hymns.json",):
+                    for hymn in raw_collections.get(filename, []):
+                        music = hymn.get("musicFilePath")
+                        if music:
+                            source_paths.add(asset_root + str(music).lstrip("/"))
+                        for tune in hymn.get("otherTunes") or []:
+                            if isinstance(tune, dict) and tune.get("musicFilePath"):
+                                source_paths.add(asset_root + str(tune["musicFilePath"]).lstrip("/"))
+                        author = hymn.get("author") or {}
+                        if isinstance(author, dict) and author.get("imagePath"):
+                            source_paths.add("assets/flutter_assets/" + str(author["imagePath"]).lstrip("/"))
+
+                resolved_assets = {}
+                for source in source_paths:
+                    member = decoded_lookup.get(_urlparse.unquote(source))
+                    if member:
+                        resolved_assets[source] = member
+
+                _dc_update_job(job_id, progress=5,
+                               message="Preparing " + str(len(resolved_assets)) + " music and author-image files…")
+                asset_jobs = []
+                for source, member in resolved_assets.items():
+                    raw = archive.read(member)
+                    digest = _hashlib.sha256(source.encode("utf-8")).hexdigest()[:24]
+                    ext = os.path.splitext(member)[1].lower()
+                    folder = "music" if "/music/" in source else "authors"
+                    destination = "devotional-centre/" + folder + "/" + digest + ext
+                    mime = _mimetypes.guess_type(member)[0] or "application/octet-stream"
+                    asset_jobs.append((source, destination, raw, mime))
+
+                path_map = {}
+                total_assets = len(asset_jobs)
+                if total_assets:
+                    with _futures.ThreadPoolExecutor(max_workers=8) as pool:
+                        futures = {
+                            pool.submit(_ml_storage_request, "POST", dest, raw, mime, True):
+                                (source, dest)
+                            for source, dest, raw, mime in asset_jobs
+                        }
+                        done = 0
+                        for future in _futures.as_completed(futures):
+                            source, destination = futures[future]
+                            response = future.result()
+                            if not response.ok:
+                                raise RuntimeError(
+                                    "Supabase media upload failed (HTTP " +
+                                    str(response.status_code) + ") for " +
+                                    os.path.basename(destination)
+                                )
+                            path_map[source] = destination
+                            done += 1
+                            if done % 10 == 0 or done == total_assets:
+                                progress = 5 + int((done / max(total_assets, 1)) * 60)
+                                _dc_update_job(
+                                    job_id, progress=progress,
+                                    message="Uploading devotional music and author images (" +
+                                            str(done) + "/" + str(total_assets) + ")…",
+                                    uploaded_assets=done
+                                )
+                _dc_update_job(job_id, progress=68,
+                               message="Importing hymn, Scripture and worship records…",
+                               uploaded_assets=len(path_map))
+
+                def replace_media_paths(item):
+                    item = dict(item)
+                    music = item.get("musicFilePath")
+                    if music:
+                        source = asset_root + str(music).lstrip("/")
+                        item["musicFilePath"] = path_map.get(source, "")
+                    author = item.get("author")
+                    if isinstance(author, dict):
+                        author = dict(author)
+                        image_path = author.get("imagePath")
+                        if image_path:
+                            source = "assets/flutter_assets/" + str(image_path).lstrip("/")
+                            author["imagePath"] = path_map.get(source, "")
+                        item["author"] = author
+                    tunes = []
+                    for tune in item.get("otherTunes") or []:
+                        if not isinstance(tune, dict):
+                            continue
+                        tune = dict(tune)
+                        music = tune.get("musicFilePath")
+                        if music:
+                            source = asset_root + str(music).lstrip("/")
+                            tune["musicFilePath"] = path_map.get(source, "")
+                        tunes.append(tune)
+                    item["otherTunes"] = tunes
+                    return item
+
+                records = []
+                for filename, (collection, label) in json_names.items():
+                    data = raw_collections.get(filename)
+                    if data is None:
+                        continue
+                    if isinstance(data, dict):
+                        title = label
+                        content = dict(data)
+                        content["title"] = content.get("title") or title
+                        records.append((
+                            "creed_" + filename.replace(".json", ""),
+                            collection, "", title, content,
+                            title + " " + str(content.get("content", "")), "", ""
+                        ))
+                    elif isinstance(data, list):
+                        for index, original in enumerate(data, 1):
+                            item = replace_media_paths(original) if isinstance(original, dict) else {"content": original}
+                            number = str(item.get("number") or item.get("reference") or index)
+                            title = str(item.get("title") or item.get("reference") or label + " " + number)
+                            if filename == "verses.json":
+                                title = str(item.get("reference") or title)
+                            resource_id = collection + ":" + number
+                            search_text = " ".join([
+                                title, number, str(item.get("firstline") or ""),
+                                str(item.get("reference") or ""),
+                                _json.dumps(item, ensure_ascii=False)
+                            ])
+                            audio_path = str(item.get("musicFilePath") or "")
+                            author_path = str((item.get("author") or {}).get("imagePath") or "")
+                            records.append((
+                                resource_id, collection, number, title, item,
+                                search_text, audio_path, author_path
+                            ))
+
+                for start in range(0, len(records), 100):
+                    batch = records[start:start + 100]
+                    for rid, collection, number, title, payload, search_text, audio_path, author_path in batch:
+                        db().execute(
+                            """INSERT INTO devotional_resources
+                               (resource_id,collection,item_number,title,content_json,
+                                search_text,audio_path,author_path,published,updated_at)
+                               VALUES (?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)
+                               ON CONFLICT(resource_id) DO UPDATE SET
+                                 collection=excluded.collection,
+                                 item_number=excluded.item_number,
+                                 title=excluded.title,
+                                 content_json=excluded.content_json,
+                                 search_text=excluded.search_text,
+                                 audio_path=excluded.audio_path,
+                                 author_path=excluded.author_path,
+                                 published=1,
+                                 updated_at=CURRENT_TIMESTAMP""",
+                            (rid, collection, number, title,
+                             _json.dumps(payload, ensure_ascii=False),
+                             search_text, audio_path, author_path)
+                        )
+                        record_count += 1
+                    db().commit()
+                    progress = 68 + int((min(start + len(batch), len(records)) /
+                                         max(len(records), 1)) * 30)
+                    _dc_update_job(job_id, progress=progress,
+                                   message="Saving devotional records (" +
+                                           str(min(start + len(batch), len(records))) +
+                                           "/" + str(len(records)) + ")…",
+                                   imported_records=record_count)
+            _dc_update_job(job_id, status="completed", progress=100,
+                           message="Import completed successfully.",
+                           imported_records=record_count,
+                           uploaded_assets=len(path_map))
+        except Exception as exc:
+            app.logger.exception("Devotional Centre import failed")
+            try:
+                _dc_update_job(job_id, status="failed",
+                               message="Import stopped: " + str(exc)[:350],
+                               imported_records=record_count,
+                               uploaded_assets=uploaded_count)
+            except Exception:
+                app.logger.exception("Could not update devotional import job")
+        finally:
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+
+
+@app.get("/devotional-centre")
+def devotional_centre_home():
+    counts = {}
+    try:
+        rows = db().execute(
+            "SELECT collection, COUNT(*) AS total FROM devotional_resources WHERE published=1 GROUP BY collection"
+        ).fetchall()
+        counts = {row["collection"]: row["total"] for row in rows}
+    except Exception:
+        app.logger.exception("Devotional Centre catalogue is not initialized yet")
+    collections = [
+        ("english-hymns", "English Methodist Hymns", "979 hymns", "🎼", "Explore the English Methodist Hymn Book."),
+        ("yoruba-hymns", "Yoruba Methodist Hymns", "845 hymns", "📖", "Explore Methodist hymns in Yoruba."),
+        ("akokun", "Akokun Hymns", "Yoruba collection", "🎵", "Browse the Akokun hymn collection."),
+        ("bible-verses", "Bible Verses", "Scripture library", "✝", "Search Scripture references and verses."),
+        ("canticles", "Canticles", "74 resources", "🙏", "Explore canticles for worship."),
+        ("communion", "English Communion", "31 resources", "🍞", "Read English Communion materials."),
+        ("yoruba-communion", "Yoruba Communion", "30 resources", "🕊", "Read Yoruba Communion materials."),
+        ("creeds", "Creeds & Confessions", "Church worship", "📜", "Apostles’ Creed, Nicene Creed and Yoruba versions."),
+    ]
+    daily = {}
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        day_hash = hashlib.sha256(today.encode("utf-8")).hexdigest()
+        verses = db().execute(
+            "SELECT resource_id,title,content_json FROM devotional_resources WHERE collection='bible_verses' AND published=1 ORDER BY resource_id LIMIT 497"
+        ).fetchall()
+        if verses:
+            daily = dict(verses[int(day_hash[:8], 16) % len(verses)])
+            daily["payload"] = json.loads(daily.get("content_json") or "{}")
+    except Exception:
+        app.logger.exception("Daily devotional Scripture could not be selected")
+    return render_template("devotional_centre.html", collections=collections,
+                           counts=counts, daily=daily)
+
+
+@app.get("/devotional-centre/<collection_slug>")
+def devotional_centre_collection(collection_slug):
+    spec = _DEVOTIONAL_COLLECTIONS.get(collection_slug)
+    if not spec:
+        return "Devotional collection not found.", 404
+    collection, title = spec
+    query = (request.args.get("q") or "").strip()[:120]
+    page = max(1, request.args.get("page", 1, type=int) or 1)
+    per_page = 40
+    where = "collection=? AND published=1"
+    args = [collection]
+    if query:
+        where += " AND lower(search_text) LIKE ?"
+        args.append("%" + query.lower() + "%")
+    total_row = db().execute(
+        "SELECT COUNT(*) AS total FROM devotional_resources WHERE " + where,
+        tuple(args)
+    ).fetchone()
+    total = int(total_row["total"] or 0)
+    rows = db().execute(
+        "SELECT resource_id,item_number,title,content_json,audio_path,author_path FROM devotional_resources WHERE " +
+        where + " ORDER BY item_number LIMIT ? OFFSET ?",
+        tuple(args + [per_page, (page - 1) * per_page])
+    ).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["payload"] = json.loads(item.get("content_json") or "{}")
+        except Exception:
+            item["payload"] = {}
+        items.append(item)
+    return render_template("devotional_collection.html",
+                           collection_slug=collection_slug, collection_title=title,
+                           items=items, query=query, page=page,
+                           total=total, pages=max(1, (total + per_page - 1) // per_page))
+
+
+@app.get("/devotional-centre/item/<path:resource_id>")
+def devotional_centre_item(resource_id):
+    row = db().execute(
+        "SELECT * FROM devotional_resources WHERE resource_id=? AND published=1 LIMIT 1",
+        (resource_id,)
+    ).fetchone()
+    if not row:
+        return "Devotional resource not found.", 404
+    item = dict(row)
+    item["payload"] = json.loads(item.get("content_json") or "{}")
+    item["audio_url"] = _dc_signed(item.get("audio_path"))
+    item["author_url"] = _dc_signed(item.get("author_path"))
+    tunes = item["payload"].get("otherTunes") or []
+    for tune in tunes:
+        tune["signed_url"] = _dc_signed(tune.get("musicFilePath"))
+    return render_template("devotional_item.html", item=item)
+
+
+@app.route("/admin/devotional-centre", methods=["GET", "POST"])
+@page_login_required
+def admin_devotional_centre():
+    if not _dc_admin_required():
+        return "Administrator access required.", 403
+    message = ""
+    error = ""
+    if request.method == "POST":
+        request.max_content_length = 120 * 1024 * 1024
+        package = request.files.get("package")
+        if not package or not package.filename.lower().endswith(".zip"):
+            error = "Choose the Devotional Kits ZIP package."
+        else:
+            import tempfile as _tempfile
+            import zipfile as _zipfile
+            temp_path = None
+            try:
+                with _tempfile.NamedTemporaryFile(prefix="mcn-devotional-", suffix=".zip", delete=False) as handle:
+                    temp_path = handle.name
+                    shutil.copyfileobj(package.stream, handle)
+                with _zipfile.ZipFile(temp_path, "r") as archive:
+                    names = archive.namelist()
+                    if len(names) > 2500 or not any(n.endswith("/hymns.json") for n in names):
+                        raise ValueError("This does not appear to be the expected Devotional Kits package.")
+                    if any(n.startswith("/") or ".." in n.split("/") for n in names):
+                        raise ValueError("The ZIP contains an unsafe file path.")
+                job_id = secrets.token_hex(12)
+                db().execute(
+                    "INSERT INTO devotional_import_jobs (job_id,status,progress,message) VALUES (?,?,?,?)",
+                    (job_id, "queued", 0, "Your import has been queued.")
+                )
+                db().commit()
+                import threading as _threading
+                worker = _threading.Thread(
+                    target=_dc_run_import, args=(temp_path, job_id), daemon=True
+                )
+                worker.start()
+                temp_path = None
+                message = "Import started. Keep this page open to follow progress."
+            except Exception as exc:
+                error = "Could not start import: " + str(exc)[:250]
+            finally:
+                if temp_path:
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+    jobs = db().execute(
+        "SELECT job_id,status,progress,message,imported_records,uploaded_assets,created_at FROM devotional_import_jobs ORDER BY created_at DESC LIMIT 5"
+    ).fetchall()
+    return render_template("devotional_admin.html", message=message,
+                           error=error, jobs=jobs)
+
+
+@app.get("/admin/devotional-centre/jobs/<job_id>")
+@page_login_required
+def admin_devotional_job_status(job_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    row = db().execute(
+        "SELECT status,progress,message,imported_records,uploaded_assets FROM devotional_import_jobs WHERE job_id=?",
+        (job_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Import job not found."}), 404
+    return jsonify(dict(row))
+
 
 
 @app.route("/admin/media-library", methods=["GET", "POST"])
