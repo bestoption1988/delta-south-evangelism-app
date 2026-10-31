@@ -11721,19 +11721,26 @@ def media_library_admin():
                         )
 
             else:
-                uploaded_files = [
+                photo_files = [
+                    item for item in request.files.getlist("photos")
+                    if item and item.filename
+                ]
+                other_files = [
                     item for item in request.files.getlist("file")
                     if item and item.filename
+                ]
+                uploaded_files = [(item, True) for item in photo_files] + [
+                    (item, False) for item in other_files
                 ]
                 title = (request.form.get("title") or "").strip()
                 description = (request.form.get("description") or "").strip()
 
                 if not uploaded_files:
-                    error = "Choose one or more files."
+                    error = "Choose one or more photos or files."
                 elif len(uploaded_files) > 10:
                     error = "You can upload a maximum of 10 files at a time. Select the next batch afterwards."
-                elif not title:
-                    error = "Enter a title for the upload."
+                elif other_files and not title:
+                    error = "Enter a title for the document or media upload."
                 elif len(title) > 180 or len(description) > 2000:
                     error = "The title or description is too long."
                 else:
@@ -11758,7 +11765,7 @@ def media_library_admin():
                     }
                     uploaded_count = 0
                     failures = []
-                    for uploaded_file in uploaded_files:
+                    for uploaded_file, is_photo in uploaded_files:
                         original_name = uploaded_file.filename.split("/")[-1].split(chr(92))[-1]
                         ext = ("." + original_name.rsplit(".", 1)[-1].lower()) if "." in original_name else ""
                         spec = _ML_TYPES.get(ext)
@@ -11778,9 +11785,12 @@ def media_library_admin():
                             continue
 
                         storage_path = f"library/{_ml_uuid.uuid4().hex}{ext}"
-                        display_title = title
-                        if len(uploaded_files) > 1:
-                            filename_title = original_name.rsplit(".", 1)[0].strip()
+                        filename_title = original_name.rsplit(".", 1)[0].strip()
+                        display_title = (
+                            filename_title[:180] if is_photo
+                            else title
+                        )
+                        if not is_photo and len(other_files) > 1:
                             display_title = f"{title} - {filename_title}"[:180]
                         try:
                             response = _ml_storage_request(
