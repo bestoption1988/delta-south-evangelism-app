@@ -8236,6 +8236,14 @@ with app.app_context():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Upgrade tables created by earlier deployments. IF NOT EXISTS makes
+        # these additive PostgreSQL migrations safe on every application start.
+        _devotional_conn.execute(
+            "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''"
+        )
+        _devotional_conn.execute(
+            "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS package_size BIGINT DEFAULT 0"
+        )
         _devotional_conn.commit()
     else:
         init_db()
