@@ -2961,7 +2961,6 @@ def public_home():
             params={
                 "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
                 "published": "eq.true",
-                "mime_type": "like.image/%",
                 "order": "created_at.desc",
                 "limit": "100",
             },
@@ -11808,7 +11807,8 @@ def media_library_admin():
                                     "storage_path": storage_path,
                                     "mime_type": spec[0],
                                     "media_type": spec[1],
-                                    "published": False,
+                                    # Publish gallery photos immediately after a successful upload.
+                                    "published": bool(is_photo),
                                     "created_by": str(user["id"]),
                                 },
                                 prefer="return=minimal",
