@@ -247,6 +247,7 @@ def init_db():
         )
     """)
     ensure_column(db(), "devotional_import_jobs", "storage_path", "TEXT DEFAULT ''")
+    ensure_column(db(), "devotional_import_jobs", "package_size", "BIGINT DEFAULT 0")
     db().execute("CREATE TABLE IF NOT EXISTS prayer_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT NOT NULL, phone TEXT DEFAULT '', email TEXT DEFAULT '', request_text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'New', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
     db().commit()
 
@@ -11795,6 +11796,28 @@ def _dc_update_job(job_id, status=None, progress=None, message=None,
     db().commit()
 
 
+def _dc_store_zip_chunks(local_path, storage_prefix):
+    """Persist a ZIP as small independent objects to avoid single-object size limits."""
+    chunk_size = 2 * 1024 * 1024
+    count = 0
+    with open(local_path, "rb") as source:
+        while True:
+            chunk = source.read(chunk_size)
+            if not chunk:
+                break
+            object_path = storage_prefix.rstrip("/") + "/" + str(count).zfill(6) + ".part"
+            response = _ml_storage_request(
+                "POST", object_path, chunk, "application/octet-stream", True
+            )
+            if not response.ok:
+                raise RuntimeError(
+                    "Could not save devotional ZIP part " + str(count + 1) +
+                    " to Supabase Storage (HTTP " + str(response.status_code) + ")."
+                )
+            count += 1
+    return count
+
+
 def _dc_run_import(zip_path, job_id):
     """Import structured devotional records into PostgreSQL and media into Supabase."""
     import zipfile as _zipfile
@@ -12071,6 +12094,7 @@ def _dc_queue_worker():
                 else:
                     job_id = row["job_id"]
                     storage_path = row["storage_path"]
+                    package_size = int(row["package_size"] or 0)
                     claim = db().execute(
                         """UPDATE devotional_import_jobs
                            SET status='processing',message='Import worker has picked up the saved package.',
@@ -12080,17 +12104,32 @@ def _dc_queue_worker():
                     )
                     db().commit()
                     if getattr(claim, "rowcount", 0) == 1:
-                        response = _ml_storage_request("GET", storage_path)
-                        if not response.ok:
-                            raise RuntimeError(
-                                "Could not retrieve saved ZIP from Supabase Storage (HTTP "
-                                + str(response.status_code) + ")."
-                            )
+                        if package_size <= 0:
+                            raise RuntimeError("The saved devotional ZIP size is missing.")
+                        chunk_size = 2 * 1024 * 1024
+                        chunk_count = (package_size + chunk_size - 1) // chunk_size
                         with _dc_tempfile.NamedTemporaryFile(
                             prefix="mcn-devotional-", suffix=".zip", delete=False
                         ) as handle:
-                            handle.write(response.content)
                             zip_path = handle.name
+                            received = 0
+                            for chunk_index in range(chunk_count):
+                                object_path = storage_path.rstrip("/") + "/" + str(chunk_index).zfill(6) + ".part"
+                                response = _ml_storage_request("GET", object_path)
+                                if not response.ok:
+                                    raise RuntimeError(
+                                        "Could not retrieve saved ZIP part " +
+                                        str(chunk_index + 1) + " of " + str(chunk_count) +
+                                        " from Supabase Storage (HTTP " +
+                                        str(response.status_code) + ")."
+                                    )
+                                handle.write(response.content)
+                                received += len(response.content)
+                        if received != package_size:
+                            raise RuntimeError(
+                                "Saved ZIP is incomplete: received " + str(received) +
+                                " of " + str(package_size) + " bytes."
+                            )
                         _dc_run_import(zip_path, job_id)
             _dc_time.sleep(3)
         except Exception as exc:
@@ -12276,6 +12315,16 @@ def admin_devotional_upload_chunk(upload_id):
             return jsonify({"error": "Upload position mismatch. Please restart the upload."}), 409
         if offset + len(chunk) > int(state["size"]):
             return jsonify({"error": "Chunk exceeds the declared ZIP size."}), 400
+        storage_prefix = "devotional-imports/uploads/" + upload_id
+        object_path = storage_prefix + "/" + str(chunk_index).zfill(6) + ".part"
+        saved = _ml_storage_request(
+            "POST", object_path, chunk, "application/octet-stream", True
+        )
+        if not saved.ok:
+            return jsonify({
+                "error": "Could not persist upload part in Supabase Storage (HTTP " +
+                         str(saved.status_code) + "). Please retry this part."
+            }), 503
         with open(upload_path, "ab") as output:
             output.write(chunk)
         state["received"] = offset + len(chunk)
@@ -12319,23 +12368,14 @@ def admin_devotional_upload_complete(upload_id):
             if bad_member:
                 raise ValueError("ZIP integrity check failed at " + str(bad_member)[:120])
         job_id = secrets.token_hex(12)
-        storage_path = "devotional-imports/" + job_id + ".zip"
-        with open(upload_path, "rb") as package_file:
-            saved = _ml_storage_request(
-                "POST", storage_path, package_file.read(),
-                "application/zip", True
-            )
-        if not saved.ok:
-            raise RuntimeError(
-                "Could not save the ZIP package to Supabase Storage (HTTP "
-                + str(saved.status_code) + ")."
-            )
+        storage_path = "devotional-imports/uploads/" + upload_id
         db().execute(
             """INSERT INTO devotional_import_jobs
-               (job_id,status,progress,message,storage_path)
-               VALUES (?,?,?,?,?)""",
+               (job_id,status,progress,message,storage_path,package_size)
+               VALUES (?,?,?,?,?,?)""",
             (job_id, "queued", 0,
-             "ZIP saved securely. Waiting for the import worker.", storage_path)
+             "All ZIP parts are saved securely. Waiting for the import worker.",
+             storage_path, int(state["size"]))
         )
         db().commit()
         try:
@@ -12380,20 +12420,13 @@ def admin_devotional_centre():
                     (job_id, "queued", 0, "Your import has been queued.")
                 )
                 db().commit()
-                storage_path = "devotional-imports/" + job_id + ".zip"
-                with open(temp_path, "rb") as package_file:
-                    saved = _ml_storage_request(
-                        "POST", storage_path, package_file.read(),
-                        "application/zip", True
-                    )
-                if not saved.ok:
-                    raise RuntimeError(
-                        "Could not save the ZIP package to Supabase Storage (HTTP "
-                        + str(saved.status_code) + ")."
-                    )
+                storage_path = "devotional-imports/uploads/" + job_id
+                package_size = os.path.getsize(temp_path)
+                _dc_store_zip_chunks(temp_path, storage_path)
                 db().execute(
-                    "UPDATE devotional_import_jobs SET storage_path=? WHERE job_id=?",
-                    (storage_path, job_id)
+                    """UPDATE devotional_import_jobs
+                       SET storage_path=?,package_size=? WHERE job_id=?""",
+                    (storage_path, package_size, job_id)
                 )
                 db().commit()
                 temp_path = None
