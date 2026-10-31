@@ -12085,7 +12085,7 @@ def _dc_queue_worker():
         try:
             with app.app_context():
                 row = db().execute(
-                    """SELECT job_id,storage_path FROM devotional_import_jobs
+                    """SELECT job_id,storage_path,package_size FROM devotional_import_jobs
                        WHERE status='queued' AND COALESCE(storage_path,'')<>''
                        ORDER BY created_at ASC LIMIT 1"""
                 ).fetchone()
