@@ -11335,7 +11335,11 @@ _ML_TYPES = {
     ".png": ("image/png", "document"),
     ".gif": ("image/gif", "document"),
     ".webp": ("image/webp", "document"),
+    ".txt": ("text/plain", "document"),
+    ".md": ("text/markdown", "document"),
     ".mp3": ("audio/mpeg", "audio"),
+    ".mid": ("audio/midi", "audio"),
+    ".midi": ("audio/midi", "audio"),
     ".wav": ("audio/wav", "audio"),
     ".ogg": ("audio/ogg", "audio"),
     ".m4a": ("audio/mp4", "audio"),
@@ -11441,6 +11445,15 @@ def _ml_storage_request(method, path, data=None, content_type=None):
         method, url, headers=headers, data=data, timeout=120
     )
     return response
+
+
+def _ml_is_text_file(data):
+    """Accept UTF-8 plain-text and Markdown uploads without binary payloads."""
+    try:
+        data.decode("utf-8-sig")
+        return True
+    except UnicodeDecodeError:
+        return False
 
 
 def _ml_prepare_item(row):
@@ -11574,7 +11587,7 @@ color:white;border-radius:8px;text-decoration:none}}
                 headers={"X-Content-Type-Options": "nosniff"},
             )
 
-        if mime != "application/pdf" and not mime.startswith("image/"):
+        if mime not in {"application/pdf", "text/plain", "text/markdown"} and not mime.startswith("image/"):
             abort(415)
 
         data = _ml_document_bytes(row)
@@ -11626,16 +11639,28 @@ def media_document_download(media_id):
 
 
 @app.route("/media-library")
-def media_library_public():
+@app.route("/media-library/<collection>")
+def media_library_public(collection=None):
     category = (request.args.get("type") or "").strip().lower()
     if category not in {"document", "audio", "video"}:
         category = ""
+
+    collection = (collection or request.args.get("collection") or "").strip().lower()
+    collection_titles = {
+        "sermons": "Recent Sermons",
+        "bible-teachings": "Bible Teachings",
+        "choir-music": "Choir & Music",
+    }
+    if collection and collection not in collection_titles:
+        return "Media collection not found.", 404
 
     params = {
         "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
         "published": "eq.true",
         "order": "created_at.desc",
     }
+    if collection:
+        params["storage_path"] = f"like.library/{collection}/*"
     if category:
         params["media_type"] = f"eq.{category}"
 
@@ -11643,12 +11668,14 @@ def media_library_public():
         rows = _ml_supabase_request("GET", params=params)
         items = [_ml_prepare_item(row) for row in rows]
         return render_template(
-            "media_library.html", items=items, selected_type=category
+            "media_library.html", items=items, selected_type=category,
+            collection=collection, collection_title=collection_titles.get(collection, "Church Media Library")
         )
     except Exception:
         app.logger.exception("Public Supabase media catalogue could not be loaded")
         return render_template(
-            "media_library.html", items=[], selected_type=category
+            "media_library.html", items=[], selected_type=category,
+            collection=collection, collection_title=collection_titles.get(collection, "Church Media Library")
         )
 
 
@@ -11733,8 +11760,14 @@ def media_library_admin():
                 ]
                 title = (request.form.get("title") or "").strip()
                 description = (request.form.get("description") or "").strip()
+                collection = (request.form.get("collection") or "library").strip().lower()
+                allowed_collections = {"library", "sermons", "bible-teachings", "choir-music"}
+                if photo_files:
+                    collection = "gallery"
 
-                if not uploaded_files:
+                if collection not in allowed_collections and collection != "gallery":
+                    error = "Choose a valid media section."
+                elif not uploaded_files:
                     error = "Choose one or more photos or files."
                 elif len(uploaded_files) > 10:
                     error = "You can upload a maximum of 10 files at a time. Select the next batch afterwards."
@@ -11743,7 +11776,7 @@ def media_library_admin():
                 elif len(title) > 180 or len(description) > 2000:
                     error = "The title or description is too long."
                 else:
-                    allowed_text = "Allowed: PDF, DOC, DOCX, JPG, JPEG, PNG, GIF, WEBP, MP3, WAV, OGG, M4A, AAC, MP4, WEBM, MOV."
+                    allowed_text = "Allowed: PDF, DOC, DOCX, TXT, MD, JPG, JPEG, PNG, GIF, WEBP, MP3, MID, MIDI, WAV, OGG, M4A, AAC, MP4, WEBM, MOV."
                     checks_by_ext = {
                         ".pdf": lambda data: data.startswith(b"%PDF-"),
                         ".docx": lambda data: data.startswith(b"PK"),
@@ -11753,6 +11786,10 @@ def media_library_admin():
                         ".png": lambda data: data.startswith(bytes.fromhex("89504E470D0A1A0A")),
                         ".gif": lambda data: data.startswith((b"GIF87a", b"GIF89a")),
                         ".webp": lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP",
+                        ".txt": lambda data: _ml_is_text_file(data),
+                        ".md": lambda data: _ml_is_text_file(data),
+                        ".mid": lambda data: data.startswith(b"MThd"),
+                        ".midi": lambda data: data.startswith(b"MThd"),
                         ".mp3": lambda data: data.startswith(b"ID3") or data.startswith(bytes([255, 251])) or data.startswith(bytes([255, 243])) or data.startswith(bytes([255, 242])),
                         ".wav": lambda data: data.startswith(b"RIFF") and data[8:12] == b"WAVE",
                         ".ogg": lambda data: data.startswith(b"OggS"),
@@ -11783,7 +11820,10 @@ def media_library_admin():
                             failures.append(f"{original_name}: file content does not match its extension.")
                             continue
 
-                        storage_path = f"library/{_ml_uuid.uuid4().hex}{ext}"
+                        storage_folder = "library" if collection == "library" else f"library/{collection}"
+                        if collection == "gallery":
+                            storage_folder = "library"
+                        storage_path = f"{storage_folder}/{_ml_uuid.uuid4().hex}{ext}"
                         filename_title = original_name.rsplit(".", 1)[0].strip()
                         display_title = (
                             filename_title[:180] if is_photo
@@ -11821,7 +11861,7 @@ def media_library_admin():
                     if uploaded_count:
                         message = (
                             f"{uploaded_count} file(s) uploaded successfully. "
-                            "Publish each photo below to show it in the homepage gallery."
+                            "Published photos appear in the homepage gallery; section uploads appear in their selected resource page."
                         )
                     if failures:
                         error = " ".join(failures)
