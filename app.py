@@ -12143,7 +12143,47 @@ def _dc_queue_worker():
     import tempfile as _dc_tempfile
     import time as _dc_time
 
+    # Gunicorn runs multiple OS processes. A Python threading.Lock only
+    # coordinates threads inside one process, so use a PostgreSQL session
+    # advisory lock to guarantee that only one process consumes the queue.
+    worker_lock_conn = None
+    if database_backend() == "postgres":
+        try:
+            worker_lock_conn = connect_database(DB_PATH)
+            lock_row = worker_lock_conn.execute(
+                "SELECT pg_try_advisory_lock(734219860124) AS locked"
+            ).fetchone()
+            if not lock_row or not bool(lock_row["locked"]):
+                app.logger.info(
+                    "Devotional import worker is already owned by another Gunicorn process."
+                )
+                worker_lock_conn.close()
+                return
+
+            # A process may have been restarted while an import was running.
+            # Once this process owns the global lock, safely requeue resumable jobs.
+            with app.app_context():
+                db().execute(
+                    """UPDATE devotional_import_jobs
+                       SET status='queued',
+                           message='Resuming after a web-service restart.',
+                           updated_at=CURRENT_TIMESTAMP
+                       WHERE status='processing'
+                         AND COALESCE(storage_path,'')<>''"""
+                )
+                db().commit()
+            app.logger.info("This process acquired the devotional import queue lock.")
+        except Exception:
+            app.logger.exception("Could not acquire the PostgreSQL devotional queue lock.")
+            if worker_lock_conn:
+                try:
+                    worker_lock_conn.close()
+                except Exception:
+                    pass
+            return
+
     while True:
+        active_job_id = None
         try:
             with app.app_context():
                 row = db().execute(
@@ -12155,6 +12195,7 @@ def _dc_queue_worker():
                     pass
                 else:
                     job_id = row["job_id"]
+                    active_job_id = job_id
                     storage_path = row["storage_path"]
                     package_size = int(row["package_size"] or 0)
                     claim = db().execute(
@@ -12198,18 +12239,17 @@ def _dc_queue_worker():
         except Exception as exc:
             app.logger.exception("Devotional Centre queue worker encountered an error")
             try:
-                with app.app_context():
-                    row = db().execute(
-                        """SELECT job_id FROM devotional_import_jobs
-                           WHERE status='processing' ORDER BY updated_at DESC LIMIT 1"""
-                    ).fetchone()
-                    if row:
+                if active_job_id:
+                    with app.app_context():
                         _dc_update_job(
-                            row["job_id"], status="failed",
+                            active_job_id, status="failed",
                             message="Import worker error: " + str(exc)[:300]
                         )
             except Exception:
-                app.logger.exception("Could not record devotional queue worker error")
+                app.logger.exception(
+                    "Could not record devotional queue worker error for job %s",
+                    active_job_id
+                )
             _dc_time.sleep(8)
 
 
@@ -12224,6 +12264,15 @@ def _dc_start_queue_worker():
         # their ZIP was never persisted. Mark them clearly instead of leaving
         # the dashboard showing a permanent "processing" state.
         with app.app_context():
+            # Ensure the durable queue columns exist before this process starts
+            # polling. This is an additive PostgreSQL migration and preserves jobs.
+            if database_backend() == "postgres":
+                db().execute(
+                    "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''"
+                )
+                db().execute(
+                    "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS package_size BIGINT DEFAULT 0"
+                )
             db().execute(
                 """UPDATE devotional_import_jobs
                    SET status='failed',
