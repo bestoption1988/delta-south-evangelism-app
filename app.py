@@ -11660,7 +11660,7 @@ def media_library_admin():
     if not user or user["role"] != "Admin":
         return "Administrator access required.", 403
 
-    request.max_content_length = _ML_MAX + 1024 * 1024
+    request.max_content_length = (_ML_MAX * 10) + (2 * 1024 * 1024)
     message = ""
     error = ""
 
