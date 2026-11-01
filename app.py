@@ -12642,14 +12642,44 @@ def admin_devotional_upload_complete(upload_id):
                             str(state.get("size", 0)) + " bytes."}), 400
         import zipfile as _zipfile
         with _zipfile.ZipFile(upload_path, "r") as archive:
-            names = archive.namelist()
-            if len(names) > 2500 or not any(n.endswith("/hymns.json") for n in names):
-                raise ValueError("This does not appear to be the expected Devotional Kits ZIP package.")
-            if any(n.startswith("/") or ".." in n.split("/") for n in names):
+            members = archive.infolist()
+            names = [item.filename for item in members]
+            if len(names) > 2500:
+                raise ValueError("The ZIP contains too many files.")
+            if any(n.startswith("/") or "\\\\" in n or ".." in n.split("/") for n in names):
                 raise ValueError("The ZIP contains an unsafe file path.")
             bad_member = archive.testzip()
             if bad_member:
                 raise ValueError("ZIP integrity check failed at " + str(bad_member)[:120])
+
+            # Convenience: if the ZIP contains a Bible PDF rather than a full
+            # Devotional Kits package, install that PDF as the CSB Bible.
+            if not any(n.endswith("/hymns.json") for n in names):
+                pdfs = [item for item in members
+                        if not item.is_dir() and item.filename.lower().endswith(".pdf")]
+                preferred = [item for item in pdfs
+                             if "csb_pew_bible_2nd_printing" in os.path.basename(item.filename).lower()
+                             or "csb" in os.path.basename(item.filename).lower()]
+                selected = preferred[0] if len(preferred) == 1 else (pdfs[0] if len(pdfs) == 1 else None)
+                if selected is None:
+                    raise ValueError("This ZIP is not a Devotional Kits package and does not contain one identifiable CSB Bible PDF.")
+                if int(selected.file_size or 0) > 30 * 1024 * 1024:
+                    raise ValueError("The Bible PDF inside this ZIP is larger than the 30 MB limit.")
+                bible_payload = archive.read(selected)
+                if not bible_payload.startswith(b"%PDF-"):
+                    raise ValueError("The PDF inside this ZIP is not valid.")
+                _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, bible_payload, "application/pdf")
+                for item in (upload_path, meta_path):
+                    try:
+                        os.remove(item)
+                    except OSError:
+                        pass
+                return jsonify({
+                    "bible_uploaded": True,
+                    "message": "CSB Bible PDF extracted from the ZIP and uploaded successfully.",
+                    "redirect": url_for("devotional_bible_reader")
+                })
+
         job_id = secrets.token_hex(12)
         storage_path = "devotional-imports/uploads/" + upload_id
         db().execute(
