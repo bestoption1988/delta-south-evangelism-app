@@ -2951,6 +2951,13 @@ def _daily_scripture_and_hymn():
                     hymn["audio_url"] = _dc_signed(
                         hymn_resource.get("audio_path") or hymn_payload.get("musicFilePath")
                     )
+                    hymn["audio_tune_name"] = (
+                        hymn_payload.get("musicTitle")
+                        or hymn_payload.get("tuneName")
+                        or hymn_payload.get("musicName")
+                        or hymn_payload.get("tune")
+                        or "Main tune"
+                    )
                     hymn["other_tunes"] = []
                     for tune in hymn_payload.get("otherTunes") or []:
                         if isinstance(tune, dict) and tune.get("musicFilePath"):
