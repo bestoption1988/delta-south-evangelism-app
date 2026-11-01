@@ -12340,7 +12340,11 @@ def devotional_centre_collection(collection_slug):
     collection, title = spec
     query = (request.args.get("q") or "").strip()[:120]
     page = max(1, request.args.get("page", 1, type=int) or 1)
-    per_page = 40
+    # Communion resources are presented as a continuous book: one complete
+    # section per reader page, in true numeric item order. Other collections
+    # retain the normal searchable catalogue layout.
+    book_mode = collection in ("communion_english", "communion_yoruba")
+    per_page = 1 if book_mode else 40
     where = "collection=? AND published=1"
     args = [collection]
     if query:
@@ -12351,9 +12355,13 @@ def devotional_centre_collection(collection_slug):
         tuple(args)
     ).fetchone()
     total = int(total_row["total"] or 0)
+    ordering = (
+        "CAST(item_number AS INTEGER), item_number, title"
+        if book_mode else "item_number"
+    )
     rows = db().execute(
         "SELECT resource_id,item_number,title,content_json,audio_path,author_path FROM devotional_resources WHERE " +
-        where + " ORDER BY item_number LIMIT ? OFFSET ?",
+        where + " ORDER BY " + ordering + " LIMIT ? OFFSET ?",
         tuple(args + [per_page, (page - 1) * per_page])
     ).fetchall()
     items = []
@@ -12367,6 +12375,7 @@ def devotional_centre_collection(collection_slug):
     return render_template("devotional_collection.html",
                            collection_slug=collection_slug, collection_title=title,
                            items=items, query=query, page=page,
+                           book_mode=book_mode,
                            total=total, pages=max(1, (total + per_page - 1) // per_page))
 
 
