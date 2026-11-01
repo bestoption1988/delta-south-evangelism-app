@@ -2935,7 +2935,7 @@ def _daily_scripture_and_hymn():
         if hymn:
             try:
                 hymn_title = str(hymn.get("title") or "").strip()
-                hymn_number_match = re.search(r"(\\d+)", hymn_title)
+                hymn_number_match = re.search(r"(\d+)", hymn_title)
                 hymn_number = hymn_number_match.group(1) if hymn_number_match else ""
                 hymn_row = db().execute(
                     """SELECT audio_path,content_json FROM devotional_resources
