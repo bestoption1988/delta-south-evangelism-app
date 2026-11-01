@@ -6,6 +6,10 @@ from dotenv import load_dotenv as _load_dotenv
 _load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
 
 import urllib.request, urllib.error
+
+# Import S3 dependencies at worker startup so uploads do not pay a cold-import penalty.
+import boto3
+from botocore.config import Config as BotoConfig
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, render_template, send_file, g, Response, session, redirect, url_for
