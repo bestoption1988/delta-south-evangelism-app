@@ -8,13 +8,10 @@
 <p>Import the Devotional Kits ZIP. The package and imported media are saved in Naijacloud Object Storage, while searchable content and job progress are saved in Naijacloud PostgreSQL. The import queue can pick up saved jobs again after a web-service restart.</p>
 {% if message %}<p class="success">{{ message }}</p>{% endif %}{% if error %}<p class="error">{{ error }}</p>{% endif %}
 <p><a class="button" href="/admin/devotional-centre/resources">Manage Imported Resources</a></p>
-<section class="panel"><h2>Upload the CSB Holy Bible (PDF)</h2>
-<p class="muted">This is separate from the Devotional Kits ZIP import. Select the original CSB_Pew_Bible_2nd_Printing.pdf file. PDF files are accepted here, up to 30 MB.</p>
-<form method="post" action="/admin/devotional-centre/bible/upload" enctype="multipart/form-data">
-<input type="file" name="bible_pdf" accept=".pdf,application/pdf" required>
-<p><button class="button" type="submit">Upload CSB Bible PDF</button></p>
-</form>
-<p><a href="/devotional-centre/bible">Open the CSB Bible Reader</a></p></section>
+<section class="panel"><h2>Complete Holy Bible (WEB)</h2>
+<p class="muted">The Devotional Centre now provides the complete 66-book World English Bible (WEB), a public-domain translation. Members can read books, chapters and verses in the diocesan website without uploading a CSB PDF.</p>
+<p><a class="button" href="/devotional-centre/holy-bible">Open the Complete Bible Reader</a></p>
+<p class="muted">Bible text is supplied by the WEB public-domain text service and displayed in the MCN Delta South Diocese Bible reader.</p></section>
 <section class="panel"><h2>Import Devotional Kits</h2>
 <p class="muted">Choose the prepared ZIP package. Do not extract it first. Upload progress will be shown first, followed by unpacking, media upload and database import stages.</p>
 <form id="devotional-upload-form" method="post" enctype="multipart/form-data">
