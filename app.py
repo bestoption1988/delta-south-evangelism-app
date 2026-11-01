@@ -12950,6 +12950,69 @@ def admin_devotional_resources():
                            message=message, error=error)
 
 
+@app.post("/admin/devotional-centre/jobs/<job_id>/retry")
+@page_login_required
+def admin_devotional_job_retry(job_id):
+    """Safely retry a failed import only when its complete ZIP remains in Object Storage."""
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    try:
+        # Additive guard for older PostgreSQL installations and interrupted migrations.
+        if database_backend() == "postgres":
+            db().execute(
+                "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''"
+            )
+            db().execute(
+                "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS package_size BIGINT DEFAULT 0"
+            )
+            db().commit()
+        row = db().execute(
+            "SELECT job_id,status,storage_path,package_size FROM devotional_import_jobs WHERE job_id=?",
+            (job_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Import job not found."}), 404
+        if row["status"] == "completed":
+            return jsonify({"error": "This import has already completed."}), 409
+        storage_path = str(row["storage_path"] or "").strip()
+        package_size = int(row["package_size"] or 0)
+        if not storage_path or package_size <= 0:
+            return jsonify({
+                "error": "The original ZIP is not recorded in Object Storage for this job. Please upload the Devotional Kits ZIP again; the existing job history has been preserved."
+            }), 409
+        chunk_size = 2 * 1024 * 1024
+        chunk_count = (package_size + chunk_size - 1) // chunk_size
+        client = _dc_s3_client()
+        bucket = _dc_s3_bucket()
+        verified = 0
+        for index in range(chunk_count):
+            key = storage_path.rstrip("/") + "/" + str(index).zfill(6) + ".part"
+            head = client.head_object(Bucket=bucket, Key=key)
+            expected = min(chunk_size, package_size - verified)
+            actual = int(head.get("ContentLength", -1))
+            if actual != expected:
+                return jsonify({
+                    "error": "The saved ZIP is incomplete in Object Storage. Please upload the package again; the existing job history has been preserved."
+                }), 409
+            verified += actual
+        if verified != package_size:
+            return jsonify({"error": "The saved ZIP size could not be verified. Please upload it again."}), 409
+        db().execute(
+            """UPDATE devotional_import_jobs
+               SET status='queued',progress=0,
+                   message='Retry requested. Saved ZIP verified; waiting for the import worker.',
+                   updated_at=CURRENT_TIMESTAMP
+               WHERE job_id=?""",
+            (job_id,)
+        )
+        db().commit()
+        return jsonify({"success": True, "message": "Saved ZIP verified. The import has been queued for retry."})
+    except Exception as exc:
+        db().rollback()
+        app.logger.exception("Could not safely retry devotional import job %s", job_id)
+        return jsonify({"error": "Could not verify or retry this import: " + str(exc)[:220]}), 503
+
+
 @app.get("/admin/devotional-centre/jobs/<job_id>")
 @page_login_required
 def admin_devotional_job_status(job_id):
