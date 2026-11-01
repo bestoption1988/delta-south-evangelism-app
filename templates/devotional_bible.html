@@ -19,11 +19,57 @@ main{max-width:1100px;margin:auto;padding:18px 14px 45px}.nav{display:flex;gap:1
 <section class="panel"><strong>CSB Bible file is not yet in diocesan storage.</strong><p class="status">An administrator must upload the original PDF below. Once uploaded, the full Bible reader will become available to everyone.</p></section>
 {% endif %}
 {% if is_admin %}
-<form class="upload" method="post" action="/admin/devotional-centre/bible/upload" enctype="multipart/form-data">
+<form class="upload" id="csb-upload-form">
 <strong>Administrator: Upload the CSB Bible PDF to Naijacloud Object Storage</strong>
-<p class="status">Select the file named CSB_Pew_Bible_2nd_Printing.pdf from your phone. Maximum size: 30 MB. The file is stored privately; the app provides time-limited viewing links.</p>
+<p class="status">Select CSB_Pew_Bible_2nd_Printing.pdf from your phone. The PDF uploads in small 2 MB parts to avoid large-request failures. Maximum size: 30 MB.</p>
 <input type="file" name="bible_pdf" accept="application/pdf,.pdf" required>
-<button type="submit">Upload CSB Bible</button>
+<button id="csb-upload-button" type="submit">Upload CSB Bible</button>
+<div id="csb-upload-status" class="status" role="status" aria-live="polite"></div>
 </form>
+<script>
+(function(){
+ const form=document.getElementById("csb-upload-form");
+ if(!form)return;
+ const button=document.getElementById("csb-upload-button");
+ const status=document.getElementById("csb-upload-status");
+ form.addEventListener("submit",async function(event){
+  event.preventDefault();
+  const file=form.querySelector('input[type="file"]').files[0];
+  if(!file){status.textContent="Choose the CSB PDF first.";return;}
+  if(!file.name.toLowerCase().endsWith(".pdf")||file.size>30*1024*1024){status.textContent="Choose a PDF file no larger than 30 MB.";return;}
+  button.disabled=true;
+  try{
+   status.textContent="Preparing secure upload…";
+   const init=await fetch("/admin/devotional-centre/bible/upload/init",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,size:file.size})});
+   const initData=await init.json().catch(()=>({}));
+   if(!init.ok)throw new Error(initData.error||"Could not start upload (HTTP "+init.status+").");
+   const id=initData.upload_id,chunkSize=initData.chunk_size||2*1024*1024;
+   let offset=0,index=0;
+   while(offset<file.size){
+    const chunk=file.slice(offset,Math.min(offset+chunkSize,file.size));
+    let response=null,lastError=null;
+    for(let attempt=1;attempt<=3;attempt++){
+     try{
+      response=await fetch("/admin/devotional-centre/bible/upload/"+id+"/chunk",{method:"POST",headers:{"Content-Type":"application/octet-stream","X-Chunk-Offset":String(offset)},body:chunk});
+      if(response.ok)break;
+      const data=await response.json().catch(()=>({}));
+      throw new Error(data.error||"Part "+(index+1)+" failed (HTTP "+response.status+").");
+     }catch(err){lastError=err;if(attempt<3)await new Promise(resolve=>setTimeout(resolve,700*attempt));}
+    }
+    if(!response||!response.ok)throw lastError||new Error("PDF part upload failed.");
+    const result=await response.json();offset=result.received;index++;
+    status.textContent="Uploading PDF: "+Math.floor(offset/file.size*100)+"% ("+index+" parts sent)…";
+   }
+   status.textContent="All parts received. Saving the Bible to Object Storage…";
+   const done=await fetch("/admin/devotional-centre/bible/upload/"+id+"/complete",{method:"POST"});
+   const data=await done.json().catch(()=>({}));
+   if(!done.ok)throw new Error(data.error||"Could not complete upload (HTTP "+done.status+").");
+   status.textContent="CSB Bible uploaded successfully. Opening the reader…";
+   window.location.href="/devotional-centre/bible";
+  }catch(err){status.textContent="Upload failed: "+(err&&err.message?err.message:String(err));}
+  finally{button.disabled=false;}
+ });
+})();
+</script>
 {% endif %}
 </main></body></html>
