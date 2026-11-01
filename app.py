@@ -12398,108 +12398,59 @@ def devotional_centre_item(resource_id):
 
 
 
-# Online multi-translation Bible reader.
-# Scripture text is fetched server-side so provider credentials are never exposed
-# to browsers. Only translations enabled for the configured API.Bible account
-# are listed; copyright notices are returned with each passage.
-def _bible_api_request(path, params=None, include_meta=False):
-    api_key = (os.environ.get("API_BIBLE_API_KEY") or "").strip()
-    if not api_key:
-        raise RuntimeError("Bible provider is not configured. Set API_BIBLE_API_KEY in the hosting environment.")
-    from urllib.parse import urlencode
-    url = "https://rest.api.bible/v1/" + path.lstrip("/")
-    if params:
-        url += "?" + urlencode(params)
-    req = urllib.request.Request(
-        url,
-        headers={"api-key": api_key, "Accept": "application/json"},
-        method="GET",
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=18) as response:
-            payload = response.read(5 * 1024 * 1024 + 1)
-        if len(payload) > 5 * 1024 * 1024:
-            raise RuntimeError("The Bible provider response was too large.")
-        result = json.loads(payload.decode("utf-8"))
-        return result if include_meta else result.get("data", result)
-    except urllib.error.HTTPError as exc:
-        detail = exc.read(1000).decode("utf-8", "replace")
-        app.logger.warning("Bible provider returned HTTP %s: %s", exc.code, detail[:300])
-        if exc.code in (401, 403):
-            raise RuntimeError("Bible provider rejected the API key or this translation is not licensed for the account.")
-        if exc.code == 404:
-            raise RuntimeError("The requested Bible book or chapter is not available.")
-        raise RuntimeError("Bible provider request failed (HTTP %s)." % exc.code)
-    except (urllib.error.URLError, TimeoutError):
-        raise RuntimeError("Could not reach the online Bible provider. Please try again.")
+# CSB-only Bible reader. The licensed PDF is stored privately in Naijacloud Object Storage.
+_CSB_BIBLE_OBJECT_KEY = "devotional/bibles/csb-pew-bible-2017.pdf"
 
 
 @app.get("/devotional-centre/bible")
 def devotional_bible_reader():
-    return render_template(
-        "devotional_bible.html",
-        bible_provider_configured=bool((os.environ.get("API_BIBLE_API_KEY") or "").strip()),
-    )
-
-
-@app.get("/api/devotional-bible/bibles")
-def devotional_bible_bibles():
+    is_admin = _dc_admin_required()
+    available = False
     try:
-        data = _bible_api_request("bibles", {"language": "eng", "include-full-details": "true"})
-        return jsonify({"data": data})
-    except Exception as exc:
-        app.logger.info("Bible translations could not be loaded: %s", exc)
-        return jsonify({"error": str(exc)}), 503
+        _dc_s3_client().head_object(Bucket=_dc_s3_bucket(), Key=_CSB_BIBLE_OBJECT_KEY)
+        available = True
+    except Exception:
+        app.logger.info("CSB Bible PDF has not yet been uploaded to Object Storage")
+    return render_template("devotional_bible.html",
+                           is_admin=is_admin, bible_available=available)
 
 
-@app.get("/api/devotional-bible/books")
-def devotional_bible_books():
-    bible_id = (request.args.get("bible_id") or "").strip()
-    if not re.fullmatch(r"[A-Za-z0-9-]{8,40}", bible_id):
-        return jsonify({"error": "Choose a valid Bible translation."}), 400
+@app.post("/admin/devotional-centre/bible/upload")
+@page_login_required
+def admin_upload_csb_bible():
+    if not _dc_admin_required():
+        return "Administrator access required.", 403
+    upload = request.files.get("bible_pdf")
+    if not upload or not upload.filename:
+        flash("Select the uploaded CSB Pew Bible PDF first.", "error")
+        return redirect(url_for("devotional_bible_reader"))
+    if not upload.filename.lower().endswith(".pdf"):
+        flash("Only a PDF Bible file is accepted.", "error")
+        return redirect(url_for("devotional_bible_reader"))
     try:
-        data = _bible_api_request("bibles/" + bible_id + "/books")
-        return jsonify({"data": data})
+        payload = upload.read(30 * 1024 * 1024 + 1)
+        if len(payload) > 30 * 1024 * 1024:
+            raise ValueError("The PDF is larger than the 30 MB upload limit.")
+        if not payload.startswith(b"%PDF"):
+            raise ValueError("The selected file is not a valid PDF.")
+        _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, payload, "application/pdf")
+        flash("Christian Standard Bible (CSB) uploaded successfully.", "success")
     except Exception as exc:
-        return jsonify({"error": str(exc)}), 503
+        app.logger.exception("CSB Bible upload failed")
+        flash("CSB upload failed: " + str(exc)[:220], "error")
+    return redirect(url_for("devotional_bible_reader"))
 
 
-@app.get("/api/devotional-bible/chapters")
-def devotional_bible_chapters():
-    bible_id = (request.args.get("bible_id") or "").strip()
-    book_id = (request.args.get("book_id") or "").strip()
-    if not re.fullmatch(r"[A-Za-z0-9-]{8,40}", bible_id) or not re.fullmatch(r"[A-Za-z0-9.]{2,16}", book_id):
-        return jsonify({"error": "Choose a valid Bible book."}), 400
+@app.get("/devotional-centre/bible/file")
+def devotional_bible_file():
     try:
-        data = _bible_api_request("bibles/" + bible_id + "/books/" + book_id + "/chapters")
-        return jsonify({"data": data})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 503
-
-
-@app.get("/api/devotional-bible/chapter")
-def devotional_bible_chapter():
-    bible_id = (request.args.get("bible_id") or "").strip()
-    chapter_id = (request.args.get("chapter_id") or "").strip()
-    if not re.fullmatch(r"[A-Za-z0-9-]{8,40}", bible_id) or not re.fullmatch(r"[A-Za-z0-9.]{3,24}", chapter_id):
-        return jsonify({"error": "Choose a valid Bible chapter."}), 400
-    try:
-        result = _bible_api_request(
-            "bibles/" + bible_id + "/chapters/" + chapter_id,
-            {
-                "content-type": "text",
-                "include-verse-numbers": "true",
-                "include-notes": "false",
-                "include-titles": "true",
-                "fums-version": "3",
-            },
-            include_meta=True,
-        )
-        data = result.get("data", {})
-        data["_fumsToken"] = (result.get("meta") or {}).get("fumsToken", "")
-        return jsonify({"data": data})
-    except Exception as exc:
-        return jsonify({"error": str(exc)}), 503
+        url = _dc_signed(_CSB_BIBLE_OBJECT_KEY)
+        if not url:
+            return "The CSB Bible PDF is not available yet. An administrator must upload it.", 404
+        return redirect(url)
+    except Exception:
+        app.logger.exception("Could not open CSB Bible PDF")
+        return "The CSB Bible PDF is not available yet. Please contact the diocesan administrator.", 404
 
 
 @app.post("/admin/devotional-centre/upload/init")
