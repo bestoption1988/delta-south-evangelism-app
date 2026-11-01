@@ -12483,6 +12483,9 @@ def admin_csb_upload_chunk(upload_id):
     path = os.path.join(upload_dir, upload_id + ".csb.part")
     meta = os.path.join(upload_dir, upload_id + ".csb.json")
     try:
+        os.makedirs(upload_dir, exist_ok=True)
+        if not os.path.isfile(path) or not os.path.isfile(meta):
+            return jsonify({"error": "PDF upload session not found. Start the upload again."}), 404
         with open(meta, "r", encoding="utf-8") as f:
             state = json.load(f)
         offset = int(request.headers.get("X-Chunk-Offset", "-1"))
@@ -12521,16 +12524,27 @@ def admin_csb_upload_complete(upload_id):
             state = json.load(f)
         if int(state.get("received", 0)) != int(state.get("size", -1)):
             return jsonify({"error": "PDF upload is incomplete."}), 400
+        if not os.path.isfile(path) or os.path.getsize(path) != int(state.get("size", -1)):
+            return jsonify({"error": "The uploaded PDF file is missing or its size does not match. Please restart the upload."}), 400
         with open(path, "rb") as f:
-            if f.read(5) != b"%PDF-":
-                return jsonify({"error": "The uploaded file is not a valid PDF."}), 400
-        _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, open(path, "rb").read(), "application/pdf")
+            header = f.read(5)
+            if header != b"%PDF-":
+                return jsonify({"error": "The uploaded file is not a valid PDF. Please select the original CSB PDF, not a renamed ZIP."}), 400
+            f.seek(0)
+            payload = f.read()
+        if len(payload) != int(state["size"]):
+            return jsonify({"error": "The PDF could not be read completely. Please retry the upload."}), 400
+        _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, payload, "application/pdf")
+        # Verify the object exists and has the expected size before reporting success.
+        stored = _dc_s3_client().head_object(Bucket=_dc_s3_bucket(), Key=_CSB_BIBLE_OBJECT_KEY)
+        if int(stored.get("ContentLength", -1)) != len(payload):
+            raise RuntimeError("Object Storage did not confirm the complete PDF size.")
         for item in (path, meta):
             try:
                 os.remove(item)
             except OSError:
-                pass
-        return jsonify({"success": True, "message": "CSB Bible uploaded successfully."})
+                app.logger.warning("Could not remove temporary CSB upload file: %s", item)
+        return jsonify({"success": True, "message": "CSB Bible uploaded and verified successfully.", "redirect": url_for("devotional_bible_reader")})
     except Exception as exc:
         app.logger.exception("Could not save completed CSB Bible PDF")
         return jsonify({"error": "Could not save CSB PDF to Object Storage: " + str(exc)[:200]}), 503
