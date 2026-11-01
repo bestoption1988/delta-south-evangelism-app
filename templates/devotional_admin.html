@@ -31,6 +31,7 @@
 <div class="job" data-job="{{ job.job_id }}">
 <div class="job-head"><strong>Import {{ job.job_id[:8] }}</strong><span class="status {{ job.status }}">{{ job.status|title }}</span></div>
 <div class="stage job-message">{{ job.message }}</div>
+{% if job.status == "failed" %}<p><button class="button retry-import" type="button" data-retry-job="{{ job.job_id }}">Verify ZIP & Retry Import</button></p>{% endif %}
 <div class="bar"><span style="width:{{ job.progress }}%"></span></div>
 <div class="job-foot"><span class="percent">{{ job.progress }}%</span><div class="stats"><span class="records">Records: {{ job.imported_records }}</span><span class="assets">Media files: {{ job.uploaded_assets }}</span></div></div>
 </div>
