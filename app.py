@@ -12402,7 +12402,7 @@ def devotional_centre_item(resource_id):
 # Scripture text is fetched server-side so provider credentials are never exposed
 # to browsers. Only translations enabled for the configured API.Bible account
 # are listed; copyright notices are returned with each passage.
-def _bible_api_request(path, params=None):
+def _bible_api_request(path, params=None, include_meta=False):
     api_key = (os.environ.get("API_BIBLE_API_KEY") or "").strip()
     if not api_key:
         raise RuntimeError("Bible provider is not configured. Set API_BIBLE_API_KEY in the hosting environment.")
@@ -12421,7 +12421,7 @@ def _bible_api_request(path, params=None):
         if len(payload) > 5 * 1024 * 1024:
             raise RuntimeError("The Bible provider response was too large.")
         result = json.loads(payload.decode("utf-8"))
-        return result.get("data", result)
+        return result if include_meta else result.get("data", result)
     except urllib.error.HTTPError as exc:
         detail = exc.read(1000).decode("utf-8", "replace")
         app.logger.warning("Bible provider returned HTTP %s: %s", exc.code, detail[:300])
@@ -12484,15 +12484,19 @@ def devotional_bible_chapter():
     if not re.fullmatch(r"[A-Za-z0-9-]{8,40}", bible_id) or not re.fullmatch(r"[A-Za-z0-9.]{3,24}", chapter_id):
         return jsonify({"error": "Choose a valid Bible chapter."}), 400
     try:
-        data = _bible_api_request(
+        result = _bible_api_request(
             "bibles/" + bible_id + "/chapters/" + chapter_id,
             {
                 "content-type": "text",
                 "include-verse-numbers": "true",
                 "include-notes": "false",
                 "include-titles": "true",
+                "fums-version": "3",
             },
+            include_meta=True,
         )
+        data = result.get("data", {})
+        data["_fumsToken"] = (result.get("meta") or {}).get("fumsToken", "")
         return jsonify({"data": data})
     except Exception as exc:
         return jsonify({"error": str(exc)}), 503
