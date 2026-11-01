@@ -1,45 +1,29 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Holy Bible | MCN Delta South Diocese</title>
+<title>Christian Standard Bible | MCN Delta South Diocese</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
-.hero{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:#fff;padding:30px 17px 36px}.wrap{max-width:1050px;margin:auto}.eyebrow{font-size:10px;letter-spacing:2px;color:#f4d36e;font-weight:800}.hero h1{font:800 clamp(28px,5vw,42px)/1.1 Georgia,serif;margin:8px 0}.hero p{margin:0;color:#e2eaf7}
-main{max-width:1050px;margin:auto;padding:20px 15px 55px}.nav{display:flex;gap:15px;flex-wrap:wrap;margin-bottom:17px}.nav a{color:#12664b;text-decoration:none;font-weight:750}
-.panel,.reader{background:#fff;border:1px solid #e0e7f0;border-radius:15px;padding:17px;box-shadow:0 5px 18px #102b5509}.controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:11px}.field label{display:block;font-size:12px;font-weight:800;color:#52627a;margin-bottom:5px}.field select{width:100%;min-width:0;padding:12px;border:1px solid #cbd5e1;border-radius:9px;background:white;color:#172b4d;font:inherit}
-.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}.actions button{border:0;border-radius:9px;padding:11px 16px;background:#123363;color:white;font-weight:800}.actions button:disabled{opacity:.45}.status{margin:12px 0 0;color:#69768b;font-size:13px}.reader{margin-top:15px;padding:clamp(18px,4vw,34px);min-height:240px}.reader h2{font:700 clamp(23px,4vw,31px) Georgia,serif;color:#17365f;margin:0 0 4px}.reader .meta{font-size:12px;color:#8a6a1c;font-weight:800;margin-bottom:18px}.scripture{font:18px/1.9 Georgia,serif;white-space:pre-wrap;overflow-wrap:anywhere;color:#26364d}.copyright{border-top:1px solid #e7edf4;margin-top:22px;padding-top:12px;color:#6e7a8d;font-size:11px}.notice{padding:14px;border-radius:10px;background:#fff7e5;border:1px solid #f0d99e;color:#624b16;margin-top:14px}.hidden{display:none}
-@media(max-width:650px){.controls{grid-template-columns:1fr}.panel{padding:14px}.scripture{font-size:17px}.hero{padding:26px 16px}}
+.hero{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:#fff;padding:28px 17px 34px}.wrap{max-width:1100px;margin:auto}.eyebrow{font-size:10px;letter-spacing:2px;color:#f4d36e;font-weight:800}.hero h1{font:800 clamp(28px,5vw,42px)/1.1 Georgia,serif;margin:8px 0}.hero p{margin:0;color:#e2eaf7}
+main{max-width:1100px;margin:auto;padding:18px 14px 45px}.nav{display:flex;gap:15px;flex-wrap:wrap;margin-bottom:15px}.nav a{color:#12664b;text-decoration:none;font-weight:750}
+.panel{background:#fff;border:1px solid #e0e7f0;border-radius:14px;padding:16px;margin-bottom:14px}.panel p{margin:5px 0}.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:12px}.actions a,.actions button{display:inline-block;border:0;border-radius:9px;padding:11px 16px;background:#123363;color:white;text-decoration:none;font-weight:800;font:inherit}.actions .secondary{background:#e9eef5;color:#18375e}
+.viewer{background:#fff;border:1px solid #dfe6ef;border-radius:13px;overflow:hidden}.viewer iframe{display:block;width:100%;height:78vh;min-height:560px;border:0}.upload{background:#fff8e8;border:1px solid #ead7a6;border-radius:12px;padding:15px;margin:14px 0}.upload input{display:block;max-width:100%;margin:10px 0}.upload button{background:#145b43;color:white;border:0;border-radius:8px;padding:11px 15px;font-weight:800}.status{font-size:13px;color:#64748b}
+@media(max-width:600px){.viewer iframe{height:75vh;min-height:480px}.hero{padding:24px 15px 28px}}
 </style></head><body>
-<header class="hero"><div class="wrap"><div class="eyebrow">METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE</div><h1>Holy Bible Library</h1><p>Read Scripture in the translations authorised for this diocesan library.</p></div></header>
+<header class="hero"><div class="wrap"><div class="eyebrow">METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE</div><h1>Holy Bible Library</h1><p>Christian Standard Bible® (CSB) · 2017 Pew Bible · Complete 66-book edition</p></div></header>
 <main><nav class="nav"><a href="/devotional-centre">← Devotional Centre</a><a href="/">Diocesan Homepage</a></nav>
-<section class="panel">
-<div class="controls">
-<div class="field"><label for="translation">Bible translation</label><select id="translation" disabled><option>Loading translations…</option></select></div>
-<div class="field"><label for="book">Book</label><select id="book" disabled><option>Select translation first</option></select></div>
-<div class="field"><label for="chapter">Chapter</label><select id="chapter" disabled><option>Select book first</option></select></div>
-</div>
-<div class="actions"><button id="read" type="button" disabled>Read Chapter</button><button id="prev" type="button" disabled>← Previous</button><button id="next" type="button" disabled>Next →</button></div>
-<p class="status" id="status" aria-live="polite">Connecting to the online Bible library…</p>
-<div id="notice" class="notice hidden"></div>
-</section>
-<article class="reader" aria-live="polite"><h2 id="heading">Welcome to the Bible Library</h2><div class="meta" id="reference"></div><div class="scripture" id="text">Choose a translation, book and chapter to begin reading.</div><div class="copyright" id="copyright"></div></article>
-</main>
-<script>
-const $=id=>document.getElementById(id);
-const translation=$("translation"),book=$("book"),chapter=$("chapter");
-let books=[],chapters=[];
-function message(s){$("status").textContent=s}
-function showError(s){$("notice").textContent=s;$("notice").classList.remove("hidden")}
-function clearError(){$("notice").classList.add("hidden");$("notice").textContent=""}
-async function api(url){const r=await fetch(url,{headers:{Accept:"application/json"}});const d=await r.json();if(!r.ok)throw new Error(d.error||"Could not load Bible data.");return d.data}
-function fill(select,items,label,selected){select.innerHTML="";const first=document.createElement("option");first.value="";first.textContent=label;select.append(first);for(const item of items){const o=document.createElement("option");o.value=item.id;o.textContent=item.reference||item.nameLocal||item.name||item.abbreviationLocal||item.id;if(item.abbreviationLocal)o.textContent+=" ("+item.abbreviationLocal+")";select.append(o)}select.disabled=!items.length;if(selected)select.value=selected}
-async function loadTranslations(){try{const data=await api("/api/devotional-bible/bibles");const list=Array.isArray(data)?data:(data.bibles||[]);fill(translation,list,"Select a translation");if(!list.length)throw new Error("No English translations are enabled for the API account yet.");message(list.length+" authorised English translation(s) available. Select one to begin.");}catch(e){message(e.message);showError(e.message.includes("API_BIBLE_API_KEY")?"The online Bible provider has not yet been connected. The administrator must add API_BIBLE_API_KEY to the Naijacloud environment variables.":e.message)}}
-translation.addEventListener("change",async()=>{clearError();fill(book,[],"Loading books…");fill(chapter,[],"Select book first");$("read").disabled=true;try{const d=await api("/api/devotional-bible/books?bible_id="+encodeURIComponent(translation.value));books=Array.isArray(d)?d:(d.books||[]);fill(book,books,"Choose a book");message("Choose a book and chapter.");}catch(e){message(e.message);showError(e.message)}});
-book.addEventListener("change",async()=>{clearError();fill(chapter,[],"Loading chapters…");$("read").disabled=true;try{const d=await api("/api/devotional-bible/chapters?bible_id="+encodeURIComponent(translation.value)+"&book_id="+encodeURIComponent(book.value));chapters=Array.isArray(d)?d:(d.chapters||[]);fill(chapter,chapters,"Choose a chapter");message("Choose a chapter, then tap Read Chapter.");}catch(e){message(e.message);showError(e.message)}});
-chapter.addEventListener("change",()=>$("read").disabled=!chapter.value);
-function trackFums(token){if(!token)return;try{const deviceKey="mcn_bible_device_id",sessionKey="mcn_bible_session_id";let deviceId=localStorage.getItem(deviceKey),sessionId=sessionStorage.getItem(sessionKey);if(!deviceId){deviceId=crypto.randomUUID();localStorage.setItem(deviceKey,deviceId)}if(!sessionId){sessionId=crypto.randomUUID();sessionStorage.setItem(sessionKey,sessionId)}const pixel=new Image();pixel.src="https://fums.api.bible/f3?t="+encodeURIComponent(token)+"&dId="+encodeURIComponent(deviceId)+"&sId="+encodeURIComponent(sessionId)}catch(e){console.warn("Bible usage reporting could not start.")}}
-async function readChapter(){if(!translation.value||!book.value||!chapter.value)return;clearError();$("read").disabled=true;message("Loading Scripture…");try{const d=await api("/api/devotional-bible/chapter?bible_id="+encodeURIComponent(translation.value)+"&chapter_id="+encodeURIComponent(chapter.value));trackFums(d._fumsToken);$("heading").textContent=d.reference||chapter.options[chapter.selectedIndex].textContent;$("reference").textContent=translation.options[translation.selectedIndex].textContent;$("text").textContent=(d.content||"").replace(/<[^>]*>/g," ").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/[ \t]+\n/g,"\n");$("copyright").textContent=d.copyright||"Copyright and attribution information supplied by the translation provider.";message("Chapter loaded. Scroll normally to read.");$("prev").disabled=chapter.selectedIndex<=1;$("next").disabled=chapter.selectedIndex>=chapter.options.length-1;}catch(e){message(e.message);showError(e.message)}finally{$("read").disabled=!chapter.value}}
-$("read").addEventListener("click",readChapter);
-$("prev").addEventListener("click",()=>{if(chapter.selectedIndex>1){chapter.selectedIndex--;readChapter()}});
-$("next").addEventListener("click",()=>{if(chapter.selectedIndex<chapter.options.length-1){chapter.selectedIndex++;readChapter()}});
-loadTranslations();
-</script></body></html>
+<section class="panel"><strong>One Bible translation: CSB</strong><p>This diocesan Bible library uses only the uploaded Christian Standard Bible (CSB). Open the full Bible and use the PDF viewer’s search, page navigation and zoom controls.</p>
+<div class="actions"><a href="/devotional-centre/bible/file" target="_blank" rel="noopener">Open Bible in new tab</a><a class="secondary" href="/devotional-centre/bible/file" download>Open / Save PDF</a></div></section>
+{% if bible_available %}
+<div class="viewer"><iframe title="Christian Standard Bible 2017 Pew Bible" src="/devotional-centre/bible/file#view=FitH" loading="lazy"></iframe></div>
+{% else %}
+<section class="panel"><strong>CSB Bible file is not yet in diocesan storage.</strong><p class="status">An administrator must upload the original PDF below. Once uploaded, the full Bible reader will become available to everyone.</p></section>
+{% endif %}
+{% if is_admin %}
+<form class="upload" method="post" action="/admin/devotional-centre/bible/upload" enctype="multipart/form-data">
+<strong>Administrator: Upload the CSB Bible PDF to Naijacloud Object Storage</strong>
+<p class="status">Select the file named CSB_Pew_Bible_2nd_Printing.pdf from your phone. Maximum size: 30 MB. The file is stored privately; the app provides time-limited viewing links.</p>
+<input type="file" name="bible_pdf" accept="application/pdf,.pdf" required>
+<button type="submit">Upload CSB Bible</button>
+</form>
+{% endif %}
+</main></body></html>
