@@ -2,18 +2,18 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ collection_title }} | MCN Delta South</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:15px/1.55 system-ui}.hero{background:linear-gradient(120deg,#081d4a,#1a477e);color:#fff;padding:28px 16px}.wrap,main{max-width:1100px;margin:auto}.hero h1{margin:5px 0;font:800 clamp(25px,4vw,38px) Georgia,serif}.hero p{margin:0;color:#dce7f7}main{padding:20px 15px 55px}.nav{display:flex;gap:15px;margin-bottom:18px;flex-wrap:wrap}.nav a{color:#11694c;text-decoration:none;font-weight:700}.search{display:flex;gap:8px;margin:18px 0}.search input{flex:1;min-width:0;padding:12px;border:1px solid #cbd5e1;border-radius:9px;font:inherit}.search button{border:0;background:#123363;color:white;border-radius:9px;padding:0 18px;font-weight:700}.list{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,310px),1fr));gap:13px}.item{background:white;border:1px solid #e0e6ef;border-radius:13px;padding:16px;box-shadow:0 4px 16px #102b5509}.number{font-size:11px;color:#a77a13;font-weight:800;letter-spacing:1px}.item h2{font-size:18px;margin:4px 0 8px}.preview{color:#647187;font-size:13px;white-space:pre-line;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}.open{display:inline-block;margin-top:12px;padding:9px 13px;border-radius:8px;background:#123363;color:white;text-decoration:none;font-size:12px;font-weight:800}.empty{background:white;border:1px dashed #cbd5e1;padding:30px;border-radius:12px;text-align:center;color:#69768b}.pages{display:flex;justify-content:space-between;margin-top:20px}.pages a{color:#12664b;font-weight:700}.count{color:#718096;font-size:12px;margin-left:auto}
-.book{max-width:850px;margin:20px auto;background:#fff;border:1px solid #dfe5ed;border-radius:16px;padding:clamp(22px,5vw,48px);box-shadow:0 8px 28px #102b5510;min-height:55vh}.book-top{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-bottom:15px;border-bottom:2px solid #eadcae;color:#9a741c;font-size:12px;font-weight:850;letter-spacing:1px;text-transform:uppercase}.book h2{font:800 clamp(24px,4vw,32px) Georgia,serif;color:#142f58;margin:24px 0}.book-content{font:18px/1.9 Georgia,serif;color:#26364d;white-space:pre-wrap;overflow-wrap:anywhere}.book-content p{margin:0 0 1em}.book-subheading{font:700 19px Georgia,serif;margin:24px 0 10px;color:#173d68}.book-controls{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px auto 0;max-width:850px}.book-controls a{display:inline-block;background:#123363;color:#fff;text-decoration:none;padding:12px 17px;border-radius:9px;font-weight:800}.book-controls a.disabled{visibility:hidden}.book-position{font-size:12px;color:#69768b;text-align:center}.book-hint{text-align:center;color:#7b8798;font-size:12px;margin-top:12px}
-</style></head><body><header class="hero"><div class="wrap"><div style="font-size:10px;letter-spacing:2px;color:#f3d36e;font-weight:800">METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE</div><h1>{{ collection_title }}</h1><p>{% if book_mode %}Read the Communion Service as a complete book, one page at a time.{% else %}Search, read and explore this collection.{% endif %}</p></div></header>
+.book{max-width:900px;margin:12px auto 0;background:#fff;border:1px solid #dfe5ed;border-radius:12px;padding:clamp(16px,3vw,28px);box-shadow:0 5px 18px #102b5508}.book-section{padding:0 0 14px;margin:0 0 14px;border-bottom:1px solid #e8edf3}.book-section:last-child{border-bottom:0;margin-bottom:0;padding-bottom:0}.book-heading{display:flex;align-items:baseline;gap:10px;margin:0 0 5px;color:#17365f}.book-number{font:800 20px Georgia,serif;color:#9a741c;min-width:22px}.book-title{font:700 17px Georgia,serif;margin:0}.book-subheading{font:700 16px Georgia,serif;margin:6px 0;color:#173d68}.book-content{font:16px/1.65 Georgia,serif;color:#26364d;white-space:pre-wrap;overflow-wrap:anywhere}.book-content p{margin:0 0 .55em}.book-content p:last-child{margin-bottom:0}.count{margin-bottom:8px}
+</style></head><body><header class="hero"><div class="wrap"><div style="font-size:10px;letter-spacing:2px;color:#f3d36e;font-weight:800">METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE</div><h1>{{ collection_title }}</h1><p>{% if book_mode %}Read the complete Communion Service in continuous order.{% else %}Search, read and explore this collection.{% endif %}</p></div></header>
 <main><nav class="nav"><a href="/devotional-centre">← All Collections</a><a href="/">Homepage</a></nav>
 <form class="search" method="get"><input name="q" value="{{ query }}" placeholder="Search by number, title, first line or text…"><button type="submit">Search</button></form>
-<p class="count">{{ total }} {% if book_mode %}book items{% else %}resources{% endif %} found</p>
+<p class="count">{{ total }} {% if book_mode %}sections{% else %}resources{% endif %} found</p>
 {% if items %}
 {% if book_mode %}
-{% set x=items[0] %}
-{% set p=x.payload %}
 <article class="book">
-  <div class="book-top"><span>Methodist Communion Service</span><span>Item {{ x.item_number }}</span></div>
-  <h2>{{ x.title }}</h2>
+{% for x in items %}
+{% set p=x.payload %}
+<section class="book-section">
+  <div class="book-heading"><span class="book-number">{{ x.item_number }}</span>{% if x.title and x.title|string|lower not in ('item ' ~ x.item_number|string)|lower %}<h2 class="book-title">{{ x.title }}</h2>{% endif %}</div>
   {% if p.get('heading') %}<h3 class="book-subheading">{{ p.get('heading') }}</h3>{% endif %}
   {% if p.get('content') %}
     <div class="book-content">{{ p.get('content') }}</div>
@@ -23,16 +23,14 @@
     <div class="book-content">{{ p.get('body') }}</div>
   {% elif p.get('description') %}
     <div class="book-content">{{ p.get('description') }}</div>
+  {% elif p.get('sections') %}
+    {% for section in p.get('sections',[]) %}<div class="book-content">{% if section is mapping %}{{ section.get('text', section.get('content','')) }}{% else %}{{ section }}{% endif %}</div>{% endfor %}
   {% else %}
     <div class="book-content">{{ p|tojson(indent=2) }}</div>
   {% endif %}
+</section>
+{% endfor %}
 </article>
-<nav class="book-controls" aria-label="Communion book pages">
-  {% if page>1 %}<a href="?q={{ query|urlencode }}&page={{ page-1 }}">← Previous Page</a>{% else %}<a class="disabled" href="#">← Previous Page</a>{% endif %}
-  <span class="book-position">Page {{ page }} of {{ pages }}<br>Item {{ x.item_number }} of {{ total }}</span>
-  {% if page<pages %}<a href="?q={{ query|urlencode }}&page={{ page+1 }}">Next Page →</a>{% else %}<a class="disabled" href="#">Next Page →</a>{% endif %}
-</nav>
-<p class="book-hint">Use Previous Page and Next Page to read the Communion Service in sequence.</p>
 {% else %}
 <div class="list">{% for x in items %}<article class="item"><div class="number">{{ collection_title }} · {{ x.item_number }}</div><h2>{{ x.title }}</h2>
 {% set p=x.payload %}
