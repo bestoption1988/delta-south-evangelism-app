@@ -8236,8 +8236,12 @@ with app.app_context():
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        # Upgrade tables created by earlier deployments. IF NOT EXISTS makes
-        # these additive PostgreSQL migrations safe on every application start.
+        # Additive compatibility migrations for databases created by earlier
+        # releases. Keep storage_path available on both devotional tables so
+        # queued imports and older resource metadata queries cannot fail.
+        _devotional_conn.execute(
+            "ALTER TABLE devotional_resources ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''"
+        )
         _devotional_conn.execute(
             "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''"
         )
