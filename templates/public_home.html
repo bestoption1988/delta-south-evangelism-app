@@ -124,7 +124,7 @@
         <div class="daily-hymn-lyrics">{{ day_hymn.get("lyrics", "") }}</div>
         {% if day_hymn.get("audio_url") %}
           <div class="daily-hymn-audio">
-            <p><b>🎵 Listen to the hymn tune</b></p>
+            <p><b>🎵 {{ day_hymn.get("audio_tune_name", "Main tune") }}</b></p>
             <audio controls preload="none" playsinline style="width:100%;max-width:520px" src="{{ day_hymn.get('audio_url') }}"></audio>
           </div>
         {% endif %}
