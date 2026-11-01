@@ -122,6 +122,20 @@
         <h3>{{ day_hymn.get("title", "Hymn of the Day") }}</h3>
         {% if day_hymn.get("meter") %}<p><b>Meter:</b> {{ day_hymn.get("meter") }}</p>{% endif %}
         <div class="daily-hymn-lyrics">{{ day_hymn.get("lyrics", "") }}</div>
+        {% if day_hymn.get("audio_url") %}
+          <div class="daily-hymn-audio">
+            <p><b>🎵 Listen to the hymn tune</b></p>
+            <audio controls preload="none" playsinline style="width:100%;max-width:520px" src="{{ day_hymn.get('audio_url') }}"></audio>
+          </div>
+        {% endif %}
+        {% for tune in day_hymn.get("other_tunes", []) %}
+          {% if tune.get("audio_url") %}
+            <div class="daily-hymn-audio">
+              <p><b>{{ tune.get("title", "Additional hymn tune") }}</b></p>
+              <audio controls preload="none" playsinline style="width:100%;max-width:520px" src="{{ tune.get('audio_url') }}"></audio>
+            </div>
+          {% endif %}
+        {% endfor %}
         {% if day_hymn.get("author") %}<p class="daily-hymn-author"><b>Author:</b> {{ day_hymn.get("author") }}</p>{% endif %}
       </div>
     </details>
