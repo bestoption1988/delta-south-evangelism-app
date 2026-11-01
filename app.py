@@ -12459,10 +12459,13 @@ def devotional_centre_collection(collection_slug):
         tuple(args)
     ).fetchone()
     total = int(total_row["total"] or 0)
-    ordering = (
-        "CAST(item_number AS INTEGER), item_number, title"
-        if book_mode else "item_number"
-    )
+    # Hymn numbers must be sorted numerically (1, 2, 3 … 10, 11),
+    # not lexicographically (1, 10, 100, 11, 2).
+    numeric_number_collections = {"english_hymns", "yoruba_hymns", "akokun"}
+    if book_mode or collection in numeric_number_collections:
+        ordering = "CAST(item_number AS INTEGER), item_number, title"
+    else:
+        ordering = "item_number, title"
     rows = db().execute(
         "SELECT resource_id,item_number,title,content_json,audio_path,author_path FROM devotional_resources WHERE " +
         where + " ORDER BY " + ordering + " LIMIT ? OFFSET ?",
