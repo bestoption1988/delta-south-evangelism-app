@@ -12396,6 +12396,108 @@ def devotional_centre_item(resource_id):
     return render_template("devotional_item.html", item=item)
 
 
+
+
+# Online multi-translation Bible reader.
+# Scripture text is fetched server-side so provider credentials are never exposed
+# to browsers. Only translations enabled for the configured API.Bible account
+# are listed; copyright notices are returned with each passage.
+def _bible_api_request(path, params=None):
+    api_key = (os.environ.get("API_BIBLE_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("Bible provider is not configured. Set API_BIBLE_API_KEY in the hosting environment.")
+    from urllib.parse import urlencode
+    url = "https://rest.api.bible/v1/" + path.lstrip("/")
+    if params:
+        url += "?" + urlencode(params)
+    req = urllib.request.Request(
+        url,
+        headers={"api-key": api_key, "Accept": "application/json"},
+        method="GET",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=18) as response:
+            payload = response.read(5 * 1024 * 1024 + 1)
+        if len(payload) > 5 * 1024 * 1024:
+            raise RuntimeError("The Bible provider response was too large.")
+        result = json.loads(payload.decode("utf-8"))
+        return result.get("data", result)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(1000).decode("utf-8", "replace")
+        app.logger.warning("Bible provider returned HTTP %s: %s", exc.code, detail[:300])
+        if exc.code in (401, 403):
+            raise RuntimeError("Bible provider rejected the API key or this translation is not licensed for the account.")
+        if exc.code == 404:
+            raise RuntimeError("The requested Bible book or chapter is not available.")
+        raise RuntimeError("Bible provider request failed (HTTP %s)." % exc.code)
+    except (urllib.error.URLError, TimeoutError):
+        raise RuntimeError("Could not reach the online Bible provider. Please try again.")
+
+
+@app.get("/devotional-centre/bible")
+def devotional_bible_reader():
+    return render_template(
+        "devotional_bible.html",
+        bible_provider_configured=bool((os.environ.get("API_BIBLE_API_KEY") or "").strip()),
+    )
+
+
+@app.get("/api/devotional-bible/bibles")
+def devotional_bible_bibles():
+    try:
+        data = _bible_api_request("bibles", {"language": "eng", "include-full-details": "true"})
+        return jsonify({"data": data})
+    except Exception as exc:
+        app.logger.info("Bible translations could not be loaded: %s", exc)
+        return jsonify({"error": str(exc)}), 503
+
+
+@app.get("/api/devotional-bible/books")
+def devotional_bible_books():
+    bible_id = (request.args.get("bible_id") or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,40}", bible_id):
+        return jsonify({"error": "Choose a valid Bible translation."}), 400
+    try:
+        data = _bible_api_request("bibles/" + bible_id + "/books")
+        return jsonify({"data": data})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 503
+
+
+@app.get("/api/devotional-bible/chapters")
+def devotional_bible_chapters():
+    bible_id = (request.args.get("bible_id") or "").strip()
+    book_id = (request.args.get("book_id") or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,40}", bible_id) or not re.fullmatch(r"[A-Za-z0-9.]{2,16}", book_id):
+        return jsonify({"error": "Choose a valid Bible book."}), 400
+    try:
+        data = _bible_api_request("bibles/" + bible_id + "/books/" + book_id + "/chapters")
+        return jsonify({"data": data})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 503
+
+
+@app.get("/api/devotional-bible/chapter")
+def devotional_bible_chapter():
+    bible_id = (request.args.get("bible_id") or "").strip()
+    chapter_id = (request.args.get("chapter_id") or "").strip()
+    if not re.fullmatch(r"[A-Za-z0-9-]{8,40}", bible_id) or not re.fullmatch(r"[A-Za-z0-9.]{3,24}", chapter_id):
+        return jsonify({"error": "Choose a valid Bible chapter."}), 400
+    try:
+        data = _bible_api_request(
+            "bibles/" + bible_id + "/chapters/" + chapter_id,
+            {
+                "content-type": "text",
+                "include-verse-numbers": "true",
+                "include-notes": "false",
+                "include-titles": "true",
+            },
+        )
+        return jsonify({"data": data})
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 503
+
+
 @app.post("/admin/devotional-centre/upload/init")
 @page_login_required
 def admin_devotional_upload_init():
