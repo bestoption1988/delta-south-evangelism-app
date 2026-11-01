@@ -12442,6 +12442,100 @@ def admin_upload_csb_bible():
     return redirect(url_for("devotional_bible_reader"))
 
 
+
+@app.post("/admin/devotional-centre/bible/upload/init")
+@page_login_required
+def admin_csb_upload_init():
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    try:
+        data = request.get_json(silent=True) or {}
+        filename = secure_filename(str(data.get("filename") or "csb-bible.pdf"))
+        size = int(data.get("size") or 0)
+        if not filename.lower().endswith(".pdf"):
+            return jsonify({"error": "Please select a PDF file."}), 400
+        if size <= 0 or size > 30 * 1024 * 1024:
+            return jsonify({"error": "PDF size must be between 1 byte and 30 MB."}), 400
+        upload_id = secrets.token_hex(20)
+        upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        path = os.path.join(upload_dir, upload_id + ".csb.part")
+        meta = os.path.join(upload_dir, upload_id + ".csb.json")
+        with open(path, "wb"):
+            pass
+        with open(meta, "w", encoding="utf-8") as f:
+            json.dump({"size": size, "received": 0}, f)
+        return jsonify({"upload_id": upload_id, "chunk_size": 2 * 1024 * 1024})
+    except Exception as exc:
+        app.logger.exception("Could not initialise CSB PDF upload")
+        return jsonify({"error": "Could not initialise PDF upload: " + str(exc)[:180]}), 500
+
+
+@app.post("/admin/devotional-centre/bible/upload/<upload_id>/chunk")
+@page_login_required
+def admin_csb_upload_chunk(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    request.max_content_length = 3 * 1024 * 1024
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    path = os.path.join(upload_dir, upload_id + ".csb.part")
+    meta = os.path.join(upload_dir, upload_id + ".csb.json")
+    try:
+        with open(meta, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        offset = int(request.headers.get("X-Chunk-Offset", "-1"))
+        chunk = request.get_data(cache=False)
+        if not chunk or len(chunk) > 2 * 1024 * 1024:
+            return jsonify({"error": "PDF part must be between 1 byte and 2 MB."}), 400
+        if offset != int(state.get("received", 0)) or os.path.getsize(path) != offset:
+            return jsonify({"error": "Upload position mismatch. Please restart the PDF upload."}), 409
+        if offset + len(chunk) > int(state["size"]):
+            return jsonify({"error": "PDF part exceeds the declared file size."}), 400
+        with open(path, "ab") as output:
+            output.write(chunk)
+        state["received"] = offset + len(chunk)
+        with open(meta, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        return jsonify({"received": state["received"], "size": state["size"]})
+    except FileNotFoundError:
+        return jsonify({"error": "PDF upload session expired. Please start again."}), 404
+    except Exception as exc:
+        app.logger.exception("CSB PDF chunk upload failed")
+        return jsonify({"error": "PDF part upload failed: " + str(exc)[:180]}), 500
+
+
+@app.post("/admin/devotional-centre/bible/upload/<upload_id>/complete")
+@page_login_required
+def admin_csb_upload_complete(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    path = os.path.join(upload_dir, upload_id + ".csb.part")
+    meta = os.path.join(upload_dir, upload_id + ".csb.json")
+    try:
+        with open(meta, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        if int(state.get("received", 0)) != int(state.get("size", -1)):
+            return jsonify({"error": "PDF upload is incomplete."}), 400
+        with open(path, "rb") as f:
+            if f.read(5) != b"%PDF-":
+                return jsonify({"error": "The uploaded file is not a valid PDF."}), 400
+        _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, open(path, "rb").read(), "application/pdf")
+        for item in (path, meta):
+            try:
+                os.remove(item)
+            except OSError:
+                pass
+        return jsonify({"success": True, "message": "CSB Bible uploaded successfully."})
+    except Exception as exc:
+        app.logger.exception("Could not save completed CSB Bible PDF")
+        return jsonify({"error": "Could not save CSB PDF to Object Storage: " + str(exc)[:200]}), 503
+
+
 @app.get("/devotional-centre/bible/file")
 def devotional_bible_file():
     try:
