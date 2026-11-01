@@ -13,7 +13,7 @@
 {% for x in items %}
 {% set p=x.payload %}
 <section class="book-section">
-  <div class="book-heading"><span class="book-number">{{ x.item_number }}</span>{% if x.title and x.title|string|lower not in ('item ' ~ x.item_number|string)|lower %}<h2 class="book-title">{{ x.title }}</h2>{% endif %}</div>
+  <div class="book-heading"><span class="book-number">{{ x.item_number }}</span>{% if x.title and not (x.title|string|lower).startswith('item ') %}<h2 class="book-title">{{ x.title }}</h2>{% endif %}</div>
   {% if p.get('heading') %}<h3 class="book-subheading">{{ p.get('heading') }}</h3>{% endif %}
   {% if p.get('content') %}
     <div class="book-content">{{ p.get('content') }}</div>
