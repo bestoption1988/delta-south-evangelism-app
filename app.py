@@ -11780,9 +11780,6 @@ def _dc_admin_required():
 
 def _dc_s3_client():
     """Return an S3-compatible client for Naijacloud Object Storage."""
-    import boto3
-    from botocore.config import Config
-
     endpoint = (os.environ.get("S3_ENDPOINT") or "").strip().rstrip("/")
     region = (os.environ.get("S3_REGION") or "").strip()
     bucket = (os.environ.get("S3_BUCKET") or "").strip()
@@ -11803,9 +11800,10 @@ def _dc_s3_client():
     return boto3.client(
         "s3", endpoint_url=endpoint, region_name=region,
         aws_access_key_id=access_key, aws_secret_access_key=secret_key,
-        config=Config(signature_version="s3v4",
-                      s3={"addressing_style": "path"},
-                      retries={"max_attempts": 4, "mode": "standard"})
+        config=BotoConfig(signature_version="s3v4",
+                          s3={"addressing_style": "path"},
+                          connect_timeout=20, read_timeout=180,
+                          retries={"max_attempts": 3, "mode": "standard"})
     )
 
 
