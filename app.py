@@ -12418,6 +12418,7 @@ def devotional_bible_reader():
 @app.post("/admin/devotional-centre/bible/upload")
 @page_login_required
 def admin_upload_csb_bible():
+    request.max_content_length = 30 * 1024 * 1024
     if not _dc_admin_required():
         return "Administrator access required.", 403
     upload = request.files.get("bible_pdf")
