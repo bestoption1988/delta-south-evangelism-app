@@ -12340,11 +12340,10 @@ def devotional_centre_collection(collection_slug):
     collection, title = spec
     query = (request.args.get("q") or "").strip()[:120]
     page = max(1, request.args.get("page", 1, type=int) or 1)
-    # Communion resources are presented as a continuous book: one complete
-    # section per reader page, in true numeric item order. Other collections
-    # retain the normal searchable catalogue layout.
+    # Communion is rendered as one continuous, scrollable book.
+    # Other collections retain the normal paginated catalogue layout.
     book_mode = collection in ("communion_english", "communion_yoruba")
-    per_page = 1 if book_mode else 40
+    per_page = 1000 if book_mode else 40
     where = "collection=? AND published=1"
     args = [collection]
     if query:
@@ -12362,7 +12361,7 @@ def devotional_centre_collection(collection_slug):
     rows = db().execute(
         "SELECT resource_id,item_number,title,content_json,audio_path,author_path FROM devotional_resources WHERE " +
         where + " ORDER BY " + ordering + " LIMIT ? OFFSET ?",
-        tuple(args + [per_page, (page - 1) * per_page])
+        tuple(args + [per_page, 0 if book_mode else (page - 1) * per_page])
     ).fetchall()
     items = []
     for row in rows:
