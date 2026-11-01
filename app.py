@@ -12448,7 +12448,7 @@ def devotional_centre_collection(collection_slug):
     # Communion is rendered as one continuous, scrollable book.
     # Other collections retain the normal paginated catalogue layout.
     book_mode = collection in ("communion_english", "communion_yoruba")
-    per_page = 1000 if book_mode else 40
+    per_page = 1000 if book_mode else (100 if collection == "bible_verses" else 40)
     where = "collection=? AND published=1"
     args = [collection]
     if query:
