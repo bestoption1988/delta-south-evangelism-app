@@ -12334,12 +12334,115 @@ def devotional_centre_home():
                            counts=counts, daily=daily)
 
 
+# Starter Scripture index: one representative passage from every book of the
+# 66-book Protestant Bible. KJV wording is public domain; existing imported
+# devotional verses are preserved and these records are inserted only once.
+_DEVOTIONAL_66_BOOK_VERSES = [
+    ("Genesis", "1:1", "In the beginning God created the heaven and the earth."),
+    ("Exodus", "14:14", "The LORD shall fight for you, and ye shall hold your peace."),
+    ("Leviticus", "19:18", "Thou shalt love thy neighbour as thyself: I am the LORD."),
+    ("Numbers", "6:24", "The LORD bless thee, and keep thee."),
+    ("Deuteronomy", "31:6", "Be strong and of a good courage, fear not... for the LORD thy God, he it is that doth go with thee."),
+    ("Joshua", "1:9", "Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest."),
+    ("Judges", "6:12", "The LORD is with thee, thou mighty man of valour."),
+    ("Ruth", "1:16", "Whither thou goest, I will go; and where thou lodgest, I will lodge: thy people shall be my people, and thy God my God."),
+    ("1 Samuel", "16:7", "Man looketh on the outward appearance, but the LORD looketh on the heart."),
+    ("2 Samuel", "22:2", "The LORD is my rock, and my fortress, and my deliverer."),
+    ("1 Kings", "8:23", "LORD God of Israel, there is no God like thee, in heaven above, or on earth beneath."),
+    ("2 Kings", "6:16", "Fear not: for they that be with us are more than they that be with them."),
+    ("1 Chronicles", "16:11", "Seek the LORD and his strength, seek his face continually."),
+    ("2 Chronicles", "7:14", "If my people, which are called by my name, shall humble themselves, and pray, and seek my face... then will I hear from heaven."),
+    ("Ezra", "7:10", "Ezra had prepared his heart to seek the law of the LORD, and to do it, and to teach in Israel statutes and judgments."),
+    ("Nehemiah", "8:10", "The joy of the LORD is your strength."),
+    ("Esther", "4:14", "Who knoweth whether thou art come to the kingdom for such a time as this?"),
+    ("Job", "19:25", "For I know that my redeemer liveth, and that he shall stand at the latter day upon the earth."),
+    ("Psalms", "23:1", "The LORD is my shepherd; I shall not want."),
+    ("Proverbs", "3:5", "Trust in the LORD with all thine heart; and lean not unto thine own understanding."),
+    ("Ecclesiastes", "3:1", "To every thing there is a season, and a time to every purpose under the heaven."),
+    ("Song of Solomon", "8:7", "Many waters cannot quench love, neither can the floods drown it."),
+    ("Isaiah", "40:31", "They that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles."),
+    ("Jeremiah", "29:11", "For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil."),
+    ("Lamentations", "3:23", "They are new every morning: great is thy faithfulness."),
+    ("Ezekiel", "36:26", "A new heart also will I give you, and a new spirit will I put within you."),
+    ("Daniel", "2:20", "Blessed be the name of God for ever and ever: for wisdom and might are his."),
+    ("Hosea", "6:6", "For I desired mercy, and not sacrifice; and the knowledge of God more than burnt offerings."),
+    ("Joel", "2:13", "Rend your heart, and not your garments, and turn unto the LORD your God."),
+    ("Amos", "5:24", "Let judgment run down as waters, and righteousness as a mighty stream."),
+    ("Obadiah", "1:15", "The day of the LORD is near upon all the heathen."),
+    ("Jonah", "2:2", "I cried by reason of mine affliction unto the LORD, and he heard me."),
+    ("Micah", "6:8", "What doth the LORD require of thee, but to do justly, and to love mercy, and to walk humbly with thy God?"),
+    ("Nahum", "1:7", "The LORD is good, a strong hold in the day of trouble; and he knoweth them that trust in him."),
+    ("Habakkuk", "2:4", "The just shall live by his faith."),
+    ("Zephaniah", "3:17", "The LORD thy God in the midst of thee is mighty; he will save, he will rejoice over thee with joy."),
+    ("Haggai", "2:9", "The glory of this latter house shall be greater than of the former, saith the LORD of hosts."),
+    ("Zechariah", "4:6", "Not by might, nor by power, but by my spirit, saith the LORD of hosts."),
+    ("Malachi", "3:10", "Bring ye all the tithes into the storehouse... and prove me now herewith, saith the LORD of hosts."),
+    ("Matthew", "6:33", "Seek ye first the kingdom of God, and his righteousness; and all these things shall be added unto you."),
+    ("Mark", "10:27", "With God all things are possible."),
+    ("Luke", "1:37", "For with God nothing shall be impossible."),
+    ("John", "3:16", "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life."),
+    ("Acts", "1:8", "Ye shall receive power, after that the Holy Ghost is come upon you: and ye shall be witnesses unto me."),
+    ("Romans", "8:28", "All things work together for good to them that love God, to them who are the called according to his purpose."),
+    ("1 Corinthians", "13:13", "And now abideth faith, hope, charity, these three; but the greatest of these is charity."),
+    ("2 Corinthians", "5:7", "For we walk by faith, not by sight."),
+    ("Galatians", "5:22", "The fruit of the Spirit is love, joy, peace, longsuffering, gentleness, goodness, faith."),
+    ("Ephesians", "2:10", "For we are his workmanship, created in Christ Jesus unto good works."),
+    ("Philippians", "4:13", "I can do all things through Christ which strengtheneth me."),
+    ("Colossians", "3:23", "And whatsoever ye do, do it heartily, as to the Lord, and not unto men."),
+    ("1 Thessalonians", "5:16", "Rejoice evermore."),
+    ("2 Thessalonians", "3:3", "The Lord is faithful, who shall stablish you, and keep you from evil."),
+    ("1 Timothy", "4:12", "Be thou an example of the believers, in word, in conversation, in charity, in spirit, in faith, in purity."),
+    ("2 Timothy", "3:16", "All scripture is given by inspiration of God, and is profitable for doctrine, for reproof, for correction, for instruction in righteousness."),
+    ("Titus", "2:11", "For the grace of God that bringeth salvation hath appeared to all men."),
+    ("Philemon", "1:6", "That the communication of thy faith may become effectual by the acknowledging of every good thing which is in you in Christ Jesus."),
+    ("Hebrews", "11:1", "Now faith is the substance of things hoped for, the evidence of things not seen."),
+    ("James", "1:5", "If any of you lack wisdom, let him ask of God, that giveth to all men liberally."),
+    ("1 Peter", "5:7", "Casting all your care upon him; for he careth for you."),
+    ("2 Peter", "3:18", "But grow in grace, and in the knowledge of our Lord and Saviour Jesus Christ."),
+    ("1 John", "4:19", "We love him, because he first loved us."),
+    ("2 John", "1:6", "And this is love, that we walk after his commandments."),
+    ("3 John", "1:4", "I have no greater joy than to hear that my children walk in truth."),
+    ("Jude", "1:24", "Now unto him that is able to keep you from falling, and to present you faultless before the presence of his glory with exceeding joy."),
+    ("Revelation", "21:4", "And God shall wipe away all tears from their eyes; and there shall be no more death, neither sorrow, nor crying, neither shall there be any more pain.")
+]
+
+
+def _dc_seed_66_book_verses():
+    """Add one starter Scripture from each Bible book without replacing imports."""
+    for index, (book, reference, verse) in enumerate(_DEVOTIONAL_66_BOOK_VERSES, 1):
+        payload = {
+            "book": book,
+            "reference": book + " " + reference,
+            "verse": verse,
+            "firstline": verse,
+            "content": verse,
+            "translation": "KJV"
+        }
+        db().execute(
+            """INSERT INTO devotional_resources
+               (resource_id, collection, item_number, title, content_json,
+                search_text, audio_path, author_path, published)
+               VALUES (?, 'bible_verses', ?, ?, ?, ?, '', '', 1)
+               ON CONFLICT(resource_id) DO NOTHING""",
+            (
+                "bible66:" + str(index).zfill(2),
+                str(index).zfill(3),
+                book + " " + reference,
+                json.dumps(payload, ensure_ascii=False),
+                book + " " + reference + " " + verse
+            )
+        )
+    db().commit()
+
+
 @app.get("/devotional-centre/<collection_slug>")
 def devotional_centre_collection(collection_slug):
     spec = _DEVOTIONAL_COLLECTIONS.get(collection_slug)
     if not spec:
         return "Devotional collection not found.", 404
     collection, title = spec
+    if collection == "bible_verses":
+        _dc_seed_66_book_verses()
     query = (request.args.get("q") or "").strip()[:120]
     page = max(1, request.args.get("page", 1, type=int) or 1)
     # Communion is rendered as one continuous, scrollable book.
