@@ -797,7 +797,7 @@
 #ds-devotion-dialog{width:min(92vw,650px);max-height:82vh;overflow:auto;border:0;border-radius:14px;padding:22px;color:#202b40;box-shadow:0 12px 50px #0005}
 #ds-devotion-dialog::backdrop{background:#061331b8}
 #ds-devotion-dialog h2{color:#102b60;overflow-wrap:anywhere}
-#ds-devotion-dialog .ds-devotion-body{white-space:pre-line;overflow-wrap:anywhere;line-height:1.8}
+#ds-devotion-dialog .ds-devotion-body{white-space:pre-line;overflow-wrap:anywhere;line-height:1.8}#ds-devotion-dialog .ds-devotion-body audio{display:block;width:100%;max-width:520px;min-height:42px;margin:12px 0 20px}#ds-devotion-dialog .ds-devotion-body .daily-hymn-audio{margin:18px 0;padding:12px;background:#f4f7fa;border-radius:10px}
 #ds-devotion-dialog .ds-devotion-close{min-height:44px;border:0;border-radius:8px;padding:10px 18px;background:#086b43;color:white;font-weight:700;cursor:pointer}
 @keyframes ds-devotion-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 @media(max-width:650px){ #daily-devotion .daily-devotion-line{flex-wrap:wrap;gap:4px;padding:7px 10px}#daily-devotion .daily-devotion-label,#daily-devotion .daily-devotion-reference{font-size:13px}#daily-devotion .daily-devotion-quote-window{flex-basis:100%}#daily-devotion .daily-devotion-quote-button{font-size:14px}}
@@ -812,7 +812,7 @@
  const items=cards.map(function(card,index){
   const summary=card.querySelector("summary"),full=card.querySelector(".daily-devotion-full");
   const title=summary&&summary.querySelector("strong"),quote=summary&&summary.querySelector("q");
-  return{kind:index===0?"scripture":"hymn",title:title?title.textContent.trim():"",quote:quote?quote.textContent.trim():"",full:full?full.innerText.trim():""};
+  return{kind:index===0?"scripture":"hymn",title:title?title.textContent.trim():"",quote:quote?quote.textContent.trim():"",full:full?full.innerHTML.trim():""};
  });
  const ticker=document.createElement("div");ticker.className="daily-devotion-ticker";
  ticker.setAttribute("aria-label","Scripture and hymn of the day. Select a quotation to read the full text.");
@@ -821,7 +821,7 @@
  const dialogBody=document.createElement("div");dialogBody.className="ds-devotion-body";
  const close=document.createElement("button");close.type="button";close.className="ds-devotion-close";close.textContent="Close";
  close.addEventListener("click",function(){dialog.close()});dialog.append(dialogTitle,dialogBody,close);document.body.appendChild(dialog);
- function openItem(item){dialogTitle.textContent=item.kind==="scripture"?"SCRIPTURE OF THE DAY: "+item.title:(item.title||"HYMN OF THE DAY");dialogBody.textContent=item.full||item.quote||"Full text is not available.";if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","")}
+ function openItem(item){dialogTitle.textContent=item.kind==="scripture"?"SCRIPTURE OF THE DAY: "+item.title:(item.title||"HYMN OF THE DAY");dialogBody.innerHTML=item.full||item.quote||"Full text is not available.";if(typeof dialog.showModal==="function")dialog.showModal();else dialog.setAttribute("open","")}
  function createLine(item){
   const line=document.createElement("div");line.className="daily-devotion-line";
   const label=document.createElement("span");label.className="daily-devotion-label";
