@@ -91,6 +91,16 @@
   }catch(err){showUpload(0,"Upload stopped: "+(err&&err.message?err.message:String(err)));label.classList.add("error");}
   finally{button.disabled=false;button.textContent="Start Full Import";}
  });}
+ list.addEventListener("click",async function(ev){
+  const btn=ev.target.closest("[data-retry-job]");if(!btn)return;
+  btn.disabled=true;btn.textContent="Verifying saved ZIP…";
+  try{
+   const response=await fetch("/admin/devotional-centre/jobs/"+encodeURIComponent(btn.dataset.retryJob)+"/retry",{method:"POST"});
+   const data=await response.json().catch(()=>({}));
+   if(!response.ok)throw new Error(data.error||"Retry request failed.");
+   btn.textContent="Retry queued";refresh();
+  }catch(err){alert(err.message||String(err));btn.disabled=false;btn.textContent="Verify ZIP & Retry Import";}
+ });
  async function refresh(){for(const el of jobs){try{const r=await fetch("/admin/devotional-centre/jobs/"+encodeURIComponent(el.dataset.job),{cache:"no-store"});if(!r.ok)continue;const j=await r.json();const status=el.querySelector(".status");status.textContent=j.status;status.className="status "+j.status;el.querySelector(".job-message").textContent=j.message;el.querySelector(".bar span").style.width=(j.progress||0)+"%";el.querySelector(".percent").textContent=(j.progress||0)+"%";el.querySelector(".records").textContent="Records: "+(j.imported_records||0);el.querySelector(".assets").textContent="Media files: "+(j.uploaded_assets||0);}catch(e){}}}
  if(jobs.length){refresh();setInterval(refresh,2500);}
 })();
