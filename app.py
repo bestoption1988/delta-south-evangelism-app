@@ -2930,6 +2930,36 @@ def _daily_scripture_and_hymn():
         else:
             hymn = {}
 
+        # Reuse the tune already stored with the matching Devotional Centre hymn.
+        # The daily hymn JSON remains the source of the displayed lyrics.
+        if hymn:
+            try:
+                hymn_title = str(hymn.get("title") or "").strip()
+                hymn_number_match = re.search(r"(\\d+)", hymn_title)
+                hymn_number = hymn_number_match.group(1) if hymn_number_match else ""
+                hymn_row = db().execute(
+                    """SELECT audio_path,content_json FROM devotional_resources
+                       WHERE published=1 AND collection='english_hymns'
+                         AND (LOWER(title)=LOWER(?) OR item_number=?)
+                       ORDER BY CASE WHEN LOWER(title)=LOWER(?) THEN 0 ELSE 1 END
+                       LIMIT 1""",
+                    (hymn_title, hymn_number, hymn_title)
+                ).fetchone()
+                if hymn_row:
+                    hymn_resource = dict(hymn_row)
+                    hymn_payload = json.loads(hymn_resource.get("content_json") or "{}")
+                    hymn["audio_url"] = _dc_signed(
+                        hymn_resource.get("audio_path") or hymn_payload.get("musicFilePath")
+                    )
+                    hymn["other_tunes"] = []
+                    for tune in hymn_payload.get("otherTunes") or []:
+                        if isinstance(tune, dict) and tune.get("musicFilePath"):
+                            tune_copy = dict(tune)
+                            tune_copy["audio_url"] = _dc_signed(tune_copy.get("musicFilePath"))
+                            if tune_copy["audio_url"]:
+                                hymn["other_tunes"].append(tune_copy)
+            except Exception:
+                app.logger.exception("Could not attach the Devotional Centre hymn tune to the daily hymn")
         return {"date": today.isoformat(), "verse": verse, "hymn": hymn}
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         app.logger.exception("Daily Scripture and Hymn collection could not be loaded")
