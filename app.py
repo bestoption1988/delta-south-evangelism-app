@@ -11590,14 +11590,13 @@ def _ml_prepare_item(row):
 
 
 def _ml_public_document(media_id):
-    """Find a published document by catalogue ID."""
+    """Find any published media-library item by catalogue ID."""
     rows = _ml_supabase_request(
         "GET",
         params={
             "select": "id,title,description,storage_path,mime_type,media_type,published",
             "id": f"eq.{media_id}",
             "published": "eq.true",
-            "media_type": "eq.document",
             "limit": "1",
         },
     )
@@ -11708,7 +11707,10 @@ color:white;border-radius:8px;text-decoration:none}}
                 headers={"X-Content-Type-Options": "nosniff"},
             )
 
-        if mime not in {"application/pdf", "text/plain", "text/markdown"} and not mime.startswith("image/"):
+        if not (
+            mime in {"application/pdf", "text/plain", "text/markdown"}
+            or mime.startswith(("image/", "audio/", "video/"))
+        ):
             abort(415)
 
         data = _ml_document_bytes(row)
@@ -11717,6 +11719,7 @@ color:white;border-radius:8px;text-decoration:none}}
             mimetype=mime,
             as_attachment=False,
             download_name=filename,
+            conditional=True,
         )
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Cache-Control"] = "private, no-store"
