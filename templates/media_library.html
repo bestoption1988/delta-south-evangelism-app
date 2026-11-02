@@ -95,8 +95,10 @@ main{padding:22px 16px 55px}
 {% endif %}
 <div class="card-body">
 <div class="type-row"><span class="pill">{{ 'VIDEO' if is_video else 'AUDIO' if is_audio else 'PDF' if is_pdf else 'IMAGE' if is_image else 'WORD DOCUMENT' if is_word else 'TEXT' if is_text else 'BOOK / RESOURCE' }}</span><span class="pill gold">{{ collection_title }}</span></div>
+{% if not is_image %}
 <h3>{{ x.title }}</h3>
 {% if x.description %}<p class="description">{{ x.description }}</p>{% else %}<p class="description">A resource from the Methodist Church Nigeria, Delta South Diocese.</p>{% endif %}
+{% endif %}
 {% if is_audio and x.signed_url %}
 <audio class="player" controls preload="none" src="{{ x.signed_url }}"></audio>
 {% elif is_video and x.signed_url %}
