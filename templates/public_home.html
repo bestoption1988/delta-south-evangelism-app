@@ -322,14 +322,9 @@
       {% for photo in homepage_gallery_items %}
       <figure class="photo-gallery-slide{% if loop.first %} is-active{% endif %}" data-gallery-slide aria-hidden="{{ 'false' if loop.first else 'true' }}">
         <button class="photo-gallery-open" type="button" data-gallery-open aria-label="View {{ photo.title }}">
-          <img src="{{ url_for('media_document_view', media_id=photo.id) }}"
+          <img src="{{ url_for('media_document_view', media_id=photo.id, raw=1) }}"
                alt="{{ photo.title }}" loading="{{ 'eager' if loop.first else 'lazy' }}">
         </button>
-        <figcaption>
-          <strong>{{ photo.title }}</strong>
-          {% if photo.description %}<span>{{ photo.description }}</span>{% endif %}
-          <small>{{ loop.index }} of {{ homepage_gallery_items|length }}</small>
-        </figcaption>
       </figure>
       {% endfor %}
     </div>
