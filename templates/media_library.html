@@ -81,7 +81,7 @@ main{padding:22px 16px 55px}
 {% if is_image %}
 <div class="cover image-cover"><img src="{{ url_for('media_document_view', media_id=x.id) }}" alt="{{ x.title }}" loading="lazy"></div>
 {% elif is_pdf %}
-<div class="pdf-cover" data-pdf-url="{{ url_for('media_document_view', media_id=x.id) }}"><canvas></canvas><div class="pdf-preview-loading">Preparing document cover…</div></div>
+<div class="pdf-cover" data-pdf-url="{{ url_for('media_document_view', media_id=x.id, raw=1) }}"><canvas></canvas><div class="pdf-preview-loading">Preparing document cover…</div></div>
 {% elif is_video %}
 <div class="cover video"><div class="cover-inner"><div class="cover-brand">MCN Delta South · Video</div><div class="cover-icon">▶</div><div class="cover-title">{{ x.title }}</div><div class="cover-subtitle">VIDEO MESSAGE · WATCH ON DEMAND</div><div class="cover-footer">Worship · Teaching · Mission</div></div></div>
 {% elif is_audio %}
