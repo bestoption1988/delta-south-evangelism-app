@@ -11714,6 +11714,54 @@ color:white;border-radius:8px;text-decoration:none}}
             abort(415)
 
         data = _ml_document_bytes(row)
+        raw_url = url_for("media_document_view", media_id=media_id, raw="1")
+        download_url = url_for("media_document_download", media_id=media_id)
+        title = escape(row.get("title") or filename)
+
+        # A dedicated responsive viewer prevents phones from opening oversized
+        # source images directly and gives PDFs an in-page reader.
+        if request.args.get("raw") != "1" and mime.startswith("image/"):
+            html = f"""<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title><style>
+*{{box-sizing:border-box}}html,body{{margin:0;width:100%;height:100%;background:#101522;color:#fff;font:15px system-ui}}
+header{{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:#10285a}}
+header a{{color:#fff;text-decoration:none;font-weight:700}}main{{height:calc(100dvh - 56px);display:flex;align-items:center;justify-content:center;padding:10px}}
+img{{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}}
+</style></head><body><header><a href="/media-library">← Media Library</a><a href="{download_url}">Download</a></header>
+<main><img src="{raw_url}" alt="{title}"></main></body></html>"""
+            return Response(html, mimetype="text/html", headers={"Cache-Control":"no-store"})
+
+        if request.args.get("raw") != "1" and mime == "application/pdf":
+            html = f"""<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title><style>
+*{{box-sizing:border-box}}body{{margin:0;background:#eef2f7;color:#172b4d;font:14px system-ui}}
+header{{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;background:#10285a;color:#fff}}
+header a,button{{color:#fff;background:#176b50;border:0;border-radius:7px;padding:9px 12px;text-decoration:none;font-weight:700}}
+#pages{{max-width:900px;margin:14px auto;padding:0 10px}}canvas{{display:block;width:100%;height:auto;margin:0 auto 14px;background:#fff;box-shadow:0 3px 14px #0002}}
+#status{{text-align:center;padding:16px}} 
+</style></head><body><header><a href="/media-library">← Media Library</a><span>{title}</span><a href="{download_url}">Download</a></header>
+<div id="status">Loading PDF…</div><main id="pages"></main>
+<script type="module">
+const status=document.getElementById('status'),pages=document.getElementById('pages');
+try{{
+ const pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs');
+ pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+ const pdf=await pdfjs.getDocument('{raw_url}').promise;status.textContent=pdf.numPages+' page(s)';
+ for(let n=1;n<=pdf.numPages;n++){{
+  const page=await pdf.getPage(n),base=page.getViewport({{scale:1}});
+  const scale=Math.min((window.innerWidth-20)/base.width,1.6),vp=page.getViewport({{scale}});
+  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),ratio=Math.min(devicePixelRatio||1,2);
+  canvas.width=Math.floor(vp.width*ratio);canvas.height=Math.floor(vp.height*ratio);
+  canvas.style.width=vp.width+'px';canvas.style.maxWidth='100%';canvas.style.height='auto';
+  ctx.setTransform(ratio,0,0,ratio,0,0);pages.appendChild(canvas);
+  await page.render({{canvasContext:ctx,viewport:vp}}).promise;
+ }}
+}}catch(e){{status.textContent='PDF preview could not load. Use Download to open this document.';}}
+</script></body></html>"""
+            return Response(html, mimetype="text/html", headers={"Cache-Control":"no-store"})
+
         response = send_file(
             io.BytesIO(data),
             mimetype=mime,
