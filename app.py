@@ -3026,6 +3026,24 @@ def public_home():
     except Exception:
         app.logger.exception("Homepage Supabase media preview could not be loaded")
 
+    # Keep published videos available for the public homepage, independent
+    # of how many newer images or documents are in the media catalogue.
+    homepage_video_items = []
+    try:
+        video_rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
+                "published": "eq.true",
+                "media_type": "eq.video",
+                "order": "created_at.desc",
+                "limit": "3",
+            },
+        )
+        homepage_video_items = [dict(item) for item in video_rows]
+    except Exception:
+        app.logger.exception("Homepage published videos could not be loaded")
+
     # The public photo gallery includes every published image in the catalogue.
     try:
         gallery_rows = _ml_supabase_request(
@@ -3136,6 +3154,7 @@ def public_home():
         homepage_events=events,
         homepage_churches=churches,
         homepage_media_items=homepage_media_items,
+        homepage_video_items=homepage_video_items,
         homepage_gallery_items=homepage_gallery_items,
         daily_devotion=daily_devotion,
         birthday_celebration_members=birthday_celebration_members
