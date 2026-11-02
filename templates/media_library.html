@@ -79,7 +79,7 @@ main{padding:22px 16px 55px}
 {% set is_text = x.mime_type in ['text/plain','text/markdown'] %}
 <article class="resource-card">
 {% if is_image %}
-<div class="cover image-cover"><img src="{{ url_for('media_document_view', media_id=x.id) }}" alt="{{ x.title }}" loading="lazy"></div>
+<div class="cover image-cover"><img src="{{ url_for('media_document_view', media_id=x.id, raw=1) }}" alt="{{ x.title }}" loading="lazy"></div>
 {% elif is_pdf %}
 <div class="pdf-cover" data-pdf-url="{{ url_for('media_document_view', media_id=x.id, raw=1) }}"><canvas></canvas><div class="pdf-preview-loading">Preparing document cover…</div></div>
 {% elif is_video %}
