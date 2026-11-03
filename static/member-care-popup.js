@@ -1630,7 +1630,29 @@ async function markMemberCareRead(threadId) {
 
     style.textContent = `
       #dsMemberCareFloat {
-        position: relative !important;
+        position: fixed !important;
+        right: 16px !important;
+        bottom: calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+        z-index: 99990 !important;
+        max-width: calc(100vw - 32px) !important;
+        box-sizing: border-box !important;
+      }
+
+      @media (max-width: 600px) {
+        #dsMemberCareFloat {
+          right: 12px !important;
+          bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: calc(100vw - 24px) !important;
+          height: 48px !important;
+          min-height: 48px !important;
+          padding: 0 16px !important;
+          border-radius: 24px !important;
+          font-size: 17px !important;
+          line-height: 1 !important;
+          white-space: nowrap !important;
+        }
       }
 
       #dsMemberCareUnread {
