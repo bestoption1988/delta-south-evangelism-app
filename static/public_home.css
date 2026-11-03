@@ -374,3 +374,42 @@ img, video, iframe {
     padding-left: 0;
   }
 }
+
+
+/* Final mobile navigation and embedded media safeguards */
+#menuToggle { cursor:pointer; min-height:44px; }
+#menuToggle:focus-visible,
+.navbar a:focus-visible {
+  outline:3px solid var(--gold);
+  outline-offset:2px;
+}
+.youtube-player iframe,
+.youtube-player video,
+.live-panel iframe,
+.live-panel video,
+#published-media-preview video {
+  display:block;
+  width:100%;
+  max-width:100%;
+  aspect-ratio:16/9;
+  border:0;
+}
+#published-media-preview img {
+  display:block;
+  width:100%;
+  max-height:340px;
+  object-fit:contain;
+  background:#eef2f7;
+  border-radius:10px;
+}
+#published-media-preview,
+.sermon-entry,
+.media-card { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:700px) {
+  .navbar { padding-inline:10px; }
+  #menuToggle { width:100%; text-align:left; }
+  .navbar #navLinks.open { max-height:70vh; overflow-y:auto; overscroll-behavior:contain; }
+  .navbar a { min-height:42px; }
+  .youtube-player iframe,
+  .live-panel iframe { min-height:210px; }
+}
