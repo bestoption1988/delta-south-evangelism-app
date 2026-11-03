@@ -534,7 +534,40 @@ private fun NativeDioceseApp() {
                     Text("Payment history", style = MaterialTheme.typography.titleMedium)
                     RecordList(paymentRows, listOf("reference", "status", "amount", "currency", "purpose", "donor_name", "circuit", "church_name", "created_at", "paid_at"))
                     Text("Payment reconciliation", style = MaterialTheme.typography.titleMedium)
-                    RecordList(reconciliationRows, listOf("reference", "payment_status", "payment_amount", "currency", "reconciliation_status", "income_id", "income_amount", "income_date"))
+                    Text("Only payments already confirmed as paid by the server can be reconciled into church income. Pending payments cannot be marked successful from this screen.")
+                    if (reconciliationRows.isEmpty()) {
+                        Text("No reconciliation records loaded.")
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            reconciliationRows.forEach { payment ->
+                                ElevatedCard(Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(payment["reference"]?.toString() ?: "Payment", style = MaterialTheme.typography.titleSmall)
+                                        Text("Status: " + (payment["payment_status"] ?: "Unknown"))
+                                        Text("Amount: " + (payment["payment_amount"] ?: "") + " " + (payment["currency"] ?: ""))
+                                        Text("Donor: " + (payment["donor_name"] ?: "Not supplied"))
+                                        Text("Reconciliation: " + (payment["reconciliation_status"] ?: "Unknown"))
+                                        if (payment["payment_status"]?.toString()?.equals("paid", true) == true && payment["income_id"] == null) {
+                                            Button(enabled = !busy, onClick = {
+                                                val ref = payment["reference"]?.toString().orEmpty()
+                                                if (ref.isNotBlank()) {
+                                                    busy = true
+                                                    scope.launch {
+                                                        runCatching { withContext(Dispatchers.IO) { Backend.api.reconcilePayment(ref) } }
+                                                            .onSuccess { message = it["message"]?.toString() ?: "Payment reconciled." }
+                                                            .onFailure { message = it.message ?: "Payment reconciliation failed." }
+                                                        runCatching { withContext(Dispatchers.IO) { Backend.api.paymentReconciliation() } }
+                                                            .onSuccess { reconciliationRows = (it["payments"] as? List<Map<String, Any?>>) ?: emptyList() }
+                                                        busy = false
+                                                    }
+                                                }
+                                            }) { Text("Reconcile into church income") }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 "Approvals" -> {
                     Text("Membership Registration Approvals", style = MaterialTheme.typography.titleLarge)
