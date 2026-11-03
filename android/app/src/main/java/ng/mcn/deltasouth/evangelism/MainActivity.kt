@@ -63,6 +63,7 @@ private fun NativeDioceseApp() {
     var healthData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var securityData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var backupRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var adminUserRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reportYear by remember { mutableStateOf(java.time.LocalDate.now().year.toString()) }
     var reportCircuit by remember { mutableStateOf("All") }
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -135,6 +136,7 @@ private fun NativeDioceseApp() {
             if (financeRoles.contains(role)) add("Finance")
             if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Reports")
             if (role in setOf("Admin", "Auditor")) add("System")
+            if (role == "Admin") add("User Administration")
             if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Governance")
             add("Conferences")
             if (canReview) add("Approvals")
@@ -719,6 +721,40 @@ private fun NativeDioceseApp() {
                                 busy = false
                             }
                         }) { Text("Send message") }
+                    }
+                }
+                "User Administration" -> {
+                    Text("User Account Administration", style = MaterialTheme.typography.titleLarge)
+                    Text("Administrator-only account oversight. Changes are recorded by the diocesan server.")
+                    ActionButton("Load user accounts", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.adminUsers() } }
+                            .onSuccess { adminUserRows = it; message = "${it.size} user accounts loaded." }
+                            .onFailure { message = it.message ?: "Could not load user accounts." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    adminUserRows.forEach { account ->
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(account["username"]?.toString() ?: "Account", style = MaterialTheme.typography.titleSmall)
+                                Text("Role: ${account["role"] ?: ""}")
+                                Text("Member: ${account["member_name"] ?: "Not linked"}  •  ID: ${account["official_member_code"] ?: ""}")
+                                Text("Circuit: ${account["circuit"] ?: ""}  •  Church: ${account["church_name"] ?: ""}")
+                                Text("Status: " + (if (account["active"] == true || account["active"]?.toString() == "1") "Active" else "Inactive"))
+                                Text("Password change required: ${account["must_change_password"] ?: false}")
+                                val uid = (account["id"] as? Number)?.toInt()
+                                if (uid != null && uid != (profile["id"] as? Number)?.toInt()) {
+                                    OutlinedButton(enabled = !busy, onClick = {
+                                        scope.launch {
+                                            busy = true
+                                            runCatching { withContext(Dispatchers.IO) { Backend.api.toggleUser(uid) } }
+                                                .onSuccess { runCatching { withContext(Dispatchers.IO) { Backend.api.adminUsers() } }.onSuccess { adminUserRows = it }; message = "Account status updated." }
+                                                .onFailure { message = it.message ?: "Account status could not be changed." }
+                                            busy = false
+                                        }
+                                    }) { Text(if (account["active"] == true || account["active"]?.toString() == "1") "Deactivate account" else "Activate account") }
+                                }
+                            }
+                        }
                     }
                 }
                 "System" -> {
