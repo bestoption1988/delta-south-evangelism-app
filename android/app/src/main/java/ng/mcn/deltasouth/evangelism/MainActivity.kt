@@ -57,6 +57,13 @@ private fun NativeDioceseApp() {
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var churchAccountRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var conferenceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var conferenceTitle by remember { mutableStateOf("") }
+    var conferenceDate by remember { mutableStateOf("") }
+    var conferenceStart by remember { mutableStateOf("") }
+    var conferenceEnd by remember { mutableStateOf("") }
+    var conferenceCircuit by remember { mutableStateOf("Diocesan") }
+    var conferenceAgenda by remember { mutableStateOf("") }
     var registrations by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryChurches by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryCircuits by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -111,6 +118,7 @@ private fun NativeDioceseApp() {
             if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Reports")
             if (role in setOf("Admin", "Auditor")) add("System")
             if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Governance")
+            add("Conferences")
             if (canReview) add("Approvals")
         }
         Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -472,6 +480,46 @@ private fun NativeDioceseApp() {
                         RecordList(actionStatus, listOf("status", "count"))
                         KeyValueList(mapOf("Recorded meetings" to governanceData["meetings"]))
                     }
+                }
+                "Conferences" -> {
+                    Text("Diocesan Conference Centre", style = MaterialTheme.typography.titleLarge)
+                    Text("View scheduled and live diocesan meetings and conferences.")
+                    ActionButton("Refresh conferences", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.conferences() } }
+                            .onSuccess { conferenceRows = it; message = "Conference schedule refreshed." }
+                            .onFailure { message = it.message ?: "Conference schedule unavailable." }
+                    }
+                    if (role in setOf("Admin", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")) {
+                        Text("Schedule a conference", style = MaterialTheme.typography.titleMedium)
+                        OutlinedTextField(conferenceTitle, { conferenceTitle = it }, label = { Text("Conference title") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(conferenceDate, { conferenceDate = it }, label = { Text("Date (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(conferenceStart, { conferenceStart = it }, label = { Text("Start time") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(conferenceEnd, { conferenceEnd = it }, label = { Text("End time") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(conferenceCircuit, { conferenceCircuit = it }, label = { Text("Circuit or Diocesan") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(conferenceAgenda, { conferenceAgenda = it }, label = { Text("Agenda") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        Button(enabled = !busy && conferenceTitle.isNotBlank() && conferenceDate.isNotBlank(), onClick = {
+                            scope.launch {
+                                busy = true
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.createConference(mapOf(
+                                    "title" to conferenceTitle.trim(),
+                                    "meeting_date" to conferenceDate.trim(),
+                                    "start_time" to conferenceStart.trim(),
+                                    "end_time" to conferenceEnd.trim(),
+                                    "circuit" to conferenceCircuit.trim(),
+                                    "agenda" to conferenceAgenda.trim()
+                                )) } }
+                                    .onSuccess {
+                                        message = "Conference scheduled. Room code: " + (it["room_code"] ?: "")
+                                        conferenceTitle = ""; conferenceAgenda = ""
+                                        runCatching { withContext(Dispatchers.IO) { Backend.api.conferences() } }.onSuccess { conferenceRows = it }
+                                    }
+                                    .onFailure { message = it.message ?: "Conference could not be scheduled." }
+                                busy = false
+                            }
+                        }) { Text("Schedule conference") }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    RecordList(conferenceRows, listOf("title", "meeting_type", "meeting_date", "start_time", "end_time", "circuit", "organizer", "status", "room_code", "agenda"))
                 }
                 "System" -> {
                     Text("System Health & Security", style = MaterialTheme.typography.titleLarge)
