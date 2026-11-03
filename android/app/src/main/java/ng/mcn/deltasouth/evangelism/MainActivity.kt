@@ -41,6 +41,8 @@ private fun NativeDioceseApp() {
     var registrations by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryChurches by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryCircuits by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var memberDirectory by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var memberSearch by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf("Home") }
     val scope = rememberCoroutineScope()
     val role = (profile["role"] ?: "").toString()
@@ -73,6 +75,7 @@ private fun NativeDioceseApp() {
     } else {
         val tabs = buildList {
             addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Directory"))
+            if (role in setOf("Admin", "Bishop / Diocesan Executive", "Evangelism Minister", "Planting Officer", "Diocesan Secretary", "Circuit Coordinator", "Local Church Evangelism Officer", "Auditor")) add("Members")
             if (financeRoles.contains(role)) add("Finance")
             if (canReview) add("Approvals")
         }
@@ -140,6 +143,30 @@ private fun NativeDioceseApp() {
                     Text("Local Churches", style = MaterialTheme.typography.titleMedium)
                     ChurchDirectoryList(directoryChurches)
                 }
+                "Members" -> {
+                    Text("Church Membership Directory", style = MaterialTheme.typography.titleLarge)
+                    Text("Search member records available to your account. Circuit and local-church restrictions are enforced by the diocesan server.")
+                    OutlinedTextField(
+                        value = memberSearch,
+                        onValueChange = { memberSearch = it },
+                        label = { Text("Search name, member ID, phone or church") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    ActionButton("Load members", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.members() } }
+                            .onSuccess { memberDirectory = it; message = "${it.size} member records loaded." }
+                            .onFailure { message = it.message ?: "Member directory could not be loaded." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    val query = memberSearch.trim().lowercase()
+                    val filteredMembers = memberDirectory.filter { row ->
+                        query.isBlank() || listOf("full_name", "member_id", "phone", "circuit", "church_name", "fellowship")
+                            .any { key -> row[key]?.toString()?.lowercase()?.contains(query) == true }
+                    }
+                    Text("${filteredMembers.size} matching members", style = MaterialTheme.typography.labelMedium)
+                    RecordList(filteredMembers, listOf("member_id", "full_name", "phone", "circuit", "church_name", "fellowship", "gender", "baptised", "confirmed", "marriage"))
+                }
                 "Finance" -> {
                     Text("Finance & Payments Centre", style = MaterialTheme.typography.titleLarge)
                     Text("Authorized finance access. Reconciliation actions remain protected by the diocesan server.")
@@ -205,6 +232,8 @@ private fun NativeDioceseApp() {
                 attendanceRows = emptyList()
                 givingRows = emptyList()
                 registrations = emptyList()
+                memberDirectory = emptyList()
+                memberSearch = ""
             }) { Text("Sign out") }
         }
     }
