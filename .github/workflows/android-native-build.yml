@@ -6,6 +6,9 @@ on:
     paths:
       - 'android/**'
       - '.github/workflows/android-native-build.yml'
+concurrency:
+  group: native-android-apk-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
