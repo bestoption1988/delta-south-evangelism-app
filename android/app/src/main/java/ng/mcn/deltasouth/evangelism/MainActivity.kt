@@ -47,6 +47,11 @@ private fun NativeDioceseApp() {
     var carePriority by remember { mutableStateOf("Normal") }
     var careReply by remember { mutableStateOf("") }
     var financeSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var reportData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var healthData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var securityData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var reportYear by remember { mutableStateOf(java.time.LocalDate.now().year.toString()) }
+    var reportCircuit by remember { mutableStateOf("All") }
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var registrations by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -100,6 +105,8 @@ private fun NativeDioceseApp() {
             if (role == "Member") add("ID Card")
             if (role in setOf("Admin", "Bishop / Diocesan Executive", "Evangelism Minister", "Planting Officer", "Diocesan Secretary", "Circuit Coordinator", "Local Church Evangelism Officer", "Auditor")) add("Members")
             if (financeRoles.contains(role)) add("Finance")
+            if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Reports")
+            if (role in setOf("Admin", "Auditor")) add("System")
             if (canReview) add("Approvals")
         }
         Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -410,6 +417,61 @@ private fun NativeDioceseApp() {
                         }
                     } else {
                         RecordList(filteredMembers, listOf("member_id", "full_name", "phone", "circuit", "church_name", "fellowship", "gender", "baptised", "confirmed", "marriage"))
+                    }
+                }
+                "Reports" -> {
+                    Text("Diocesan Reports & Performance", style = MaterialTheme.typography.titleLarge)
+                    OutlinedTextField(reportYear, { reportYear = it.filter(Char::isDigit).take(4) }, label = { Text("Report year") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(reportCircuit, { reportCircuit = it }, label = { Text("Circuit (All or exact circuit name)") }, modifier = Modifier.fillMaxWidth())
+                    ActionButton("Load diocesan report", busy) {
+                        val year = reportYear.toIntOrNull() ?: java.time.LocalDate.now().year
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.reports(year, reportCircuit.trim().ifBlank { "All" }) } }
+                            .onSuccess { reportData = it; message = "Report loaded for $year." }
+                            .onFailure { message = it.message ?: "Report could not be loaded." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    val summary = reportData["summary"] as? Map<String, Any?> ?: emptyMap()
+                    if (summary.isNotEmpty()) {
+                        Text("Performance summary", style = MaterialTheme.typography.titleMedium)
+                        KeyValueList(summary)
+                    }
+                    val finance = reportData["finance"] as? Map<String, Any?> ?: emptyMap()
+                    if (finance.isNotEmpty()) {
+                        Text("Finance summary", style = MaterialTheme.typography.titleMedium)
+                        KeyValueList(finance)
+                    }
+                    val circuits = reportData["circuits"] as? List<Map<String, Any?>> ?: emptyList()
+                    Text("Circuit performance", style = MaterialTheme.typography.titleMedium)
+                    RecordList(circuits, listOf("circuit", "members", "plants", "launched", "outreach", "decisions", "joined"))
+                    val roadmap = reportData["five_year"] as? List<Map<String, Any?>> ?: emptyList()
+                    Text("Five-year church planting roadmap", style = MaterialTheme.typography.titleMedium)
+                    RecordList(roadmap, listOf("year", "target", "planned", "launched", "remaining"))
+                }
+                "System" -> {
+                    Text("System Health & Security", style = MaterialTheme.typography.titleLarge)
+                    Text("Read-only diagnostics and security overview. Backup restoration and account changes remain protected on the web administration portal.")
+                    ActionButton("Run system checks", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.systemHealth() to Backend.api.securityStatus() } }
+                            .onSuccess { healthData = it.first; securityData = it.second; message = "System checks completed." }
+                            .onFailure { message = it.message ?: "System checks could not be completed." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    if (healthData.isNotEmpty()) {
+                        Text("Application health", style = MaterialTheme.typography.titleMedium)
+                        KeyValueList(mapOf("Overall status" to healthData["ok"], "Version" to healthData["version"], "Stage" to healthData["stage"], "Database integrity" to healthData["integrity"], "Generated" to healthData["generated_at"]))
+                        val checks = healthData["checks"] as? Map<String, Any?> ?: emptyMap()
+                        KeyValueList(checks)
+                        Text("Missing tables: " + ((healthData["missing_tables"] as? List<*>)?.joinToString().orEmpty().ifBlank { "None" }))
+                        Text("Schema issues: " + ((healthData["schema_issues"] as? List<*>)?.joinToString().orEmpty().ifBlank { "None" }))
+                        val counts = healthData["counts"] as? Map<String, Any?> ?: emptyMap()
+                        Text("Database record counts", style = MaterialTheme.typography.titleMedium)
+                        KeyValueList(counts)
+                    }
+                    if (securityData.isNotEmpty()) {
+                        Text("Security overview", style = MaterialTheme.typography.titleMedium)
+                        KeyValueList(securityData.filterKeys { it != "latest_backup" })
+                        val latest = securityData["latest_backup"] as? Map<String, Any?> ?: emptyMap()
+                        if (latest.isNotEmpty()) KeyValueList(latest)
                     }
                 }
                 "Finance" -> {
