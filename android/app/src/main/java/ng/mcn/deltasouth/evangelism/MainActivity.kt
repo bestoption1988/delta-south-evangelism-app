@@ -34,6 +34,10 @@ private fun NativeDioceseApp() {
     var idCard by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var attendanceSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var attendanceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var attendanceRegisterMembers by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var attendanceRegisterDate by remember { mutableStateOf(java.time.LocalDate.now().toString()) }
+    var attendanceMeetingType by remember { mutableStateOf("Sunday Service") }
+    var attendanceMemberSearch by remember { mutableStateOf("") }
     var givingRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var feedRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var eventRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -118,6 +122,7 @@ private fun NativeDioceseApp() {
         val tabs = buildList {
             addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Updates", "Member Care", "Directory"))
             if (role == "Member") add("ID Card")
+            if (role in setOf("Admin", "Evangelism Minister", "Planting Officer", "Circuit Coordinator", "Local Church Evangelism Officer")) add("Attendance Register")
             if (role in setOf("Admin", "Bishop / Diocesan Executive", "Evangelism Minister", "Planting Officer", "Diocesan Secretary", "Circuit Coordinator", "Local Church Evangelism Officer", "Auditor")) add("Members")
             if (financeRoles.contains(role)) add("Finance")
             if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Reports")
@@ -158,6 +163,53 @@ private fun NativeDioceseApp() {
                     }
                     if (idCard.isNotEmpty()) MemberIdCard(idCard)
                     Text(message, style = MaterialTheme.typography.bodySmall)
+                }
+                "Attendance Register" -> {
+                    Text("Church Attendance Register", style = MaterialTheme.typography.titleLarge)
+                    Text("Record member attendance for your authorized church or circuit. The server enforces your role and church boundaries.")
+                    OutlinedTextField(attendanceRegisterDate, { attendanceRegisterDate = it }, label = { Text("Attendance date (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(attendanceMeetingType, { attendanceMeetingType = it }, label = { Text("Meeting / service") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(attendanceMemberSearch, { attendanceMemberSearch = it }, label = { Text("Search member name or ID") }, modifier = Modifier.fillMaxWidth())
+                    ActionButton("Load members for attendance", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.members() } }
+                            .onSuccess { attendanceRegisterMembers = it; message = "${it.size} members loaded." }
+                            .onFailure { message = it.message ?: "Could not load members." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    val filteredAttendanceMembers = attendanceRegisterMembers.filter { member ->
+                        val q = attendanceMemberSearch.trim()
+                        q.isBlank() || listOf("full_name", "member_id", "phone", "church_name").any { member[it]?.toString()?.contains(q, true) == true }
+                    }
+                    filteredAttendanceMembers.forEach { member ->
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(member["full_name"]?.toString() ?: "Member", style = MaterialTheme.typography.titleSmall)
+                                Text("ID: ${member["member_id"] ?: member["id"] ?: ""}  •  ${member["church_name"] ?: ""}")
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(enabled = !busy, onClick = {
+                                        val id = (member["id"] as? Number)?.toInt() ?: member["member_id"]?.toString()?.toIntOrNull()
+                                        if (id != null) scope.launch {
+                                            busy = true
+                                            runCatching { withContext(Dispatchers.IO) { Backend.api.recordMemberAttendance(mapOf("member_id" to id.toString(), "attendance_date" to attendanceRegisterDate.trim(), "meeting_type" to attendanceMeetingType.trim(), "status" to "Present")) } }
+                                                .onSuccess { message = "Present recorded for ${member["full_name"] ?: "member"}." }
+                                                .onFailure { message = it.message ?: "Could not record attendance." }
+                                            busy = false
+                                        }
+                                    }) { Text("Present") }
+                                    OutlinedButton(enabled = !busy, onClick = {
+                                        val id = (member["id"] as? Number)?.toInt() ?: member["member_id"]?.toString()?.toIntOrNull()
+                                        if (id != null) scope.launch {
+                                            busy = true
+                                            runCatching { withContext(Dispatchers.IO) { Backend.api.recordMemberAttendance(mapOf("member_id" to id.toString(), "attendance_date" to attendanceRegisterDate.trim(), "meeting_type" to attendanceMeetingType.trim(), "status" to "Absent")) } }
+                                                .onSuccess { message = "Absent recorded for ${member["full_name"] ?: "member"}." }
+                                                .onFailure { message = it.message ?: "Could not record attendance." }
+                                            busy = false
+                                        }
+                                    }) { Text("Absent") }
+                                }
+                            }
+                        }
+                    }
                 }
                 "Attendance" -> {
                     ActionButton("Refresh attendance", busy) {
