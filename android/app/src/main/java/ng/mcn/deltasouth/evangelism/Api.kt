@@ -45,6 +45,8 @@ interface DioceseApi {
  @GET("api/finance-summary") suspend fun financeSummary(): Map<String, Any?>
  @GET("api/payment-history") suspend fun paymentHistory(): Map<String, Any?>
  @GET("api/payment-reconciliation") suspend fun paymentReconciliation(): Map<String, Any?>
+ @GET("api/membership/churches") suspend fun membershipChurches(): List<Map<String, Any?>>
+ @GET("api/circuits") suspend fun circuits(): List<Map<String, Any?>>
  @GET("api/member-registrations") suspend fun memberRegistrations(): List<Map<String, Any?>>
  @POST("api/member-registrations/{id}/review") suspend fun reviewMemberRegistration(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
 }
