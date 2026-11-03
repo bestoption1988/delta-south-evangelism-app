@@ -30,7 +30,14 @@ private fun NativeDioceseApp() {
     var message by remember { mutableStateOf("") }
     var profile by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var dashboard by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
-    var memberRecords by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var memberRecords by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }    var profilePhone by remember { mutableStateOf("") }
+    var profileBirthday by remember { mutableStateOf("") }
+    var profileAddress by remember { mutableStateOf("") }
+    var profileProfession by remember { mutableStateOf("") }
+    var profileFellowship by remember { mutableStateOf("") }
+    var currentPassword by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
     var idCard by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var attendanceSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var attendanceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -67,7 +74,8 @@ private fun NativeDioceseApp() {
     var conferenceStart by remember { mutableStateOf("") }
     var conferenceEnd by remember { mutableStateOf("") }
     var conferenceCircuit by remember { mutableStateOf("Diocesan") }
-    var conferenceAgenda by remember { mutableStateOf("") }    var conferenceDetail by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var conferenceAgenda by remember { mutableStateOf("") }
+    var conferenceDetail by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var conferenceSelectedId by remember { mutableStateOf<Int?>(null) }
     var conferenceMessage by remember { mutableStateOf("") }
     var conferenceParticipantName by remember { mutableStateOf("") }
@@ -148,11 +156,44 @@ private fun NativeDioceseApp() {
                     KeyValueList(dashboard)
                 }
                 "Profile" -> {
+                    Text("My Membership Profile", style = MaterialTheme.typography.titleLarge)
                     ActionButton("Load membership record", busy) {
                         runCatching { withContext(Dispatchers.IO) { Backend.api.memberRecords() } }
-                            .onSuccess { memberRecords = it }.onFailure { message = it.message ?: "Membership record unavailable." }
+                            .onSuccess { memberRecords = it; message = "Membership record loaded." }.onFailure { message = it.message ?: "Membership record unavailable." }
                     }
                     KeyValueList(if (memberRecords.isEmpty()) profile else memberRecords)
+                    if (role == "Member") {
+                        Text("Update contact details", style = MaterialTheme.typography.titleMedium)
+                        OutlinedTextField(profilePhone, { profilePhone = it }, label = { Text("Phone") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(profileBirthday, { profileBirthday = it }, label = { Text("Birthday") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(profileAddress, { profileAddress = it }, label = { Text("Residential address") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(profileProfession, { profileProfession = it }, label = { Text("Profession / business / trade") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(profileFellowship, { profileFellowship = it }, label = { Text("Fellowship") }, modifier = Modifier.fillMaxWidth())
+                        Button(enabled = !busy, onClick = {
+                            scope.launch {
+                                busy = true
+                                val updates = mapOf("phone" to profilePhone, "birthday" to profileBirthday, "address" to profileAddress, "profession_business_trade" to profileProfession, "fellowship" to profileFellowship).filterValues { it.isNotBlank() }
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.updateMemberProfile(updates) } }
+                                    .onSuccess { message = it["message"]?.toString() ?: "Profile updated." }
+                                    .onFailure { message = it.message ?: "Profile update failed." }
+                                busy = false
+                            }
+                        }) { Text("Save profile details") }
+                        Text("Change password", style = MaterialTheme.typography.titleMedium)
+                        OutlinedTextField(currentPassword, { currentPassword = it }, label = { Text("Current password") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(newPassword, { newPassword = it }, label = { Text("New password (minimum 8 characters)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm new password") }, modifier = Modifier.fillMaxWidth())
+                        Button(enabled = !busy && currentPassword.isNotBlank() && newPassword.length >= 8 && newPassword == confirmPassword, onClick = {
+                            scope.launch {
+                                busy = true
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.changeMemberPassword(mapOf("current_password" to currentPassword, "new_password" to newPassword, "confirm_password" to confirmPassword)) } }
+                                    .onSuccess { currentPassword = ""; newPassword = ""; confirmPassword = ""; message = it["message"]?.toString() ?: "Password changed." }
+                                    .onFailure { message = it.message ?: "Password change failed." }
+                                busy = false
+                            }
+                        }) { Text("Change password") }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
                 }
                 "ID Card" -> {
                     Text("Official Diocesan Membership ID", style = MaterialTheme.typography.titleLarge)
@@ -259,7 +300,27 @@ private fun NativeDioceseApp() {
                     Text("Upcoming events", style = MaterialTheme.typography.titleMedium)
                     RecordList(eventRows, listOf("title", "event_name", "description", "event_date", "start_time", "venue", "status"))
                     Text("My notifications", style = MaterialTheme.typography.titleMedium)
-                    RecordList(notificationRows, listOf("title", "message", "type", "created_at", "is_read", "status"))
+                    notificationRows.forEach { notification ->
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(notification["title"]?.toString() ?: "Notification", style = MaterialTheme.typography.titleSmall)
+                                Text(notification["message"]?.toString() ?: "")
+                                Text("Type: ${notification["notification_type"] ?: ""}  •  Status: ${notification["status"] ?: ""}")
+                                val notificationId = (notification["id"] as? Number)?.toInt()
+                                if (notificationId != null && notification["status"]?.toString()?.equals("Read", true) != true) {
+                                    OutlinedButton(enabled = !busy, onClick = {
+                                        scope.launch {
+                                            busy = true
+                                            runCatching { withContext(Dispatchers.IO) { Backend.api.markNotificationRead(notificationId) } }
+                                                .onSuccess { runCatching { withContext(Dispatchers.IO) { Backend.api.notifications() } }.onSuccess { notificationRows = it }; message = "Notification marked as read." }
+                                                .onFailure { message = it.message ?: "Could not mark notification as read." }
+                                            busy = false
+                                        }
+                                    }) { Text("Mark as read") }
+                                }
+                            }
+                        }
+                    }
                 }
                 "Member Care" -> {
                     Text("Diocesan Member Care", style = MaterialTheme.typography.titleLarge)
