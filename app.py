@@ -4101,8 +4101,10 @@ def get_connection_url():
     host = request.host
     proto = request.headers.get("X-Forwarded-Proto", request.scheme).split(",")[0].strip()
 
-    # Public/cloud deployment
-    if host.endswith(".rumptycloud.app"):
+    # Naijacloud production deployment.
+    # Use the forwarded HTTPS scheme and request host; do not special-case
+    # unrelated hosting domains.
+    if host.endswith(".naijacloud.app"):
         return f"https://{host}".rstrip("/")
 
     hostname = host.split(":")[0]
