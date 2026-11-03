@@ -51,6 +51,7 @@ private fun NativeDioceseApp() {
     var governanceData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var healthData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var securityData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var backupRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reportYear by remember { mutableStateOf(java.time.LocalDate.now().year.toString()) }
     var reportCircuit by remember { mutableStateOf("All") }
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -475,9 +476,23 @@ private fun NativeDioceseApp() {
                     Text("System Health & Security", style = MaterialTheme.typography.titleLarge)
                     Text("Read-only diagnostics and security overview. Backup restoration and account changes remain protected on the web administration portal.")
                     ActionButton("Run system checks", busy) {
-                        runCatching { withContext(Dispatchers.IO) { Backend.api.systemHealth() to Backend.api.securityStatus() } }
-                            .onSuccess { healthData = it.first; securityData = it.second; message = "System checks completed." }
+                        runCatching { withContext(Dispatchers.IO) { Triple(Backend.api.systemHealth(), Backend.api.securityStatus(), Backend.api.backupHistory()) } }
+                            .onSuccess { healthData = it.first; securityData = it.second; backupRows = it.third; message = "System checks and backup history refreshed." }
                             .onFailure { message = it.message ?: "System checks could not be completed." }
+                    }
+                    if (role == "Admin") {
+                        ActionButton("Create secure database backup", busy) {
+                            scope.launch {
+                                busy = true
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.createSecurityBackup() } }
+                                    .onSuccess { result ->
+                                        message = "Backup created: " + (result["filename"] ?: "Completed")
+                                        runCatching { withContext(Dispatchers.IO) { Backend.api.backupHistory() } }.onSuccess { backupRows = it }
+                                    }
+                                    .onFailure { message = it.message ?: "Backup could not be created." }
+                                busy = false
+                            }
+                        }
                     }
                     Text(message, style = MaterialTheme.typography.bodySmall)
                     if (healthData.isNotEmpty()) {
@@ -497,6 +512,9 @@ private fun NativeDioceseApp() {
                         val latest = securityData["latest_backup"] as? Map<String, Any?> ?: emptyMap()
                         if (latest.isNotEmpty()) KeyValueList(latest)
                     }
+                    Text("Database backup history", style = MaterialTheme.typography.titleMedium)
+                    Text("Recent server backups. Backup restoration is intentionally not available in the mobile app.")
+                    RecordList(backupRows, listOf("created_at", "created_by", "filename", "size_bytes", "backup_type", "status"))
                 }
                 "Finance" -> {
                     Text("Finance & Payments Centre", style = MaterialTheme.typography.titleLarge)
