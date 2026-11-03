@@ -56,6 +56,7 @@ private fun NativeDioceseApp() {
     var reportCircuit by remember { mutableStateOf("All") }
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var churchAccountRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var registrations by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryChurches by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryCircuits by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -525,12 +526,17 @@ private fun NativeDioceseApp() {
                                 financeSummary = it.first
                                 paymentRows = (it.second["payments"] as? List<Map<String, Any?>>) ?: emptyList()
                                 reconciliationRows = (it.third["payments"] as? List<Map<String, Any?>>) ?: emptyList()
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.churchAccounts() } }
+                                    .onSuccess { churchAccountRows = it }
                                 message = "Finance records refreshed."
                             }.onFailure { message = it.message ?: "Finance records could not be loaded." }
                     }
                     Text(message, style = MaterialTheme.typography.bodySmall)
                     val summary = financeSummary["summary"] as? Map<String, Any?> ?: emptyMap()
                     SummaryCards(summary)
+                    Text("Church bank accounts", style = MaterialTheme.typography.titleMedium)
+                    Text("Active diocesan, circuit and local church accounts available to your authorized role.")
+                    RecordList(churchAccountRows, listOf("account_level", "circuit", "church_name", "bank_name", "account_name", "account_number", "currency", "purpose"))
                     Text("Payment history", style = MaterialTheme.typography.titleMedium)
                     RecordList(paymentRows, listOf("reference", "status", "amount", "currency", "purpose", "donor_name", "circuit", "church_name", "created_at", "paid_at"))
                     Text("Payment reconciliation", style = MaterialTheme.typography.titleMedium)
