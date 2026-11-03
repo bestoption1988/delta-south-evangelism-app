@@ -20,7 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
-    private static final String HOME = "https://delta-south-evangelism-app-9d73e7.rumptycloud.app/";
+    private static final String HOME = "https://mcn-delta-south.naijacloud.app/";
     private static final int FILE_CHOOSER = 1001;
     private WebView webView;
     private ValueCallback<Uri[]> uploadCallback;
@@ -84,13 +84,25 @@ public class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true);
 
         webView.setWebViewClient(new WebViewClient() {
+            private boolean isDiocesanHost(Uri uri) {
+                String host = uri.getHost();
+                return "mcn-delta-south.naijacloud.app".equalsIgnoreCase(host);
+            }
+
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
-                if ("https".equalsIgnoreCase(u.getScheme()) && HOME.startsWith(u.getScheme()+"://")) {
-                    if (u.getHost() != null && u.getHost().equals("delta-south-evangelism-app-9d73e7.rumptycloud.app")) return false;
-                }
+                // Keep all diocesan pages and authenticated workflows inside the app.
+                if ("https".equalsIgnoreCase(u.getScheme()) && isDiocesanHost(u)) return false;
+                // Open unrelated external websites in the user's browser.
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception ignored) {}
                 return true;
+            }
+
+            @Override public void onReceivedError(WebView view, android.webkit.WebResourceRequest request,
+                                                  android.webkit.WebResourceError error) {
+                if (request.isForMainFrame()) {
+                    view.loadData("<html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font-family:sans-serif;padding:28px;color:#102653'><h2>Delta South Evangelism</h2><p>We could not connect to the diocesan service. Please check your internet connection and try again.</p><button onclick='location.href=\"" + HOME + "\"'>Retry</button></body></html>", "text/html", "UTF-8");
+                }
             }
         });
 
