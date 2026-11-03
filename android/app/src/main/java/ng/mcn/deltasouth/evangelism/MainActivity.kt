@@ -39,6 +39,8 @@ private fun NativeDioceseApp() {
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var registrations by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var directoryChurches by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var directoryCircuits by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var selected by remember { mutableStateOf("Home") }
     val scope = rememberCoroutineScope()
     val role = (profile["role"] ?: "").toString()
@@ -70,7 +72,7 @@ private fun NativeDioceseApp() {
         }
     } else {
         val tabs = buildList {
-            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed"))
+            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Directory"))
             if (financeRoles.contains(role)) add("Finance")
             if (canReview) add("Approvals")
         }
@@ -123,6 +125,20 @@ private fun NativeDioceseApp() {
                     }
                     Text(message)
                     RecordList(feedRows, listOf("title", "message", "created_at", "status"))
+                }
+                "Directory" -> {
+                    Text("Church & Circuit Directory", style = MaterialTheme.typography.titleLarge)
+                    Text("Browse the circuits and local churches available to your account.")
+                    ActionButton("Load church directory", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.circuits() to Backend.api.membershipChurches() } }
+                            .onSuccess { directoryCircuits = it.first; directoryChurches = it.second; message = "Directory refreshed." }
+                            .onFailure { message = it.message ?: "Directory could not be loaded." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    Text("Circuits", style = MaterialTheme.typography.titleMedium)
+                    RecordList(directoryCircuits, listOf("name", "status", "notes"))
+                    Text("Local Churches", style = MaterialTheme.typography.titleMedium)
+                    ChurchDirectoryList(directoryChurches)
                 }
                 "Finance" -> {
                     Text("Finance & Payments Centre", style = MaterialTheme.typography.titleLarge)
@@ -289,6 +305,31 @@ private fun SummaryCards(summary: Map<String, Any?>) {
                             Text(label, style = MaterialTheme.typography.labelSmall)
                             Text("₦" + String.format("%,.2f", (summary[key] as? Number)?.toDouble() ?: 0.0), style = MaterialTheme.typography.titleMedium)
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun ChurchDirectoryList(rows: List<Map<String, Any?>>) {
+    if (rows.isEmpty()) {
+        Text("No church records loaded. Select Load church directory.")
+        return
+    }
+    val grouped = rows.groupBy { it["circuit"]?.toString().orEmpty().ifBlank { "Unassigned Circuit" } }.toSortedMap()
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.heightIn(max = 520.dp)) {
+        grouped.forEach { (circuit, churches) ->
+            item(key = circuit) {
+                Text(circuit + " • " + churches.size + " churches", style = MaterialTheme.typography.titleMedium)
+            }
+            items(churches) { church ->
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text(church["church_name"]?.toString() ?: "Local Church", style = MaterialTheme.typography.bodyLarge)
+                        Text(circuit, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
