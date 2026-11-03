@@ -1,4 +1,5 @@
 package ng.mcn.deltasouth.evangelism
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,151 +13,285 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
 class MainActivity : ComponentActivity() {
- override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); setContent { MaterialTheme { NativeDioceseApp() } } }
-}
-@Composable private fun NativeDioceseApp() {
- var username by remember { mutableStateOf("") }
- var password by remember { mutableStateOf("") }
- var signedIn by remember { mutableStateOf(false) }
- var busy by remember { mutableStateOf(false) }
- var message by remember { mutableStateOf("") }
- var profile by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
- var dashboard by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
- var memberRecords by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
- var attendanceSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
- var attendanceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
- var givingRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
- var feedRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
- var financeSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
- var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
- var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
- var selected by remember { mutableStateOf("Home") }
- val scope = rememberCoroutineScope()
- if (!signedIn) {
-  Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-   Text("METHODIST CHURCH NIGERIA", style = MaterialTheme.typography.titleLarge)
-   Text("DELTA SOUTH DIOCESE", style = MaterialTheme.typography.titleMedium)
-   Spacer(Modifier.height(24.dp))
-   OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
-   OutlinedTextField(password, { password = it }, label = { Text("Password") }, modifier = Modifier.fillMaxWidth())
-   Spacer(Modifier.height(12.dp))
-   Button(enabled = !busy, onClick = {
-    busy = true; message = "Signing in…"
-    scope.launch {
-     val result = withContext(Dispatchers.IO) { Backend.login(username.trim(), password) }
-     result.onSuccess {
-      runCatching { withContext(Dispatchers.IO) { Backend.api.me() } }
-       .onSuccess { profile = it; signedIn = true; message = "" }
-       .onFailure { message = it.message ?: "Could not load account profile." }
-     }.onFailure { message = it.message ?: "Sign in failed." }
-     busy = false
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent { MaterialTheme { NativeDioceseApp() } }
     }
-   }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait…" else "Sign in") }
-   if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
-  }
- } else {
-  Column(Modifier.fillMaxSize().padding(16.dp)) {
-   Text("MCN Delta South Diocese", style = MaterialTheme.typography.headlineSmall)
-   Text("Welcome, ${profile["full_name"] ?: profile["username"] ?: "Member"}")
-   Spacer(Modifier.height(12.dp))
-   Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-    listOf("Home", "Profile", "Attendance", "Giving", "Feed").forEach { label -> FilterChip(selected == label, { selected = label }, label = { Text(label) }) }
-   }
-   Spacer(Modifier.height(12.dp))
-   when (selected) {
-    "Home" -> {
-     Button(onClick = {
-      busy = true
-      scope.launch {
-       runCatching { withContext(Dispatchers.IO) { Backend.api.dashboard() } }
-        .onSuccess { dashboard = it }.onFailure { message = it.message ?: "Dashboard could not load." }
-       busy = false
-      }
-     }) { Text("Refresh dashboard") }
-     if (dashboard.isEmpty()) Text("Your diocesan dashboard is ready. Tap refresh to load current data.")
-     KeyValueList(dashboard)
-    }
-    "Profile" -> {
-     Button(onClick = {
-      busy = true
-      scope.launch {
-       runCatching { withContext(Dispatchers.IO) { Backend.api.memberRecords() } }
-        .onSuccess { memberRecords = it }.onFailure { message = it.message ?: "Membership record unavailable." }
-       busy = false
-      }
-     }) { Text("Load membership record") }
-     KeyValueList(if (memberRecords.isEmpty()) profile else memberRecords)
-    }
-    "Attendance" -> {
-     Button(onClick = {
-      busy = true
-      scope.launch {
-       runCatching { withContext(Dispatchers.IO) { Backend.api.attendanceSummary() to Backend.api.memberAttendance() } }
-        .onSuccess { attendanceSummary = it.first; attendanceRows = it.second }
-        .onFailure { message = it.message ?: "Attendance history unavailable." }
-       busy = false
-      }
-     }) { Text("Refresh attendance") }
-     KeyValueList(attendanceSummary)
-     Text("Attendance history", style = MaterialTheme.typography.titleMedium)
-     RecordList(attendanceRows, listOf("attendance_date", "meeting_type", "status", "circuit", "church_name"))
-    }
-    "Giving" -> {
-     Button(onClick = {
-      busy = true
-      scope.launch {
-       runCatching { withContext(Dispatchers.IO) { Backend.api.givingHistory() } }
-        .onSuccess { givingRows = it }.onFailure { message = it.message ?: "Giving history unavailable." }
-       busy = false
-      }
-     }) { Text("Refresh giving history") }
-     Text("Your recorded contributions", style = MaterialTheme.typography.titleMedium)
-     RecordList(givingRows, listOf("date", "source", "fund", "amount", "method", "reference"))
-    }
-    else -> {
-     Text("Church announcements and events")
-     Button(onClick = {
-      busy = true
-      scope.launch {
-       runCatching { withContext(Dispatchers.IO) { Backend.api.announcements() } }
-        .onSuccess { feedRows = it; message = "${it.size} announcements loaded." }.onFailure { message = it.message ?: "Feed unavailable." }
-       busy = false
-      }
-     }) { Text("Load announcements") }
-     Text(message)
-     RecordList(feedRows, listOf("title", "message", "created_at", "status"))
-    }
-   }
-   Spacer(Modifier.height(16.dp))
-   OutlinedButton(onClick = { Backend.cookies.clear(); signedIn = false; profile = emptyMap(); dashboard = emptyMap(); memberRecords = emptyMap(); attendanceRows = emptyList(); givingRows = emptyList() }) { Text("Sign out") }
-  }
- }
-}
-@Composable private fun KeyValueList(values: Map<String, Any?>) {
- LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-  items(values.entries.toList()) { entry ->
-   ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) { Text(entry.key, style = MaterialTheme.typography.labelMedium); Text(entry.value?.toString() ?: "—") } }
-  }
- }
 }
 
-@Composable private fun RecordList(rows: List<Map<String, Any?>>, fields: List<String>) {
- if (rows.isEmpty()) {
-  Text("No records loaded yet. Tap the refresh button to retrieve your records.", style = MaterialTheme.typography.bodySmall)
- } else {
-  LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 440.dp)) {
-   items(rows) { row ->
-    ElevatedCard(Modifier.fillMaxWidth()) {
-     Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-      fields.filter { row[it] != null && row[it].toString().isNotBlank() }.forEach { key ->
-       Text(key.replace('_', ' ').replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-       Text(row[key].toString(), style = MaterialTheme.typography.bodyMedium)
-      }
-     }
+@Composable
+private fun NativeDioceseApp() {
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var signedIn by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf("") }
+    var profile by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var dashboard by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var memberRecords by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var attendanceSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var attendanceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var givingRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var feedRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var financeSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var registrations by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var selected by remember { mutableStateOf("Home") }
+    val scope = rememberCoroutineScope()
+    val role = (profile["role"] ?: "").toString()
+    val financeRoles = setOf("Admin", "Finance Officer", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")
+    val canReview = role == "Admin" || role == "Evangelism Minister"
+
+    if (!signedIn) {
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+            Text("METHODIST CHURCH NIGERIA", style = MaterialTheme.typography.titleLarge)
+            Text("DELTA SOUTH DIOCESE", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(24.dp))
+            OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(password, { password = it }, label = { Text("Password") }, modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(12.dp))
+            Button(enabled = !busy, onClick = {
+                busy = true
+                message = "Signing in…"
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) { Backend.login(username.trim(), password) }
+                    result.onSuccess {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.me() } }
+                            .onSuccess { profile = it; signedIn = true; selected = "Home"; message = "" }
+                            .onFailure { message = it.message ?: "Could not load account profile." }
+                    }.onFailure { message = it.message ?: "Sign in failed." }
+                    busy = false
+                }
+            }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait…" else "Sign in") }
+            if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+        }
+    } else {
+        val tabs = buildList {
+            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed"))
+            if (financeRoles.contains(role)) add("Finance")
+            if (canReview) add("Approvals")
+        }
+        Column(Modifier.fillMaxSize().padding(16.dp)) {
+            Text("MCN Delta South Diocese", style = MaterialTheme.typography.headlineSmall)
+            Text("Welcome, ${profile["full_name"] ?: profile["username"] ?: "Member"}")
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                tabs.forEach { label -> FilterChip(selected == label, { selected = label }, label = { Text(label) }) }
+            }
+            Spacer(Modifier.height(10.dp))
+            when (selected) {
+                "Home" -> {
+                    ActionButton("Refresh dashboard", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.dashboard() } }
+                            .onSuccess { dashboard = it }.onFailure { message = it.message ?: "Dashboard could not load." }
+                    }
+                    KeyValueList(dashboard)
+                }
+                "Profile" -> {
+                    ActionButton("Load membership record", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.memberRecords() } }
+                            .onSuccess { memberRecords = it }.onFailure { message = it.message ?: "Membership record unavailable." }
+                    }
+                    KeyValueList(if (memberRecords.isEmpty()) profile else memberRecords)
+                }
+                "Attendance" -> {
+                    ActionButton("Refresh attendance", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.attendanceSummary() to Backend.api.memberAttendance() } }
+                            .onSuccess { attendanceSummary = it.first; attendanceRows = it.second }
+                            .onFailure { message = it.message ?: "Attendance history unavailable." }
+                    }
+                    KeyValueList(attendanceSummary)
+                    Text("Attendance history", style = MaterialTheme.typography.titleMedium)
+                    RecordList(attendanceRows, listOf("attendance_date", "meeting_type", "status", "circuit", "church_name"))
+                }
+                "Giving" -> {
+                    ActionButton("Refresh giving history", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.givingHistory() } }
+                            .onSuccess { givingRows = it }.onFailure { message = it.message ?: "Giving history unavailable." }
+                    }
+                    Text("Your recorded contributions", style = MaterialTheme.typography.titleMedium)
+                    RecordList(givingRows, listOf("date", "source", "fund", "amount", "method", "reference"))
+                }
+                "Feed" -> {
+                    ActionButton("Load announcements", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.announcements() } }
+                            .onSuccess { feedRows = it; message = "${it.size} announcements loaded." }
+                            .onFailure { message = it.message ?: "Feed unavailable." }
+                    }
+                    Text(message)
+                    RecordList(feedRows, listOf("title", "message", "created_at", "status"))
+                }
+                "Finance" -> {
+                    Text("Finance & Payments Centre", style = MaterialTheme.typography.titleLarge)
+                    Text("Authorized finance access. Reconciliation actions remain protected by the diocesan server.")
+                    ActionButton("Refresh finance records", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Triple(Backend.api.financeSummary(), Backend.api.paymentHistory(), Backend.api.paymentReconciliation()) } }
+                            .onSuccess {
+                                financeSummary = it.first
+                                paymentRows = (it.second["payments"] as? List<Map<String, Any?>>) ?: emptyList()
+                                reconciliationRows = (it.third["payments"] as? List<Map<String, Any?>>) ?: emptyList()
+                                message = "Finance records refreshed."
+                            }.onFailure { message = it.message ?: "Finance records could not be loaded." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    val summary = financeSummary["summary"] as? Map<String, Any?> ?: emptyMap()
+                    SummaryCards(summary)
+                    Text("Payment history", style = MaterialTheme.typography.titleMedium)
+                    RecordList(paymentRows, listOf("reference", "status", "amount", "currency", "purpose", "donor_name", "circuit", "church_name", "created_at", "paid_at"))
+                    Text("Payment reconciliation", style = MaterialTheme.typography.titleMedium)
+                    RecordList(reconciliationRows, listOf("reference", "payment_status", "payment_amount", "currency", "reconciliation_status", "income_id", "income_amount", "income_date"))
+                }
+                "Approvals" -> {
+                    Text("Membership Registration Approvals", style = MaterialTheme.typography.titleLarge)
+                    Text("Review pending applications. Approval creates the official member record and login using the existing server workflow.")
+                    ActionButton("Load registrations", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.memberRegistrations() } }
+                            .onSuccess { registrations = it; message = "${it.size} registration records loaded." }
+                            .onFailure { message = it.message ?: "Registration list unavailable." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    RegistrationList(registrations, busy) { id, status ->
+                        busy = true
+                        scope.launch {
+                            runCatching {
+                                withContext(Dispatchers.IO) {
+                                    Backend.api.reviewMemberRegistration(id, mapOf(
+                                        "status" to status,
+                                        "role" to "Member",
+                                        "circuit" to "",
+                                        "church_name" to "",
+                                        "review_note" to "Reviewed in the native Android app."
+                                    ))
+                                }
+                            }.onSuccess {
+                                message = it["message"]?.toString() ?: "Registration updated."
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.memberRegistrations() } }
+                                    .onSuccess { registrations = it }
+                            }.onFailure { message = it.message ?: "Could not update registration." }
+                            busy = false
+                        }
+                    }
+                }
+            }
+            if (message.isNotBlank() && selected !in setOf("Feed", "Finance", "Approvals")) {
+                Text(message, color = MaterialTheme.colorScheme.error)
+            }
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = {
+                Backend.cookies.clear()
+                signedIn = false
+                profile = emptyMap()
+                dashboard = emptyMap()
+                memberRecords = emptyMap()
+                attendanceRows = emptyList()
+                givingRows = emptyList()
+                registrations = emptyList()
+            }) { Text("Sign out") }
+        }
     }
-   }
-  }
- }
 }
-\n@Composable private fun SummaryCards(summary: Map<String, Any?>) {\n val labels = listOf("income_total" to "Total income", "expense_total" to "Total expenses", "net_balance" to "Net balance", "paid_online_total" to "Online payments", "matched_online_total" to "Matched online", "unmatched_online_total" to "Unmatched online")\n Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {\n  labels.chunked(2).forEach { pair ->\n   Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {\n    pair.forEach { (key, label) ->\n     ElevatedCard(Modifier.weight(1f)) { Column(Modifier.padding(12.dp)) { Text(label, style = MaterialTheme.typography.labelSmall); Text("₦" + String.format("%,.2f", (summary[key] as? Number)?.toDouble() ?: 0.0), style = MaterialTheme.typography.titleMedium) } }\n    }\n   }\n  }\n }\n}\n
+
+@Composable
+private fun ActionButton(label: String, busy: Boolean, action: suspend () -> Unit) {
+    val scope = rememberCoroutineScope()
+    Button(enabled = !busy, onClick = { scope.launch { action() } }) {
+        Text(if (busy) "Please wait…" else label)
+    }
+}
+
+@Composable
+private fun RegistrationList(
+    rows: List<Map<String, Any?>>,
+    busy: Boolean,
+    onReview: (Int, String) -> Unit
+) {
+    if (rows.isEmpty()) {
+        Text("No registration records loaded. Select Load registrations.")
+        return
+    }
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 480.dp)) {
+        items(rows) { row ->
+            val id = (row["id"] as? Number)?.toInt() ?: row["id"]?.toString()?.toIntOrNull() ?: -1
+            val status = row["status"]?.toString() ?: "Pending"
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(row["full_name"]?.toString() ?: "Applicant", style = MaterialTheme.typography.titleMedium)
+                    Text("Registration: ${row["registration_id"] ?: id}")
+                    Text("Circuit: ${row["circuit"] ?: "—"}")
+                    Text("Local Church: ${row["church_name"] ?: "—"}")
+                    Text("Phone: ${row["phone"] ?: "—"}")
+                    Text("Status: $status")
+                    if (status != "Approved" && status != "Rejected" && id > 0) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(enabled = !busy, onClick = { onReview(id, "Approved") }) { Text("Approve as Member") }
+                            OutlinedButton(enabled = !busy, onClick = { onReview(id, "Rejected") }) { Text("Reject") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KeyValueList(values: Map<String, Any?>) {
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.heightIn(max = 520.dp)) {
+        items(values.entries.toList()) { entry ->
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(entry.key, style = MaterialTheme.typography.labelMedium)
+                    Text(entry.value?.toString() ?: "—")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecordList(rows: List<Map<String, Any?>>, fields: List<String>) {
+    if (rows.isEmpty()) {
+        Text("No records loaded yet.")
+    } else {
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.heightIn(max = 440.dp)) {
+            items(rows) { row ->
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        fields.filter { row[it] != null && row[it].toString().isNotBlank() }.forEach { key ->
+                            Text(key.replace('_', ' ').replaceFirstChar { it.uppercase() }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                            Text(row[key].toString(), style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryCards(summary: Map<String, Any?>) {
+    val labels = listOf(
+        "income_total" to "Total income",
+        "expense_total" to "Total expenses",
+        "net_balance" to "Net balance",
+        "paid_online_total" to "Online payments",
+        "matched_online_total" to "Matched online",
+        "unmatched_online_total" to "Unmatched online"
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        labels.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                pair.forEach { (key, label) ->
+                    ElevatedCard(Modifier.weight(1f)) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(label, style = MaterialTheme.typography.labelSmall)
+                            Text("₦" + String.format("%,.2f", (summary[key] as? Number)?.toDouble() ?: 0.0), style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
