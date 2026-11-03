@@ -43,6 +43,7 @@ private fun NativeDioceseApp() {
     var directoryCircuits by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var memberDirectory by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var memberSearch by remember { mutableStateOf("") }
+    var membershipStats by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var selected by remember { mutableStateOf("Home") }
     val scope = rememberCoroutineScope()
     val role = (profile["role"] ?: "").toString()
@@ -153,6 +154,15 @@ private fun NativeDioceseApp() {
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
+                    ActionButton("Load membership statistics", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.membershipStatistics() } }
+                            .onSuccess { membershipStats = it }
+                            .onFailure { message = it.message ?: "Membership statistics unavailable." }
+                    }
+                    if (membershipStats.isNotEmpty()) {
+                        val statisticKeys = listOf("total_members", "male", "female", "youth", "children", "baptised", "confirmed", "married", "new_members", "transferred", "relocated")
+                        SummaryCards(membershipStats.filterKeys { it in statisticKeys })
+                    }
                     ActionButton("Load members", busy) {
                         runCatching { withContext(Dispatchers.IO) { Backend.api.members() } }
                             .onSuccess { memberDirectory = it; message = "${it.size} member records loaded." }
@@ -234,6 +244,7 @@ private fun NativeDioceseApp() {
                 registrations = emptyList()
                 memberDirectory = emptyList()
                 memberSearch = ""
+                membershipStats = emptyMap()
             }) { Text("Sign out") }
         }
     }
