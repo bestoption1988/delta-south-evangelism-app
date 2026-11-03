@@ -64,6 +64,8 @@ private fun NativeDioceseApp() {
     var securityData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var backupRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var adminUserRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var qualityData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var auditRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reportYear by remember { mutableStateOf(java.time.LocalDate.now().year.toString()) }
     var reportCircuit by remember { mutableStateOf("All") }
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -796,6 +798,30 @@ private fun NativeDioceseApp() {
                         KeyValueList(securityData.filterKeys { it != "latest_backup" })
                         val latest = securityData["latest_backup"] as? Map<String, Any?> ?: emptyMap()
                         if (latest.isNotEmpty()) KeyValueList(latest)
+                    }
+                    if (role in setOf("Admin", "Auditor")) {
+                        Text("Data quality checks", style = MaterialTheme.typography.titleMedium)
+                        ActionButton("Run data quality scan", busy) {
+                            runCatching { withContext(Dispatchers.IO) { Backend.api.dataQuality() } }
+                                .onSuccess { qualityData = it; message = "Data quality scan completed." }
+                                .onFailure { message = it.message ?: "Data quality scan unavailable." }
+                        }
+                        if (qualityData.isNotEmpty()) {
+                            KeyValueList(mapOf("Overall data quality" to qualityData["ok"], "Generated" to qualityData["generated_at"]))
+                            Text("Checks", style = MaterialTheme.typography.titleSmall)
+                            val checks = qualityData["checks"] as? List<Map<String, Any?>> ?: emptyList()
+                            RecordList(checks, listOf("name", "count", "severity"))
+                            Text("Issues requiring attention", style = MaterialTheme.typography.titleSmall)
+                            val issues = qualityData["issues"] as? List<Map<String, Any?>> ?: emptyList()
+                            RecordList(issues, listOf("name", "count", "severity"))
+                        }
+                        Text("Audit trail", style = MaterialTheme.typography.titleMedium)
+                        ActionButton("Load recent audit records", busy) {
+                            runCatching { withContext(Dispatchers.IO) { Backend.api.auditLog() } }
+                                .onSuccess { auditRows = it; message = "${it.size} audit records loaded." }
+                                .onFailure { message = it.message ?: "Audit records unavailable." }
+                        }
+                        RecordList(auditRows, listOf("happened_at", "username", "action", "table_name", "record_id", "details"))
                     }
                     Text("Database backup history", style = MaterialTheme.typography.titleMedium)
                     Text("Recent server backups. Backup restoration is intentionally not available in the mobile app.")
