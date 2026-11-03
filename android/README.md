@@ -16,3 +16,8 @@ GitHub Actions builds a debug APK on pushes to native-android-development affect
 
 ## Safety
 No existing Flask files, production data, or main-branch history are modified by this Android folder. The app uses the existing authenticated backend; server-side authorization remains authoritative. This is a development build and requires endpoint verification, device testing, and release signing before public distribution.
+
+
+## Native member self-service additions
+
+The member area now provides dedicated screens for membership records, attendance summary/history, and recorded giving history. These screens use the existing authenticated member endpoints (`/api/member/records`, `/api/member/attendance-summary`, `/api/member/attendance`, and `/api/member/giving-history`). Data is read-only in this increment; the server remains responsible for account access and record integrity.
