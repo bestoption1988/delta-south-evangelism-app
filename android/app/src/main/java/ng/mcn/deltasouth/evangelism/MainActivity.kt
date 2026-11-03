@@ -68,6 +68,7 @@ private fun NativeDioceseApp() {
     var conferenceMessage by remember { mutableStateOf("") }
     var conferenceParticipantName by remember { mutableStateOf("") }
     var conferenceParticipantRole by remember { mutableStateOf("") }
+    var conferencePresenceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var registrations by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryChurches by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryCircuits by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -557,6 +558,40 @@ private fun NativeDioceseApp() {
                                 busy = false
                             }
                         }) { Text("Add participant") }
+                        Text("Live attendance / presence", style = MaterialTheme.typography.titleMedium)
+                        Text("Check in to show that you are currently in this conference. Presence expires automatically if not refreshed.")
+                        val presenceName = (profile["full_name"] ?: profile["name"] ?: profile["username"] ?: username).toString()
+                        val presenceId = (profile["username"] ?: profile["id"] ?: username).toString()
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(enabled = !busy, onClick = {
+                                val selectedId = conferenceSelectedId ?: return@Button
+                                scope.launch {
+                                    busy = true
+                                    runCatching { withContext(Dispatchers.IO) { Backend.api.updateConferencePresence(selectedId, mapOf("participant_id" to presenceId, "participant_name" to presenceName, "audio_only" to true)) } }
+                                        .onSuccess { runCatching { withContext(Dispatchers.IO) { Backend.api.conferencePresence(selectedId) } }.onSuccess { conferencePresenceRows = it }; message = "Conference attendance checked in." }
+                                        .onFailure { message = it.message ?: "Could not check in." }
+                                    busy = false
+                                }
+                            }) { Text("Check in") }
+                            OutlinedButton(enabled = !busy, onClick = {
+                                val selectedId = conferenceSelectedId ?: return@OutlinedButton
+                                scope.launch {
+                                    busy = true
+                                    runCatching { withContext(Dispatchers.IO) { Backend.api.leaveConferencePresence(selectedId, presenceId) } }
+                                        .onSuccess { runCatching { withContext(Dispatchers.IO) { Backend.api.conferencePresence(selectedId) } }.onSuccess { conferencePresenceRows = it }; message = "You have left the live attendance list." }
+                                        .onFailure { message = it.message ?: "Could not leave attendance." }
+                                    busy = false
+                                }
+                            }) { Text("Leave") }
+                        }
+                        ActionButton("Refresh live attendance", busy) {
+                            val selectedId = conferenceSelectedId ?: return@ActionButton
+                            runCatching { withContext(Dispatchers.IO) { Backend.api.conferencePresence(selectedId) } }
+                                .onSuccess { conferencePresenceRows = it; message = "Live attendance refreshed." }
+                                .onFailure { message = it.message ?: "Attendance list unavailable." }
+                        }
+                        Text("Currently present: ${conferencePresenceRows.size}")
+                        RecordList(conferencePresenceRows, listOf("participant_name", "participant_id", "audio_only", "last_seen"))
                         Text("Conference messages")
                         val messages = conferenceDetail["messages"] as? List<Map<String, Any?>> ?: emptyList()
                         RecordList(messages, listOf("sender_name", "sender_role", "message", "created_at"))
