@@ -38,6 +38,14 @@ private fun NativeDioceseApp() {
     var feedRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var eventRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var notificationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var careThreads by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var careDetail by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var careSelectedId by remember { mutableStateOf<Int?>(null) }
+    var careSubject by remember { mutableStateOf("") }
+    var careMessage by remember { mutableStateOf("") }
+    var careCategory by remember { mutableStateOf("General Assistance") }
+    var carePriority by remember { mutableStateOf("Normal") }
+    var careReply by remember { mutableStateOf("") }
     var financeSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -88,7 +96,7 @@ private fun NativeDioceseApp() {
         }
     } else {
         val tabs = buildList {
-            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Updates", "Directory"))
+            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Updates", "Member Care", "Directory"))
             if (role == "Member") add("ID Card")
             if (role in setOf("Admin", "Bishop / Diocesan Executive", "Evangelism Minister", "Planting Officer", "Diocesan Secretary", "Circuit Coordinator", "Local Church Evangelism Officer", "Auditor")) add("Members")
             if (financeRoles.contains(role)) add("Finance")
@@ -176,6 +184,81 @@ private fun NativeDioceseApp() {
                     RecordList(eventRows, listOf("title", "event_name", "description", "event_date", "start_time", "venue", "status"))
                     Text("My notifications", style = MaterialTheme.typography.titleMedium)
                     RecordList(notificationRows, listOf("title", "message", "type", "created_at", "is_read", "status"))
+                }
+                "Member Care" -> {
+                    Text("Diocesan Member Care", style = MaterialTheme.typography.titleLarge)
+                    Text("Submit a request, follow up your conversations and reply to the diocesan support team.")
+                    ActionButton("Load my conversations", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.customerCareThreads() } }
+                            .onSuccess { careThreads = it; message = "${it.size} conversations loaded." }
+                            .onFailure { message = it.message ?: "Member Care is unavailable." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    careThreads.forEach { thread ->
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp)) {
+                                Text(thread["subject"]?.toString()?.ifBlank { "Support request" } ?: "Support request", style = MaterialTheme.typography.titleSmall)
+                                Text("Ticket: ${thread["thread_id"] ?: "—"} • ${thread["status"] ?: "—"}")
+                                Text("Category: ${thread["category"] ?: "General Assistance"} • Priority: ${thread["priority"] ?: "Normal"}")
+                                TextButton(onClick = {
+                                    val id = (thread["id"] as? Number)?.toInt()
+                                    if (id != null) {
+                                        careSelectedId = id
+                                        scope.launch {
+                                            runCatching { withContext(Dispatchers.IO) { Backend.api.customerCareDetail(id) } }
+                                                .onSuccess { careDetail = it }
+                                                .onFailure { message = it.message ?: "Conversation could not be opened." }
+                                        }
+                                    }
+                                }) { Text("Open conversation") }
+                            }
+                        }
+                    }
+                    Divider()
+                    Text("Create a support request", style = MaterialTheme.typography.titleMedium)
+                    OutlinedTextField(careSubject, { careSubject = it }, label = { Text("Subject") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(careCategory, { careCategory = it }, label = { Text("Category (use exact category)") }, modifier = Modifier.fillMaxWidth())
+                    Text("Categories: General Assistance, Registration, Church Records, Baptism, Confirmation, Marriage, Transfer / Relocation, Giving / Tithe, Technical Support, Other", style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(carePriority, { carePriority = it }, label = { Text("Priority: Normal, High, Urgent") }, modifier = Modifier.fillMaxWidth())
+                    OutlinedTextField(careMessage, { careMessage = it }, label = { Text("Describe how we can help") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+                    Button(enabled = !busy && careMessage.isNotBlank(), onClick = {
+                        busy = true
+                        scope.launch {
+                            runCatching { withContext(Dispatchers.IO) {
+                                Backend.api.createCustomerCareThread(mapOf(
+                                    "subject" to careSubject.trim(), "category" to careCategory.trim(),
+                                    "priority" to carePriority.trim(), "message" to careMessage.trim()
+                                ))
+                            } }.onSuccess {
+                                message = "Support request submitted. Ticket: ${it["thread_id"] ?: "created"}"
+                                careSubject = ""; careMessage = ""
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.customerCareThreads() } }
+                                    .onSuccess { careThreads = it }
+                            }.onFailure { message = it.message ?: "Could not submit request." }
+                            busy = false
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Submitting…" else "Submit support request") }
+                    careSelectedId?.let { selectedId ->
+                        Divider()
+                        val thread = careDetail["thread"] as? Map<String, Any?> ?: emptyMap()
+                        Text("Conversation: ${thread["thread_id"] ?: selectedId}", style = MaterialTheme.typography.titleMedium)
+                        val messages = careDetail["messages"] as? List<Map<String, Any?>> ?: emptyList()
+                        RecordList(messages, listOf("sender_name", "sender_role", "message", "created_at"))
+                        OutlinedTextField(careReply, { careReply = it }, label = { Text("Write a reply") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        Button(enabled = !busy && careReply.isNotBlank(), onClick = {
+                            busy = true
+                            scope.launch {
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.sendCustomerCareMessage(selectedId, mapOf("message" to careReply.trim())) } }
+                                    .onSuccess {
+                                        careReply = ""
+                                        runCatching { withContext(Dispatchers.IO) { Backend.api.customerCareDetail(selectedId) } }
+                                            .onSuccess { careDetail = it }
+                                        message = "Reply sent."
+                                    }.onFailure { message = it.message ?: "Reply could not be sent." }
+                                busy = false
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Sending…" else "Send reply") }
+                    }
                 }
                 "Directory" -> {
                     Text("Church & Circuit Directory", style = MaterialTheme.typography.titleLarge)
