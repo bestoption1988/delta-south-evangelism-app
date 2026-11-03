@@ -11,6 +11,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 import retrofit2.http.Body
 import java.util.concurrent.ConcurrentHashMap
 class SessionCookieJar : CookieJar {
@@ -56,6 +57,9 @@ interface DioceseApi {
  @POST("api/members/{id}/appointments") suspend fun createMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
  @PUT("api/member-appointments/{id}") suspend fun updateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
  @POST("api/member-appointments/{id}/terminate") suspend fun terminateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
+ @GET("api/reports") suspend fun reports(@Query("year") year: Int, @Query("circuit") circuit: String = "All"): Map<String, Any?>
+ @GET("api/security/status") suspend fun securityStatus(): Map<String, Any?>
+ @GET("api/system/health") suspend fun systemHealth(): Map<String, Any?>
  @GET("api/customer-care") suspend fun customerCareThreads(): List<Map<String, Any?>>
  @POST("api/customer-care") suspend fun createCustomerCareThread(@Body body: Map<String, String>): Map<String, Any?>
  @GET("api/customer-care/{id}") suspend fun customerCareDetail(@Path("id") id: Int): Map<String, Any?>
