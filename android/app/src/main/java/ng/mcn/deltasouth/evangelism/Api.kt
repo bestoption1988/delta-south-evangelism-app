@@ -57,6 +57,9 @@ interface DioceseApi {
  @POST("api/members/{id}/appointments") suspend fun createMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
  @PUT("api/member-appointments/{id}") suspend fun updateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
  @POST("api/member-appointments/{id}/terminate") suspend fun terminateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
- @PUT("api/member-appointments/{id}") suspend fun updateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
- @POST("api/member-appointments/{id}/terminate") suspend fun terminateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
+ @GET("api/customer-care") suspend fun customerCareThreads(): List<Map<String, Any?>>
+ @POST("api/customer-care") suspend fun createCustomerCareThread(@Body body: Map<String, String>): Map<String, Any?>
+ @GET("api/customer-care/{id}") suspend fun customerCareDetail(@Path("id") id: Int): Map<String, Any?>
+ @POST("api/customer-care/{id}/message") suspend fun sendCustomerCareMessage(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
+
 }
