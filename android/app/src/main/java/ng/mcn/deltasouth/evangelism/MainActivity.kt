@@ -50,6 +50,7 @@ private fun NativeDioceseApp() {
     var eventRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var notificationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var careThreads by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var careUnreadTotal by remember { mutableStateOf(0) }
     var careDetail by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var careSelectedId by remember { mutableStateOf<Int?>(null) }
     var careSubject by remember { mutableStateOf("") }
@@ -329,9 +330,10 @@ private fun NativeDioceseApp() {
                 "Member Care" -> {
                     Text("Diocesan Member Care", style = MaterialTheme.typography.titleLarge)
                     Text("Submit a request, follow up your conversations and reply to the diocesan support team.")
+                    Text("Unread replies: $careUnreadTotal", style = MaterialTheme.typography.labelLarge)
                     ActionButton("Load my conversations", busy) {
                         runCatching { withContext(Dispatchers.IO) { Backend.api.customerCareThreads() } }
-                            .onSuccess { careThreads = it; message = "${it.size} conversations loaded." }
+                            .onSuccess { careThreads = it; runCatching { withContext(Dispatchers.IO) { Backend.api.customerCareUnreadCount() } }.onSuccess { careUnreadTotal = (it["total"] as? Number)?.toInt() ?: 0 }; message = "${it.size} conversations loaded." }
                             .onFailure { message = it.message ?: "Member Care is unavailable." }
                     }
                     Text(message, style = MaterialTheme.typography.bodySmall)
@@ -346,8 +348,15 @@ private fun NativeDioceseApp() {
                                     if (id != null) {
                                         careSelectedId = id
                                         scope.launch {
-                                            runCatching { withContext(Dispatchers.IO) { Backend.api.customerCareDetail(id) } }
-                                                .onSuccess { careDetail = it }
+                                            runCatching { withContext(Dispatchers.IO) {
+                                                Backend.api.markCustomerCareRead(id)
+                                                Backend.api.customerCareDetail(id)
+                                            } }
+                                                .onSuccess {
+                                                    careDetail = it
+                                                    runCatching { withContext(Dispatchers.IO) { Backend.api.customerCareUnreadCount() } }
+                                                        .onSuccess { careUnreadTotal = (it["total"] as? Number)?.toInt() ?: 0 }
+                                                }
                                                 .onFailure { message = it.message ?: "Conversation could not be opened." }
                                         }
                                     }
