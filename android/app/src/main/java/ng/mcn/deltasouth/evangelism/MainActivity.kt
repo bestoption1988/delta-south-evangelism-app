@@ -28,6 +28,9 @@ class MainActivity : ComponentActivity() {
  var attendanceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
  var givingRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
  var feedRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+ var financeSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+ var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+ var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
  var selected by remember { mutableStateOf("Home") }
  val scope = rememberCoroutineScope()
  if (!signedIn) {
@@ -156,3 +159,4 @@ class MainActivity : ComponentActivity() {
   }
  }
 }
+\n@Composable private fun SummaryCards(summary: Map<String, Any?>) {\n val labels = listOf("income_total" to "Total income", "expense_total" to "Total expenses", "net_balance" to "Net balance", "paid_online_total" to "Online payments", "matched_online_total" to "Matched online", "unmatched_online_total" to "Unmatched online")\n Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {\n  labels.chunked(2).forEach { pair ->\n   Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {\n    pair.forEach { (key, label) ->\n     ElevatedCard(Modifier.weight(1f)) { Column(Modifier.padding(12.dp)) { Text(label, style = MaterialTheme.typography.labelSmall); Text("₦" + String.format("%,.2f", (summary[key] as? Number)?.toDouble() ?: 0.0), style = MaterialTheme.typography.titleMedium) } }\n    }\n   }\n  }\n }\n}\n
