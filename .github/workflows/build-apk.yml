@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - upgrade-original-delta-south-app
     paths:
       - "android/**"
       - ".github/workflows/build-apk.yml"
