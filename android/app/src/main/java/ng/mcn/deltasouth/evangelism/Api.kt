@@ -47,6 +47,9 @@ interface DioceseApi {
  @GET("api/church-accounts") suspend fun churchAccounts(): List<Map<String, Any?>>
  @GET("api/conference") suspend fun conferences(): List<Map<String, Any?>>
  @POST("api/conference") suspend fun createConference(@Body body: Map<String, String>): Map<String, Any?>
+ @GET("api/conference/{id}") suspend fun conferenceDetail(@Path("id") id: Int): Map<String, Any?>
+ @POST("api/conference/{id}/message") suspend fun sendConferenceMessage(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
+ @POST("api/conference/{id}/participant") suspend fun addConferenceParticipant(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
  @GET("api/finance-summary") suspend fun financeSummary(): Map<String, Any?>
  @GET("api/payment-history") suspend fun paymentHistory(): Map<String, Any?>
  @GET("api/payment-reconciliation") suspend fun paymentReconciliation(): Map<String, Any?>
