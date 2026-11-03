@@ -67,6 +67,8 @@ private fun NativeDioceseApp() {
     var securityData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var backupRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var adminUserRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var accountRequestRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var accountRequestRole by remember { mutableStateOf("Local Church Evangelism Officer") }
     var qualityData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var auditRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reportYear by remember { mutableStateOf(java.time.LocalDate.now().year.toString()) }
@@ -148,6 +150,7 @@ private fun NativeDioceseApp() {
             if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Reports")
             if (role in setOf("Admin", "Auditor")) add("System")
             if (role == "Admin") add("User Administration")
+            if (role == "Admin") add("Account Requests")
             if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Governance")
             add("Conferences")
             if (canReview) add("Approvals")
@@ -417,6 +420,59 @@ private fun NativeDioceseApp() {
                             }
                         }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Sending…" else "Send reply") }
                     }
+                }
+                "Account Requests" -> {
+                    Text("Staff Account Registration Requests", style = MaterialTheme.typography.titleLarge)
+                    Text("Review pending requests and assign only an authorized role. The server validates circuit and church assignments.")
+                    ActionButton("Load account requests", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.accountRequests() } }
+                            .onSuccess { accountRequestRows = it; message = "${it.count { row -> row["status"]?.toString() == "Pending" }} pending requests loaded." }
+                            .onFailure { message = it.message ?: "Account requests could not be loaded." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    OutlinedTextField(accountRequestRole, { accountRequestRole = it }, label = { Text("Role to assign (choose an allowed staff role)") }, modifier = Modifier.fillMaxWidth())
+                    Text("Allowed: Admin, Bishop / Diocesan Executive, Evangelism Minister, Planting Officer, Diocesan Secretary, Circuit Coordinator, Local Church Evangelism Officer, Finance Officer, Auditor", style = MaterialTheme.typography.bodySmall)
+                    accountRequestRows.filter { it["status"]?.toString() == "Pending" }.forEach { req ->
+                        val id = (req["id"] as? Number)?.toInt() ?: -1
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                Text(req["full_name"]?.toString() ?: "Applicant", style = MaterialTheme.typography.titleSmall)
+                                Text("Username: ${req["username"] ?: "—"}")
+                                Text("Phone: ${req["phone"] ?: "—"}")
+                                Text("Requested assignment: ${req["circuit"] ?: "—"} • ${req["church_name"] ?: "—"}")
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Button(enabled = !busy && id > 0 && accountRequestRole.isNotBlank(), onClick = {
+                                        scope.launch {
+                                            busy = true
+                                            runCatching { withContext(Dispatchers.IO) {
+                                                Backend.api.approveAccountRequest(id, mapOf(
+                                                    "role" to accountRequestRole.trim(),
+                                                    "circuit" to (req["circuit"]?.toString() ?: ""),
+                                                    "church_name" to (req["church_name"]?.toString() ?: "")
+                                                ))
+                                            } }.onSuccess {
+                                                message = it["message"]?.toString() ?: "Account approved."
+                                                runCatching { withContext(Dispatchers.IO) { Backend.api.accountRequests() } }.onSuccess { accountRequestRows = it }
+                                            }.onFailure { message = it.message ?: "Approval failed. Check role and assignment." }
+                                            busy = false
+                                        }
+                                    }) { Text("Approve") }
+                                    OutlinedButton(enabled = !busy && id > 0, onClick = {
+                                        scope.launch {
+                                            busy = true
+                                            runCatching { withContext(Dispatchers.IO) { Backend.api.rejectAccountRequest(id, mapOf("review_note" to "Rejected by administrator in native app.")) } }
+                                                .onSuccess {
+                                                    message = it["message"]?.toString() ?: "Request rejected."
+                                                    runCatching { withContext(Dispatchers.IO) { Backend.api.accountRequests() } }.onSuccess { accountRequestRows = it }
+                                                }.onFailure { message = it.message ?: "Rejection failed." }
+                                            busy = false
+                                        }
+                                    }) { Text("Reject") }
+                                }
+                            }
+                        }
+                    }
+                    if (accountRequestRows.none { it["status"]?.toString() == "Pending" }) Text("No pending account requests.")
                 }
                 "Directory" -> {
                     Text("Church & Circuit Directory", style = MaterialTheme.typography.titleLarge)
