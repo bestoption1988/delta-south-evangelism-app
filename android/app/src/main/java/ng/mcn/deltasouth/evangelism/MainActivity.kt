@@ -74,6 +74,12 @@ private fun NativeDioceseApp() {
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var churchAccountRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var accountBank by remember { mutableStateOf("") }
+    var accountName by remember { mutableStateOf("") }
+    var accountNumber by remember { mutableStateOf("") }
+    var accountType by remember { mutableStateOf("Current") }
+    var accountBranch by remember { mutableStateOf("") }
+    var accountNotes by remember { mutableStateOf("") }
     var conferenceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var conferenceTitle by remember { mutableStateOf("") }
     var conferenceDate by remember { mutableStateOf("") }
@@ -858,6 +864,37 @@ private fun NativeDioceseApp() {
                     Text("Church bank accounts", style = MaterialTheme.typography.titleMedium)
                     Text("Active diocesan, circuit and local church accounts available to your authorized role.")
                     RecordList(churchAccountRows, listOf("account_level", "circuit", "church_name", "bank_name", "account_name", "account_number", "currency", "purpose"))
+                    if (role in setOf("Admin", "Finance Officer", "Evangelism Minister", "Circuit Coordinator", "Local Church Evangelism Officer")) {
+                        Text("Register a church bank account", style = MaterialTheme.typography.titleMedium)
+                        Text("Your role determines whether the account is registered at diocesan, circuit or local-church level.")
+                        OutlinedTextField(accountBank, { accountBank = it }, label = { Text("Bank name") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(accountName, { accountName = it }, label = { Text("Account name") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(accountNumber, { accountNumber = it }, label = { Text("Account number") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(accountType, { accountType = it }, label = { Text("Account type (Current / Savings)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(accountBranch, { accountBranch = it }, label = { Text("Bank branch (optional)") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(accountNotes, { accountNotes = it }, label = { Text("Notes (optional)") }, modifier = Modifier.fillMaxWidth())
+                        Button(enabled = !busy && accountBank.isNotBlank() && accountName.isNotBlank() && accountNumber.isNotBlank(), onClick = {
+                            scope.launch {
+                                busy = true
+                                runCatching { withContext(Dispatchers.IO) {
+                                    Backend.api.createChurchAccount(mapOf(
+                                        "bank_name" to accountBank.trim(),
+                                        "account_name" to accountName.trim(),
+                                        "account_number" to accountNumber.trim(),
+                                        "account_type" to accountType.trim(),
+                                        "branch" to accountBranch.trim(),
+                                        "notes" to accountNotes.trim()
+                                    ))
+                                } }.onSuccess {
+                                    accountBank = ""; accountName = ""; accountNumber = ""; accountBranch = ""; accountNotes = ""
+                                    runCatching { withContext(Dispatchers.IO) { Backend.api.churchAccounts() } }
+                                        .onSuccess { churchAccountRows = it }
+                                    message = "Church bank account registered."
+                                }.onFailure { message = it.message ?: "Could not register bank account." }
+                                busy = false
+                            }
+                        }, modifier = Modifier.fillMaxWidth()) { Text("Register bank account") }
+                    }
                     Text("Payment history", style = MaterialTheme.typography.titleMedium)
                     RecordList(paymentRows, listOf("reference", "status", "amount", "currency", "purpose", "donor_name", "circuit", "church_name", "created_at", "paid_at"))
                     Text("Payment reconciliation", style = MaterialTheme.typography.titleMedium)
