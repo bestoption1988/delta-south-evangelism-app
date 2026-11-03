@@ -37,6 +37,8 @@ interface DioceseApi {
  @GET("api/me") suspend fun me(): Map<String, Any?>
  @GET("api/dashboard") suspend fun dashboard(): Map<String, Any?>
  @GET("api/member/records") suspend fun memberRecords(): Map<String, Any?>
+ @PUT("api/member/profile") suspend fun updateMemberProfile(@Body body: Map<String, String>): Map<String, Any?>
+ @POST("api/member/change-password") suspend fun changeMemberPassword(@Body body: Map<String, String>): Map<String, Any?>
  @GET("api/member/id-card") suspend fun memberIdCard(): Map<String, Any?>
  @GET("api/member/attendance-summary") suspend fun attendanceSummary(): Map<String, Any?>
  @GET("api/member/attendance") suspend fun memberAttendance(): List<Map<String, Any?>>
@@ -45,6 +47,7 @@ interface DioceseApi {
  @GET("api/member/announcements") suspend fun announcements(): List<Map<String, Any?>>
  @GET("api/member/events") suspend fun events(): List<Map<String, Any?>>
  @GET("api/member/notifications") suspend fun notifications(): List<Map<String, Any?>>
+ @POST("api/member/notifications/{id}/read") suspend fun markNotificationRead(@Path("id") id: Int): Map<String, Any?>
  @GET("api/church-accounts") suspend fun churchAccounts(): List<Map<String, Any?>>
  @GET("api/conference") suspend fun conferences(): List<Map<String, Any?>>
  @POST("api/conference") suspend fun createConference(@Body body: Map<String, String>): Map<String, Any?>
