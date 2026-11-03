@@ -161,6 +161,16 @@ def init_db():
         )
     db().commit()
 
+    # Keep the publicly confirmed national church leader's name visible
+    # on fresh installations without overwriting an administrator's edits.
+    db().execute(
+        """UPDATE leadership_profiles
+           SET full_name=?
+           WHERE title='Prelate' AND COALESCE(TRIM(full_name), '')=''""",
+        ("His Eminence, Dr. Oliver Ali Aba (JP)",)
+    )
+    db().commit()
+
     # Account registration requests: initialize before the Admin
     # account-requests API is used. Existing records are preserved.
     db().execute("""
