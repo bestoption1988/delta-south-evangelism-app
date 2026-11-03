@@ -8854,6 +8854,55 @@ def media_library_public():
         )
 
 
+@app.route("/media-library/file/<int:media_id>")
+def media_library_document(media_id):
+    """Serve published library files through the app for reliable mobile viewing."""
+    try:
+        rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,storage_path,mime_type,media_type,published",
+                "id": f"eq.{media_id}",
+                "published": "eq.true",
+                "limit": "1",
+            },
+        )
+        if not rows:
+            return "Media not found.", 404
+
+        item = rows[0]
+        mime_type = (item.get("mime_type") or "application/octet-stream").lower()
+        if mime_type not in {
+            "application/pdf",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "image/jpeg", "image/png", "image/webp", "image/gif",
+        }:
+            return "This file type is not available in the document viewer.", 415
+
+        response = _ml_storage_request("GET", item["storage_path"])
+        if not response.ok:
+            app.logger.warning(
+                "Published media retrieval failed for record %s (HTTP %s)",
+                media_id, response.status_code
+            )
+            return "The file is temporarily unavailable.", 502
+
+        import io as _ml_io
+        from flask import send_file as _ml_send_file
+        filename = item.get("storage_path", "church-document").rsplit("/", 1)[-1]
+        download = request.args.get("download") == "1"
+        return _ml_send_file(
+            _ml_io.BytesIO(response.content),
+            mimetype=mime_type,
+            as_attachment=download,
+            download_name=filename,
+            conditional=True,
+        )
+    except Exception:
+        app.logger.exception("Published media document could not be served")
+        return "Unable to open this file right now.", 500
+
+
 @app.route("/admin/media-library", methods=["GET", "POST"])
 @page_login_required
 def media_library_admin():
