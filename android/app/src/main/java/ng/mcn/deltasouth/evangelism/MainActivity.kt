@@ -54,6 +54,7 @@ private fun NativeDioceseApp() {
     var appointmentStart by remember { mutableStateOf("") }
     var appointmentEnd by remember { mutableStateOf("") }
     var appointmentNotes by remember { mutableStateOf("") }
+    var appointmentEditingId by remember { mutableStateOf<Int?>(null) }
     var selected by remember { mutableStateOf("Home") }
     val scope = rememberCoroutineScope()
     val role = (profile["role"] ?: "").toString()
@@ -223,8 +224,27 @@ private fun NativeDioceseApp() {
                             Divider()
                             Text("Appointments: ${selectedMember["full_name"] ?: "Member"}", style = MaterialTheme.typography.titleMedium)
                             val appointmentRows = appointmentData["appointments"] as? List<Map<String, Any?>> ?: emptyList()
-                            RecordList(appointmentRows, listOf("office", "level", "circuit", "church_name", "start_date", "end_date", "status", "notes", "appointed_by"))
-                            Text("Add church office appointment", style = MaterialTheme.typography.titleSmall)
+                            appointmentRows.forEach { appointment ->
+                                ElevatedCard(Modifier.fillMaxWidth()) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(appointment["office"]?.toString() ?: "Church office", style = MaterialTheme.typography.titleSmall)
+                                        Text("${appointment["level"] ?: ""} • ${appointment["circuit"] ?: "Diocesan"} • ${appointment["church_name"] ?: ""}")
+                                        Text("Start: ${appointment["start_date"] ?: "—"}   End: ${appointment["end_date"] ?: "—"}")
+                                        Text("Status: ${appointment["status"] ?: "—"}")
+                                        TextButton(onClick = {
+                                            appointmentEditingId = (appointment["id"] as? Number)?.toInt()
+                                            appointmentOffice = appointment["office"]?.toString() ?: ""
+                                            appointmentLevel = appointment["level"]?.toString() ?: "Local Church"
+                                            appointmentCircuit = appointment["circuit"]?.toString() ?: ""
+                                            appointmentChurch = appointment["church_name"]?.toString() ?: ""
+                                            appointmentStart = appointment["start_date"]?.toString() ?: ""
+                                            appointmentEnd = appointment["end_date"]?.toString() ?: ""
+                                            appointmentNotes = appointment["notes"]?.toString() ?: ""
+                                        }) { Text("Edit appointment") }
+                                    }
+                                }
+                            }
+                            Text(if (appointmentEditingId == null) "Add church office appointment" else "Edit selected appointment", style = MaterialTheme.typography.titleSmall)
                             OutlinedTextField(appointmentOffice, { appointmentOffice = it }, label = { Text("Office (use exact official title)") }, modifier = Modifier.fillMaxWidth())
                             Text("Valid offices: Bishop / Diocesan Executive; Lay President; Evangelism Minister; Presbyters; Ministers; Lay Preachers; Planting Officer; Diocesan Secretary; Circuit Coordinator; Local Church Evangelism Officer; Sunday School Teachers; Finance Officer; Conference Awardees; Diocesan Awardees; Friends of the Diocese; Auditor; Men Fellowship President; Women Fellowship President; Youth Fellowship President; Others", style = MaterialTheme.typography.bodySmall)
                             OutlinedTextField(appointmentLevel, { appointmentLevel = it }, label = { Text("Level: Diocesan, Circuit, or Local Church") }, modifier = Modifier.fillMaxWidth())
@@ -237,7 +257,12 @@ private fun NativeDioceseApp() {
                                 busy = true
                                 scope.launch {
                                     runCatching { withContext(Dispatchers.IO) {
-                                        Backend.api.createMemberAppointment(memberId!!, mapOf(
+                                        if (appointmentEditingId != null) Backend.api.updateMemberAppointment(appointmentEditingId!!, mapOf(
+                                            "office" to appointmentOffice.trim(), "level" to appointmentLevel.trim(),
+                                            "circuit" to appointmentCircuit.trim(), "church_name" to appointmentChurch.trim(),
+                                            "start_date" to appointmentStart.trim(), "end_date" to appointmentEnd.trim(),
+                                            "status" to "Active", "notes" to appointmentNotes.trim()
+                                        )) else Backend.api.createMemberAppointment(memberId!!, mapOf(
                                             "office" to appointmentOffice.trim(), "level" to appointmentLevel.trim(),
                                             "circuit" to appointmentCircuit.trim(), "church_name" to appointmentChurch.trim(),
                                             "start_date" to appointmentStart.trim(), "end_date" to appointmentEnd.trim(),
@@ -245,6 +270,7 @@ private fun NativeDioceseApp() {
                                         ))
                                     } }.onSuccess {
                                         message = it["message"]?.toString() ?: "Appointment saved."
+                                        appointmentEditingId = null
                                         runCatching { withContext(Dispatchers.IO) { Backend.api.memberAppointments(memberId!!) } }
                                             .onSuccess { appointmentData = it }
                                     }.onFailure { message = it.message ?: "Appointment could not be saved." }
