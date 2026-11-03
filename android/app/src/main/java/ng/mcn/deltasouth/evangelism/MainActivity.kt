@@ -48,6 +48,7 @@ private fun NativeDioceseApp() {
     var careReply by remember { mutableStateOf("") }
     var financeSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var reportData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var governanceData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var healthData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var securityData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var reportYear by remember { mutableStateOf(java.time.LocalDate.now().year.toString()) }
@@ -107,6 +108,7 @@ private fun NativeDioceseApp() {
             if (financeRoles.contains(role)) add("Finance")
             if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Reports")
             if (role in setOf("Admin", "Auditor")) add("System")
+            if (role in setOf("Admin", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary", "Circuit Coordinator")) add("Governance")
             if (canReview) add("Approvals")
         }
         Column(Modifier.fillMaxSize().padding(16.dp)) {
@@ -446,6 +448,28 @@ private fun NativeDioceseApp() {
                     val roadmap = reportData["five_year"] as? List<Map<String, Any?>> ?: emptyList()
                     Text("Five-year church planting roadmap", style = MaterialTheme.typography.titleMedium)
                     RecordList(roadmap, listOf("year", "target", "planned", "launched", "remaining"))
+                }
+                "Governance" -> {
+                    Text("Diocesan Governance & Reporting", style = MaterialTheme.typography.titleLarge)
+                    Text("Reporting periods, circuit report submissions and action-point status.")
+                    ActionButton("Refresh governance overview", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.reportingSummary() } }
+                            .onSuccess { governanceData = it; message = "Governance overview refreshed." }
+                            .onFailure { message = it.message ?: "Governance overview unavailable." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    if (governanceData.isNotEmpty()) {
+                        Text("Reporting periods", style = MaterialTheme.typography.titleMedium)
+                        val periods = governanceData["periods"] as? List<Map<String, Any?>> ?: emptyList()
+                        RecordList(periods, listOf("period_name", "start_date", "end_date", "submission_due", "status"))
+                        Text("Circuit report status", style = MaterialTheme.typography.titleMedium)
+                        val reportStatus = governanceData["report_status"] as? List<Map<String, Any?>> ?: emptyList()
+                        RecordList(reportStatus, listOf("status", "count"))
+                        Text("Action-point status", style = MaterialTheme.typography.titleMedium)
+                        val actionStatus = governanceData["action_status"] as? List<Map<String, Any?>> ?: emptyList()
+                        RecordList(actionStatus, listOf("status", "count"))
+                        KeyValueList(mapOf("Recorded meetings" to governanceData["meetings"]))
+                    }
                 }
                 "System" -> {
                     Text("System Health & Security", style = MaterialTheme.typography.titleLarge)
