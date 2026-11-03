@@ -45,6 +45,15 @@ private fun NativeDioceseApp() {
     var memberDirectory by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var memberSearch by remember { mutableStateOf("") }
     var membershipStats by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var appointmentMember by remember { mutableStateOf<Map<String, Any?>?>(null) }
+    var appointmentData by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var appointmentOffice by remember { mutableStateOf("Local Church Evangelism Officer") }
+    var appointmentLevel by remember { mutableStateOf("Local Church") }
+    var appointmentCircuit by remember { mutableStateOf("") }
+    var appointmentChurch by remember { mutableStateOf("") }
+    var appointmentStart by remember { mutableStateOf("") }
+    var appointmentEnd by remember { mutableStateOf("") }
+    var appointmentNotes by remember { mutableStateOf("") }
     var selected by remember { mutableStateOf("Home") }
     val scope = rememberCoroutineScope()
     val role = (profile["role"] ?: "").toString()
@@ -187,7 +196,65 @@ private fun NativeDioceseApp() {
                             .any { key -> row[key]?.toString()?.lowercase()?.contains(query) == true }
                     }
                     Text("${filteredMembers.size} matching members", style = MaterialTheme.typography.labelMedium)
-                    RecordList(filteredMembers, listOf("member_id", "full_name", "phone", "circuit", "church_name", "fellowship", "gender", "baptised", "confirmed", "marriage"))
+                    if (role == "Admin") {
+                        Text("Church Office Appointments", style = MaterialTheme.typography.titleMedium)
+                        Text("Select a member to view or record diocesan, circuit or local-church appointments.")
+                        filteredMembers.forEach { row ->
+                            ElevatedCard(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(10.dp)) {
+                                    Text(row["full_name"]?.toString() ?: "Member", style = MaterialTheme.typography.titleSmall)
+                                    Text("ID: ${row["member_id"] ?: "—"} • ${row["church_name"] ?: row["circuit"] ?: ""}")
+                                    TextButton(onClick = {
+                                        val id = (row["id"] as? Number)?.toInt()
+                                        if (id != null) {
+                                            appointmentMember = row
+                                            scope.launch {
+                                                runCatching { withContext(Dispatchers.IO) { Backend.api.memberAppointments(id) } }
+                                                    .onSuccess { appointmentData = it; appointmentCircuit = row["circuit"]?.toString() ?: ""; appointmentChurch = row["church_name"]?.toString() ?: ""; message = "Appointments loaded." }
+                                                    .onFailure { message = it.message ?: "Could not load appointments." }
+                                            }
+                                        } else message = "This member record has no database ID."
+                                    }) { Text("Manage appointments") }
+                                }
+                            }
+                        }
+                        appointmentMember?.let { selectedMember ->
+                            val memberId = (selectedMember["id"] as? Number)?.toInt()
+                            Divider()
+                            Text("Appointments: ${selectedMember["full_name"] ?: "Member"}", style = MaterialTheme.typography.titleMedium)
+                            val appointmentRows = appointmentData["appointments"] as? List<Map<String, Any?>> ?: emptyList()
+                            RecordList(appointmentRows, listOf("office", "level", "circuit", "church_name", "start_date", "end_date", "status", "notes", "appointed_by"))
+                            Text("Add church office appointment", style = MaterialTheme.typography.titleSmall)
+                            OutlinedTextField(appointmentOffice, { appointmentOffice = it }, label = { Text("Office (use exact official title)") }, modifier = Modifier.fillMaxWidth())
+                            Text("Valid offices: Bishop / Diocesan Executive; Lay President; Evangelism Minister; Presbyters; Ministers; Lay Preachers; Planting Officer; Diocesan Secretary; Circuit Coordinator; Local Church Evangelism Officer; Sunday School Teachers; Finance Officer; Conference Awardees; Diocesan Awardees; Friends of the Diocese; Auditor; Men Fellowship President; Women Fellowship President; Youth Fellowship President; Others", style = MaterialTheme.typography.bodySmall)
+                            OutlinedTextField(appointmentLevel, { appointmentLevel = it }, label = { Text("Level: Diocesan, Circuit, or Local Church") }, modifier = Modifier.fillMaxWidth())
+                            if (appointmentLevel != "Diocesan") OutlinedTextField(appointmentCircuit, { appointmentCircuit = it }, label = { Text("Circuit") }, modifier = Modifier.fillMaxWidth())
+                            if (appointmentLevel == "Local Church") OutlinedTextField(appointmentChurch, { appointmentChurch = it }, label = { Text("Local church") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(appointmentStart, { appointmentStart = it }, label = { Text("Start date (YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(appointmentEnd, { appointmentEnd = it }, label = { Text("End date (optional, YYYY-MM-DD)") }, modifier = Modifier.fillMaxWidth())
+                            OutlinedTextField(appointmentNotes, { appointmentNotes = it }, label = { Text("Notes") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                            Button(enabled = !busy && memberId != null && appointmentStart.isNotBlank(), onClick = {
+                                busy = true
+                                scope.launch {
+                                    runCatching { withContext(Dispatchers.IO) {
+                                        Backend.api.createMemberAppointment(memberId!!, mapOf(
+                                            "office" to appointmentOffice.trim(), "level" to appointmentLevel.trim(),
+                                            "circuit" to appointmentCircuit.trim(), "church_name" to appointmentChurch.trim(),
+                                            "start_date" to appointmentStart.trim(), "end_date" to appointmentEnd.trim(),
+                                            "status" to "Active", "notes" to appointmentNotes.trim()
+                                        ))
+                                    } }.onSuccess {
+                                        message = it["message"]?.toString() ?: "Appointment saved."
+                                        runCatching { withContext(Dispatchers.IO) { Backend.api.memberAppointments(memberId!!) } }
+                                            .onSuccess { appointmentData = it }
+                                    }.onFailure { message = it.message ?: "Appointment could not be saved." }
+                                    busy = false
+                                }
+                            }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Saving…" else "Save appointment") }
+                        }
+                    } else {
+                        RecordList(filteredMembers, listOf("member_id", "full_name", "phone", "circuit", "church_name", "fellowship", "gender", "baptised", "confirmed", "marriage"))
+                    }
                 }
                 "Finance" -> {
                     Text("Finance & Payments Centre", style = MaterialTheme.typography.titleLarge)
