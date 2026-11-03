@@ -10,6 +10,7 @@ import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
+import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Body
 import java.util.concurrent.ConcurrentHashMap
@@ -54,6 +55,8 @@ interface DioceseApi {
  @POST("api/member-registrations/{id}/review") suspend fun reviewMemberRegistration(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
  @GET("api/members/{id}/appointments") suspend fun memberAppointments(@Path("id") id: Int): Map<String, Any?>
  @POST("api/members/{id}/appointments") suspend fun createMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
+ @PUT("api/member-appointments/{id}") suspend fun updateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
+ @POST("api/member-appointments/{id}/terminate") suspend fun terminateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
  @PUT("api/member-appointments/{id}") suspend fun updateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
  @POST("api/member-appointments/{id}/terminate") suspend fun terminateMemberAppointment(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
 }
