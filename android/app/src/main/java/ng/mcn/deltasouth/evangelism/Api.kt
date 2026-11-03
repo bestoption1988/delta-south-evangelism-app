@@ -8,6 +8,9 @@ import okhttp3.Request
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.Path
+import retrofit2.http.Body
 import java.util.concurrent.ConcurrentHashMap
 class SessionCookieJar : CookieJar {
  private val store = ConcurrentHashMap<String, List<Cookie>>()
@@ -42,4 +45,6 @@ interface DioceseApi {
  @GET("api/finance-summary") suspend fun financeSummary(): Map<String, Any?>
  @GET("api/payment-history") suspend fun paymentHistory(): Map<String, Any?>
  @GET("api/payment-reconciliation") suspend fun paymentReconciliation(): Map<String, Any?>
+ @GET("api/member-registrations") suspend fun memberRegistrations(): List<Map<String, Any?>>
+ @POST("api/member-registrations/{id}/review") suspend fun reviewMemberRegistration(@Path("id") id: Int, @Body body: Map<String, String>): Map<String, Any?>
 }
