@@ -31,6 +31,7 @@ private fun NativeDioceseApp() {
     var profile by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var dashboard by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var memberRecords by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var idCard by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var attendanceSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var attendanceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var givingRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -76,6 +77,7 @@ private fun NativeDioceseApp() {
     } else {
         val tabs = buildList {
             addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Directory"))
+            if (role == "Member") add("ID Card")
             if (role in setOf("Admin", "Bishop / Diocesan Executive", "Evangelism Minister", "Planting Officer", "Diocesan Secretary", "Circuit Coordinator", "Local Church Evangelism Officer", "Auditor")) add("Members")
             if (financeRoles.contains(role)) add("Finance")
             if (canReview) add("Approvals")
@@ -102,6 +104,16 @@ private fun NativeDioceseApp() {
                             .onSuccess { memberRecords = it }.onFailure { message = it.message ?: "Membership record unavailable." }
                     }
                     KeyValueList(if (memberRecords.isEmpty()) profile else memberRecords)
+                }
+                "ID Card" -> {
+                    Text("Official Diocesan Membership ID", style = MaterialTheme.typography.titleLarge)
+                    ActionButton("Load my membership ID", busy) {
+                        runCatching { withContext(Dispatchers.IO) { Backend.api.memberIdCard() } }
+                            .onSuccess { idCard = it; message = "Membership ID loaded." }
+                            .onFailure { message = it.message ?: "Membership ID is unavailable." }
+                    }
+                    if (idCard.isNotEmpty()) MemberIdCard(idCard)
+                    Text(message, style = MaterialTheme.typography.bodySmall)
                 }
                 "Attendance" -> {
                     ActionButton("Refresh attendance", busy) {
@@ -239,6 +251,7 @@ private fun NativeDioceseApp() {
                 profile = emptyMap()
                 dashboard = emptyMap()
                 memberRecords = emptyMap()
+                idCard = emptyMap()
                 attendanceRows = emptyList()
                 givingRows = emptyList()
                 registrations = emptyList()
@@ -398,6 +411,24 @@ private fun MembershipSummaryCards(stats: Map<String, Any?>) {
                 }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
+        }
+    }
+}
+
+@Composable
+private fun MemberIdCard(data: Map<String, Any?>) {
+    ElevatedCard(Modifier.fillMaxWidth(), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("METHODIST CHURCH NIGERIA", style = MaterialTheme.typography.titleMedium)
+            Text("DELTA SOUTH DIOCESE", style = MaterialTheme.typography.titleLarge)
+            HorizontalDivider()
+            Text(data["full_name"]?.toString() ?: "Member", style = MaterialTheme.typography.headlineSmall)
+            Text("MEMBER ID: ${data["member_id"] ?: "—"}", style = MaterialTheme.typography.titleMedium)
+            Text("Office / Position: ${data["role_position"] ?: "Member"}")
+            Text("Circuit: ${data["circuit"] ?: "—"}")
+            Text("Local Church: ${data["church_name"] ?: "—"}")
+            Text("Fellowship: ${data["fellowship"] ?: "—"}")
+            Text("Present this card as proof of diocesan membership.", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
