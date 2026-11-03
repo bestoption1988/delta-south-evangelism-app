@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -148,7 +150,7 @@ private fun NativeDioceseApp() {
             Text("MCN Delta South Diocese", style = MaterialTheme.typography.headlineSmall)
             Text("Welcome, ${profile["full_name"] ?: profile["username"] ?: "Member"}")
             Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
                 tabs.forEach { label -> FilterChip(selected == label, { selected = label }, label = { Text(label) }) }
             }
             Spacer(Modifier.height(10.dp))
