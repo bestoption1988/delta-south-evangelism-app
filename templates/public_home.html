@@ -30,7 +30,7 @@
 </div>
 
 <nav class="navbar">
-  <button id="menuToggle" aria-label="Open navigation" aria-expanded="false">☰ Menu</button>
+  <button id="menuToggle" type="button" aria-controls="navLinks" aria-label="Open navigation" aria-expanded="false">☰ Menu</button>
   <div id="navLinks">
     <a href="#home">⌂ Home</a>
     <a href="#about">About Us</a>
@@ -309,14 +309,26 @@
 <script>
 const toggle = document.getElementById("menuToggle");
 const links = document.getElementById("navLinks");
-toggle.addEventListener("click", () => {
-  const open = links.classList.toggle("open");
+function setNavigationOpen(open) {
+  links.classList.toggle("open", open);
   toggle.setAttribute("aria-expanded", String(open));
+  toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+}
+toggle.addEventListener("click", () => {
+  setNavigationOpen(toggle.getAttribute("aria-expanded") !== "true");
 });
 links.querySelectorAll("a").forEach(a => a.addEventListener("click", () => {
-  links.classList.remove("open");
-  toggle.setAttribute("aria-expanded", "false");
+  setNavigationOpen(false);
 }));
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
+    setNavigationOpen(false);
+    toggle.focus();
+  }
+});
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 700) setNavigationOpen(false);
+});
 document.getElementById("year").textContent = new Date().getFullYear();
 </script>
 </body>
