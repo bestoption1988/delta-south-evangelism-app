@@ -36,6 +36,8 @@ private fun NativeDioceseApp() {
     var attendanceRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var givingRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var feedRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var eventRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
+    var notificationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var financeSummary by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var paymentRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var reconciliationRows by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -86,7 +88,7 @@ private fun NativeDioceseApp() {
         }
     } else {
         val tabs = buildList {
-            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Directory"))
+            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Updates", "Directory"))
             if (role == "Member") add("ID Card")
             if (role in setOf("Admin", "Bishop / Diocesan Executive", "Evangelism Minister", "Planting Officer", "Diocesan Secretary", "Circuit Coordinator", "Local Church Evangelism Officer", "Auditor")) add("Members")
             if (financeRoles.contains(role)) add("Finance")
@@ -151,6 +153,29 @@ private fun NativeDioceseApp() {
                     }
                     Text(message)
                     RecordList(feedRows, listOf("title", "message", "created_at", "status"))
+                }
+                "Updates" -> {
+                    Text("Diocesan Updates Centre", style = MaterialTheme.typography.titleLarge)
+                    Text("Announcements, diocesan events and account notifications.")
+                    ActionButton("Refresh all updates", busy) {
+                        runCatching {
+                            withContext(Dispatchers.IO) {
+                                Triple(Backend.api.announcements(), Backend.api.events(), Backend.api.notifications())
+                            }
+                        }.onSuccess {
+                            feedRows = it.first
+                            eventRows = it.second
+                            notificationRows = it.third
+                            message = "Updates refreshed."
+                        }.onFailure { message = it.message ?: "Updates could not be loaded." }
+                    }
+                    Text(message, style = MaterialTheme.typography.bodySmall)
+                    Text("Announcements", style = MaterialTheme.typography.titleMedium)
+                    RecordList(feedRows, listOf("title", "message", "created_at", "status"))
+                    Text("Upcoming events", style = MaterialTheme.typography.titleMedium)
+                    RecordList(eventRows, listOf("title", "event_name", "description", "event_date", "start_time", "venue", "status"))
+                    Text("My notifications", style = MaterialTheme.typography.titleMedium)
+                    RecordList(notificationRows, listOf("title", "message", "type", "created_at", "is_read", "status"))
                 }
                 "Directory" -> {
                     Text("Church & Circuit Directory", style = MaterialTheme.typography.titleLarge)
