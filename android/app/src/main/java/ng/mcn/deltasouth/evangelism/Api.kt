@@ -79,6 +79,8 @@ interface DioceseApi {
  @GET("api/users") suspend fun adminUsers(): List<Map<String, Any?>>
  @POST("api/security/users/{id}/toggle") suspend fun toggleUser(@Path("id") id: Int): Map<String, Any?>
  @GET("api/system/health") suspend fun systemHealth(): Map<String, Any?>
+ @GET("api/system/data-quality") suspend fun dataQuality(): Map<String, Any?>
+ @GET("api/audit") suspend fun auditLog(): List<Map<String, Any?>>
  @GET("api/customer-care") suspend fun customerCareThreads(): List<Map<String, Any?>>
  @POST("api/customer-care") suspend fun createCustomerCareThread(@Body body: Map<String, String>): Map<String, Any?>
  @GET("api/customer-care/{id}") suspend fun customerCareDetail(@Path("id") id: Int): Map<String, Any?>
