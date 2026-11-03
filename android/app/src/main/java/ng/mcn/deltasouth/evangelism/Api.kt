@@ -60,6 +60,8 @@ interface DioceseApi {
  @GET("api/admin/reporting-summary") suspend fun reportingSummary(): Map<String, Any?>
  @GET("api/reports") suspend fun reports(@Query("year") year: Int, @Query("circuit") circuit: String = "All"): Map<String, Any?>
  @GET("api/security/status") suspend fun securityStatus(): Map<String, Any?>
+ @GET("api/security/backups") suspend fun backupHistory(): List<Map<String, Any?>>
+ @POST("api/security/backup") suspend fun createSecurityBackup(): Map<String, Any?>
  @GET("api/system/health") suspend fun systemHealth(): Map<String, Any?>
  @GET("api/customer-care") suspend fun customerCareThreads(): List<Map<String, Any?>>
  @POST("api/customer-care") suspend fun createCustomerCareThread(@Body body: Map<String, String>): Map<String, Any?>
