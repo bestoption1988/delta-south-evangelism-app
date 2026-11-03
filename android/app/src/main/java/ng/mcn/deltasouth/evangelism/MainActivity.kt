@@ -63,7 +63,11 @@ private fun NativeDioceseApp() {
     var conferenceStart by remember { mutableStateOf("") }
     var conferenceEnd by remember { mutableStateOf("") }
     var conferenceCircuit by remember { mutableStateOf("Diocesan") }
-    var conferenceAgenda by remember { mutableStateOf("") }
+    var conferenceAgenda by remember { mutableStateOf("") }    var conferenceDetail by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var conferenceSelectedId by remember { mutableStateOf<Int?>(null) }
+    var conferenceMessage by remember { mutableStateOf("") }
+    var conferenceParticipantName by remember { mutableStateOf("") }
+    var conferenceParticipantRole by remember { mutableStateOf("") }
     var registrations by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryChurches by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
     var directoryCircuits by remember { mutableStateOf<List<Map<String, Any?>>>(emptyList()) }
@@ -520,6 +524,54 @@ private fun NativeDioceseApp() {
                     }
                     Text(message, style = MaterialTheme.typography.bodySmall)
                     RecordList(conferenceRows, listOf("title", "meeting_type", "meeting_date", "start_time", "end_time", "circuit", "organizer", "status", "room_code", "agenda"))
+                    Text("Open a conference", style = MaterialTheme.typography.titleMedium)
+                    conferenceRows.forEach { room ->
+                        val id = (room["id"] as? Number)?.toInt()
+                        if (id != null) {
+                            OutlinedButton(enabled = !busy, onClick = {
+                                scope.launch {
+                                    busy = true
+                                    runCatching { withContext(Dispatchers.IO) { Backend.api.conferenceDetail(id) } }
+                                        .onSuccess { conferenceDetail = it; conferenceSelectedId = id; message = "Conference room opened." }
+                                        .onFailure { message = it.message ?: "Could not open conference." }
+                                    busy = false
+                                }
+                            }) { Text("Open: " + (room["title"] ?: "Conference")) }
+                        }
+                    }
+                    if (conferenceSelectedId != null && conferenceDetail.isNotEmpty()) {
+                        val room = conferenceDetail["room"] as? Map<String, Any?> ?: emptyMap()
+                        Text("Room: " + (room["room_code"] ?: ""), style = MaterialTheme.typography.titleMedium)
+                        Text("Participants")
+                        val participants = conferenceDetail["participants"] as? List<Map<String, Any?>> ?: emptyList()
+                        RecordList(participants, listOf("participant_name", "participant_role", "phone", "status"))
+                        OutlinedTextField(conferenceParticipantName, { conferenceParticipantName = it }, label = { Text("Participant name") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(conferenceParticipantRole, { conferenceParticipantRole = it }, label = { Text("Role") }, modifier = Modifier.fillMaxWidth())
+                        Button(enabled = !busy && conferenceParticipantName.isNotBlank(), onClick = {
+                            val selectedId = conferenceSelectedId ?: return@Button
+                            scope.launch {
+                                busy = true
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.addConferenceParticipant(selectedId, mapOf("participant_name" to conferenceParticipantName.trim(), "participant_role" to conferenceParticipantRole.trim())) } }
+                                    .onSuccess { conferenceParticipantName = ""; conferenceParticipantRole = ""; runCatching { withContext(Dispatchers.IO) { Backend.api.conferenceDetail(selectedId) } }.onSuccess { conferenceDetail = it }; message = "Participant added." }
+                                    .onFailure { message = it.message ?: "Could not add participant." }
+                                busy = false
+                            }
+                        }) { Text("Add participant") }
+                        Text("Conference messages")
+                        val messages = conferenceDetail["messages"] as? List<Map<String, Any?>> ?: emptyList()
+                        RecordList(messages, listOf("sender_name", "sender_role", "message", "created_at"))
+                        OutlinedTextField(conferenceMessage, { conferenceMessage = it }, label = { Text("Write a message") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
+                        Button(enabled = !busy && conferenceMessage.isNotBlank(), onClick = {
+                            val selectedId = conferenceSelectedId ?: return@Button
+                            scope.launch {
+                                busy = true
+                                runCatching { withContext(Dispatchers.IO) { Backend.api.sendConferenceMessage(selectedId, mapOf("message" to conferenceMessage.trim())) } }
+                                    .onSuccess { conferenceMessage = ""; runCatching { withContext(Dispatchers.IO) { Backend.api.conferenceDetail(selectedId) } }.onSuccess { conferenceDetail = it }; message = "Conference message sent." }
+                                    .onFailure { message = it.message ?: "Could not send conference message." }
+                                busy = false
+                            }
+                        }) { Text("Send message") }
+                    }
                 }
                 "System" -> {
                     Text("System Health & Security", style = MaterialTheme.typography.titleLarge)
