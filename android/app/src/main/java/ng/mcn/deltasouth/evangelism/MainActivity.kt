@@ -161,7 +161,7 @@ private fun NativeDioceseApp() {
                     }
                     if (membershipStats.isNotEmpty()) {
                         val statisticKeys = listOf("total_members", "male", "female", "youth", "children", "baptised", "confirmed", "married", "new_members", "transferred", "relocated")
-                        SummaryCards(membershipStats.filterKeys { it in statisticKeys })
+                        MembershipSummaryCards(membershipStats.filterKeys { it in statisticKeys })
                     }
                     ActionButton("Load members", busy) {
                         runCatching { withContext(Dispatchers.IO) { Backend.api.members() } }
@@ -372,6 +372,31 @@ private fun ChurchDirectoryList(rows: List<Map<String, Any?>>) {
                         Text(circuit, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MembershipSummaryCards(stats: Map<String, Any?>) {
+    val labels = listOf(
+        "total_members" to "Total members", "male" to "Male", "female" to "Female",
+        "youth" to "Youth", "children" to "Children", "baptised" to "Baptised",
+        "confirmed" to "Confirmed", "married" to "Married", "new_members" to "New members",
+        "transferred" to "Transferred", "relocated" to "Relocated"
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        labels.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                pair.forEach { (key, label) ->
+                    ElevatedCard(Modifier.weight(1f)) {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(label, style = MaterialTheme.typography.labelSmall)
+                            Text((stats[key] ?: 0).toString(), style = MaterialTheme.typography.titleLarge)
+                        }
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
