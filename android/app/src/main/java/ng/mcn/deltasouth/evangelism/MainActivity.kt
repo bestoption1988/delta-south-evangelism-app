@@ -339,16 +339,38 @@ private fun NativeDioceseApp() {
                                         Text("${appointment["level"] ?: ""} • ${appointment["circuit"] ?: "Diocesan"} • ${appointment["church_name"] ?: ""}")
                                         Text("Start: ${appointment["start_date"] ?: "—"}   End: ${appointment["end_date"] ?: "—"}")
                                         Text("Status: ${appointment["status"] ?: "—"}")
-                                        TextButton(onClick = {
-                                            appointmentEditingId = (appointment["id"] as? Number)?.toInt()
-                                            appointmentOffice = appointment["office"]?.toString() ?: ""
-                                            appointmentLevel = appointment["level"]?.toString() ?: "Local Church"
-                                            appointmentCircuit = appointment["circuit"]?.toString() ?: ""
-                                            appointmentChurch = appointment["church_name"]?.toString() ?: ""
-                                            appointmentStart = appointment["start_date"]?.toString() ?: ""
-                                            appointmentEnd = appointment["end_date"]?.toString() ?: ""
-                                            appointmentNotes = appointment["notes"]?.toString() ?: ""
-                                        }) { Text("Edit appointment") }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            TextButton(onClick = {
+                                                appointmentEditingId = (appointment["id"] as? Number)?.toInt()
+                                                appointmentOffice = appointment["office"]?.toString() ?: ""
+                                                appointmentLevel = appointment["level"]?.toString() ?: "Local Church"
+                                                appointmentCircuit = appointment["circuit"]?.toString() ?: ""
+                                                appointmentChurch = appointment["church_name"]?.toString() ?: ""
+                                                appointmentStart = appointment["start_date"]?.toString() ?: ""
+                                                appointmentEnd = appointment["end_date"]?.toString() ?: ""
+                                                appointmentNotes = appointment["notes"]?.toString() ?: ""
+                                            }) { Text("Edit") }
+                                            if (appointment["status"]?.toString() != "Terminated") {
+                                                TextButton(onClick = {
+                                                    val id = (appointment["id"] as? Number)?.toInt()
+                                                    if (id != null) {
+                                                        scope.launch {
+                                                            busy = true
+                                                            runCatching { withContext(Dispatchers.IO) {
+                                                                Backend.api.terminateMemberAppointment(id, mapOf(
+                                                                    "end_date" to java.time.LocalDate.now().toString(),
+                                                                    "notes" to (appointment["notes"]?.toString() ?: "")
+                                                                ))
+                                                            } }.onSuccess {
+                                                                Backend.api.memberAppointments(memberId!!).let { appointmentData = it }
+                                                                message = "Appointment terminated."
+                                                            }.onFailure { message = it.message ?: "Could not terminate appointment." }
+                                                            busy = false
+                                                        }
+                                                    }
+                                                }, enabled = !busy) { Text("Terminate") }
+                                            }
+                                        }
                                     }
                                 }
                             }
