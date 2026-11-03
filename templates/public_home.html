@@ -237,7 +237,7 @@
       <audio controls preload="none" style="width:100%" src="{{ item.signed_url }}"></audio>
     {% elif item.media_type == 'video' and item.signed_url %}
       <video controls playsinline preload="metadata" style="display:block;width:100%;max-width:100%;aspect-ratio:16/9;max-height:360px;object-fit:contain;background:#07163f;border-radius:10px" src="{{ item.signed_url }}"></video>
-    {% elif item.media_type == 'image' and item.signed_url %}
+    {% elif item.media_type == 'image' %}
       <a href="{{ url_for('media_library_document', media_id=item.id) }}" target="_blank" rel="noopener"><img loading="lazy" decoding="async" src="{{ url_for('media_library_document', media_id=item.id) }}" alt="{{ item.title }}" style="display:block;width:100%;max-height:340px;object-fit:contain;background:#f1f5f9;border-radius:10px"></a>
     {% elif item.mime_type == 'application/pdf' and item.signed_url %}
       <iframe loading="lazy" title="{{ item.title }} PDF preview" src="{{ url_for('media_library_document', media_id=item.id) }}#toolbar=0&navpanes=0&view=FitH" style="display:block;width:100%;height:min(60vh,520px);min-height:260px;border:1px solid #dce4ee;border-radius:10px;background:#f8fafc"></iframe>
