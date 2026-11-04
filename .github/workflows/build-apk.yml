@@ -50,10 +50,12 @@ jobs:
           sdkmanager --list_installed
 
       - name: Prepare release signing key when configured
-        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/release-key.jks
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > app/release-key.jks
+          fi
 
       - name: Build installable debug APK and release Android App Bundle
         env:
