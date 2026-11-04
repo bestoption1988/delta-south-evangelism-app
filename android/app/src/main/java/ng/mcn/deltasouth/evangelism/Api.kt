@@ -13,6 +13,7 @@ import retrofit2.http.PUT
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import java.util.concurrent.ConcurrentHashMap
 class SessionCookieJar : CookieJar {
  private val store = ConcurrentHashMap<String, List<Cookie>>()
