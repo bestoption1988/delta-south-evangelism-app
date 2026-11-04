@@ -1027,7 +1027,7 @@ private fun NativeDioceseApp() {
             }
             Spacer(Modifier.height(12.dp))
             OutlinedButton(onClick = {
-                Backend.cookies.clear()
+                Backend.clearLocalData()
                 signedIn = false
                 profile = emptyMap()
                 dashboard = emptyMap()
