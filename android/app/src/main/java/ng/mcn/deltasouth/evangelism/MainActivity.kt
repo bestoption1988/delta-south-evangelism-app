@@ -6,6 +6,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.content.Context
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
@@ -143,6 +144,7 @@ private fun NativeDioceseApp() {
             busy = false
         }
     }
+    BackHandler(enabled = signedIn && selected != "Home") { selected = "Home"; message = "" }
     val role = (profile["role"] ?: "").toString()
     val financeRoles = setOf("Admin", "Finance Officer", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")
     val canReview = role == "Admin" || role == "Evangelism Minister"
@@ -1064,16 +1066,40 @@ private fun NativeDioceseApp() {
                 currentPassword = ""
                 newPassword = ""
                 confirmPassword = ""
+                busy = false
+                message = ""
+                selected = "Home"
                 profile = emptyMap()
                 dashboard = emptyMap()
                 memberRecords = emptyMap()
+                profilePhone = ""; profileBirthday = ""; profileAddress = ""
+                profileProfession = ""; profileFellowship = ""
                 idCard = emptyMap()
+                attendanceSummary = emptyMap()
                 attendanceRows = emptyList()
+                attendanceRegisterMembers = emptyList()
+                attendanceMemberSearch = ""
                 givingRows = emptyList()
-                registrations = emptyList()
-                memberDirectory = emptyList()
-                memberSearch = ""
-                membershipStats = emptyMap()
+                feedRows = emptyList()
+                eventRows = emptyList()
+                notificationRows = emptyList()
+                careThreads = emptyList(); careUnreadTotal = 0; careDetail = emptyMap()
+                careSelectedId = null; careSubject = ""; careMessage = ""; careReply = ""
+                financeSummary = emptyMap(); reportData = emptyMap(); governanceData = emptyMap()
+                healthData = emptyMap(); securityData = emptyMap(); backupRows = emptyList()
+                adminUserRows = emptyList(); accountRequestRows = emptyList()
+                qualityData = emptyMap(); auditRows = emptyList()
+                paymentRows = emptyList(); reconciliationRows = emptyList()
+                churchAccountRows = emptyList()
+                accountBank = ""; accountName = ""; accountNumber = ""; accountBranch = ""; accountNotes = ""
+                conferenceRows = emptyList(); conferenceDetail = emptyMap(); conferenceSelectedId = null
+                conferenceMessage = ""; conferenceParticipantName = ""; conferenceParticipantRole = ""
+                conferencePresenceRows = emptyList()
+                registrations = emptyList(); directoryChurches = emptyList(); directoryCircuits = emptyList()
+                memberDirectory = emptyList(); memberSearch = ""; membershipStats = emptyMap()
+                appointmentMember = null; appointmentData = emptyMap(); appointmentCircuit = ""
+                appointmentChurch = ""; appointmentStart = ""; appointmentEnd = ""; appointmentNotes = ""
+                appointmentEditingId = null
             }) { Text("Sign out") }
         }
     }
