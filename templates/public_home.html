@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261010-logo-fix">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261103-mobile-navigation-media-fix">
 </head>
 <body>
 
@@ -30,7 +30,7 @@
 </div>
 
 <nav class="navbar">
-  <button id="menuToggle" aria-label="Open navigation" aria-expanded="false">☰ Menu</button>
+  <button id="menuToggle" type="button" aria-controls="navLinks" aria-label="Open navigation" aria-expanded="false">☰ Menu</button>
   <div id="navLinks">
     <a href="#home">⌂ Home</a>
     <a href="#about">About Us</a>
@@ -236,7 +236,12 @@
     {% if item.media_type == 'audio' and item.signed_url %}
       <audio controls preload="none" style="width:100%" src="{{ item.signed_url }}"></audio>
     {% elif item.media_type == 'video' and item.signed_url %}
-      <video controls playsinline preload="metadata" style="width:100%;max-height:320px" src="{{ item.signed_url }}"></video>
+      <video controls playsinline preload="metadata" style="display:block;width:100%;max-width:100%;aspect-ratio:16/9;max-height:360px;object-fit:contain;background:#07163f;border-radius:10px" src="{{ item.signed_url }}"></video>
+    {% elif item.media_type == 'image' or (item.mime_type or '').startswith('image/') %}
+      <a href="{{ url_for('media_library_document', media_id=item.id) }}" target="_blank" rel="noopener"><img loading="lazy" decoding="async" src="{{ url_for('media_library_document', media_id=item.id) }}" alt="{{ item.title }}" style="display:block;width:100%;max-height:340px;object-fit:contain;background:#f1f5f9;border-radius:10px"></a>
+    {% elif item.mime_type == 'application/pdf' %}
+      <iframe loading="lazy" title="{{ item.title }} PDF preview" src="{{ url_for('media_library_document', media_id=item.id) }}#toolbar=0&navpanes=0&view=FitH" style="display:block;width:100%;height:min(60vh,520px);min-height:260px;border:1px solid #dce4ee;border-radius:10px;background:#f8fafc"></iframe>
+      <p><a class="button blue-button" href="{{ url_for('media_library_document', media_id=item.id) }}" target="_blank" rel="noopener">Open / Download PDF</a></p>
     {% elif item.signed_url %}
       <a class="button blue-button" href="{{ item.signed_url }}" target="_blank" rel="noopener">Open Document</a>
     {% endif %}
@@ -304,14 +309,26 @@
 <script>
 const toggle = document.getElementById("menuToggle");
 const links = document.getElementById("navLinks");
-toggle.addEventListener("click", () => {
-  const open = links.classList.toggle("open");
+function setNavigationOpen(open) {
+  links.classList.toggle("open", open);
   toggle.setAttribute("aria-expanded", String(open));
+  toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+}
+toggle.addEventListener("click", () => {
+  setNavigationOpen(toggle.getAttribute("aria-expanded") !== "true");
 });
 links.querySelectorAll("a").forEach(a => a.addEventListener("click", () => {
-  links.classList.remove("open");
-  toggle.setAttribute("aria-expanded", "false");
+  setNavigationOpen(false);
 }));
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
+    setNavigationOpen(false);
+    toggle.focus();
+  }
+});
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 700) setNavigationOpen(false);
+});
 document.getElementById("year").textContent = new Date().getFullYear();
 </script>
 </body>
