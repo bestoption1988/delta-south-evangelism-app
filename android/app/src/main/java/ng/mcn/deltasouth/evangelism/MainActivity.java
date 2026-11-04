@@ -20,7 +20,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
-    private static final String HOME = "https://delta-south-evangelism-app-9d73e7.rumptycloud.app/";
+    private static final String HOME = "https://mcn-delta-south.naijacloud.app/";
     private static final int FILE_CHOOSER = 1001;
     private WebView webView;
     private ValueCallback<Uri[]> uploadCallback;
@@ -87,7 +87,7 @@ public class MainActivity extends Activity {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest req) {
                 Uri u = req.getUrl();
                 if ("https".equalsIgnoreCase(u.getScheme()) && HOME.startsWith(u.getScheme()+"://")) {
-                    if (u.getHost() != null && u.getHost().equals("delta-south-evangelism-app-9d73e7.rumptycloud.app")) return false;
+                    if (u.getHost() != null && u.getHost().equals("mcn-delta-south.naijacloud.app")) return false;
                 }
                 try { startActivity(new Intent(Intent.ACTION_VIEW, u)); } catch (Exception ignored) {}
                 return true;
