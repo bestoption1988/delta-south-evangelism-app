@@ -56,7 +56,7 @@ class SessionCookieJar : CookieJar {
   persist()
  }
  override fun loadForRequest(url: HttpUrl): List<Cookie> {
-  val valid = store.values.filter { it.matches(url) && !it.hasExpired() }
+  val valid = store.values.filter { it.matches(url) && it.expiresAt > System.currentTimeMillis() }
   if (valid.size != store.size) { store.entries.removeIf { (it.value.expiresAt <= System.currentTimeMillis()) }; persist() }
   return valid
  }
