@@ -1,23 +1,59 @@
-# MCN Delta South Diocese — Native Android
+# Delta South Evangelism — Native Android App
 
-This isolated Android application is developed alongside (not instead of) the existing Flask website and backend.
+This is the standalone Kotlin/Jetpack Compose Android client for the existing Delta South Evangelism service. It is developed separately from the Flask website and does not replace or modify the live backend.
 
-- Package: ng.mcn.deltasouth.evangelism
+## App identity
+
+- Application ID: ng.mcn.deltasouth.evangelism
+- Display name: Delta South Evangelism
 - Backend: https://mcn-delta-south.naijacloud.app/
-- Language/UI: Kotlin + Jetpack Compose
-- Build: Gradle 8.9, JDK 17, Android SDK 35
+- Kotlin + Jetpack Compose
+- JDK 17, Gradle 8.10, Android Gradle Plugin 8.7.3, Android SDK 35
+- Minimum Android version: Android 8.0 (API 26)
 
-The initial native shell includes sign-in, a session-cookie-aware API client, dashboard refresh, profile data display and announcement-feed connection. Additional native workflows are being migrated incrementally.
+## Current native capabilities
 
-## Build
-From this directory run: gradle --no-daemon assembleDebug.
+- Authenticated sign-in using the existing server session.
+- Encrypted persistent session cookies and encrypted, account-separated offline GET cache.
+- Session restoration after app restart.
+- Member profile display and contact-detail updates, password change, membership ID card.
+- Attendance history and attendance-register workflows according to server role permissions.
+- Giving history, announcements, events, notifications and member-care messaging.
+- Church/circuit directory, membership records and statistics.
+- Conference tools, finance, reconciliation, reports, governance, account requests, approvals and system/security screens exposed by the current server API.
+- Online connectivity indicator and Android back navigation to Home.
+- Bounded connection, read, write and total-call timeouts to prevent requests hanging indefinitely.
 
-GitHub Actions builds a debug APK on pushes to native-android-development affecting android/**, and uploads it as delta-south-native-debug-apk.
+## Offline behaviour and safety
 
-## Safety
-No existing Flask files, production data, or main-branch history are modified by this Android folder. The app uses the existing authenticated backend; server-side authorization remains authoritative. This is a development build and requires endpoint verification, device testing, and release signing before public distribution.
+The app can display previously fetched, allowlisted JSON GET data while offline. Cached data is encrypted and keyed to the authenticated session. Logout clears the local session and offline cache.
 
+Offline changes are not queued or replayed. Attendance, financial actions, approvals and other writes require an internet connection and a live server response. This avoids silently duplicating payments or records when connectivity returns. Server-side authorization remains authoritative.
 
-## Native member self-service additions
+## Build and release
 
-The member area now provides dedicated screens for membership records, attendance summary/history, and recorded giving history. These screens use the existing authenticated member endpoints (`/api/member/records`, `/api/member/attendance-summary`, `/api/member/attendance`, and `/api/member/giving-history`). Data is read-only in this increment; the server remains responsible for account access and record integrity.
+GitHub Actions workflow: .github/workflows/build-apk.yml.
+
+A push to native-android-development affecting android/** or the workflow triggers:
+- Debug APK build and package-signature verification.
+- Release Android App Bundle build and ZIP integrity check.
+- SHA-256 checksum generation.
+- Upload of APK, AAB and checksum artifacts to the workflow run.
+
+The debug APK is installable for testing. A Play Store release AAB must be signed with the app's private upload/release key. Configure these GitHub Actions repository secrets to enable release signing:
+
+- ANDROID_KEYSTORE_BASE64
+- ANDROID_KEYSTORE_PATH (the workflow sets the path to its temporary key file)
+- ANDROID_KEYSTORE_PASSWORD
+- ANDROID_KEY_ALIAS
+- ANDROID_KEY_PASSWORD
+
+Keep the keystore and passwords private; never commit them to the repository. If signing secrets are absent, the AAB is built unsigned and is not Play Store-ready.
+
+## Phone-only workflow
+
+No local Android Studio installation is required to produce CI artifacts. Open the repository's GitHub Actions page on the phone, select the Android build workflow, and download the APK/AAB artifacts after a successful run. Install the debug APK only for testing. Use the signed AAB for Play Console upload after configuring the private signing key.
+
+## Protected production boundary
+
+All native client work is isolated on native-android-development. The production main branch, Flask application and live diocesan database are not modified by this Android client workflow. Test all role-specific screens on real devices before public release.
