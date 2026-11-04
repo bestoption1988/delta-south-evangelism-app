@@ -22,6 +22,7 @@ footer{text-align:center;color:#7c8799;font-size:12px;margin-top:35px}
 {% set db_key = {'english-hymns':'english_hymns','yoruba-hymns':'yoruba_hymns','akokun':'akokun','bible-verses':'bible_verses','canticles':'canticles','communion':'communion_english','yoruba-communion':'communion_yoruba','creeds':'creeds'}.get(slug,'') %}
 <a class="tile" href="{{ url_for('devotional_centre_collection', collection_slug=slug) }}"><div class="icon">{{ icon }}</div><h3>{{ title }}</h3><p>{{ description }}</p><span class="count">{{ counts.get(db_key, 0) }} resources</span></a>
 {% endfor %}
+<a class="tile" href="/devotional-centre/holy-bible"><div class="icon">📖</div><h3>Complete Holy Bible</h3><p>Read all 66 books, choose any chapter, and study every verse without leaving the diocesan website.</p><span class="count">WEB · 66 books · Free</span></a>
 </div>
 <a class="admin" href="/admin/devotional-centre">Administrator: Import & Manage Library</a>
 <footer>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE · TOGETHER IN MISSION</footer></main></body></html>
