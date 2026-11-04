@@ -38,7 +38,11 @@ private fun NativeDioceseApp() {
     DisposableEffect(appContext) {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val callback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) { online = true }
+            override fun onAvailable(network: Network) {
+                val capabilities = manager.getNetworkCapabilities(network)
+                online = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
             override fun onLost(network: Network) { online = networkAvailable(appContext) }
             override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
                 online = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
@@ -55,7 +59,8 @@ private fun NativeDioceseApp() {
     var message by remember { mutableStateOf("") }
     var profile by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var dashboard by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
-    var memberRecords by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }    var profilePhone by remember { mutableStateOf("") }
+    var memberRecords by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
+    var profilePhone by remember { mutableStateOf("") }
     var profileBirthday by remember { mutableStateOf("") }
     var profileAddress by remember { mutableStateOf("") }
     var profileProfession by remember { mutableStateOf("") }
