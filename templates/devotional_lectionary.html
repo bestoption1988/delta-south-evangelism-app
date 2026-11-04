@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Yearly Lectionary 2027 | MCN Delta South</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
+.hero{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:#fff;padding:30px 17px 35px}.wrap,main{max-width:1050px;margin:auto}.eyebrow{font-size:11px;letter-spacing:2px;color:#f4d36e;font-weight:800;text-transform:uppercase}.hero h1{font:800 clamp(27px,5vw,42px)/1.12 Georgia,serif;margin:8px 0}.hero p{color:#e3ebf7;margin:0;max-width:720px}
+main{padding:20px 14px 55px}.nav{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:17px}.nav a{color:#12664b;text-decoration:none;font-weight:700}
+.tools{position:sticky;top:0;z-index:3;background:#f2f5f9;padding:10px 0 14px}.tools input{width:100%;padding:14px;border:1px solid #cbd5e1;border-radius:11px;font:inherit;background:white}.hint{font-size:12px;color:#68768b;margin:7px 2px}
+.readings{display:grid;gap:12px}.entry{background:#fff;border:1px solid #e0e6ef;border-radius:12px;padding:15px 17px;box-shadow:0 4px 15px #102b5508;overflow-wrap:anywhere}.entry pre{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace;color:#26364d}.entry[hidden]{display:none}.empty{display:none;padding:25px;background:white;border-radius:12px;text-align:center;color:#65738a}
+</style></head><body>
+<header class="hero"><div class="wrap"><div class="eyebrow">Methodist Church Nigeria · Delta South Diocese</div><h1>Yearly Lectionary</h1><p>Appointed Scripture readings from the uploaded diocesan lectionary. Search by date, Sunday, feast day or Bible reference.</p></div></header>
+<main><nav class="nav"><a href="/devotional-centre">← Devotional Centre</a><a href="/">Diocesan Homepage</a></nav>
+<div class="tools"><input id="lectionarySearch" type="search" placeholder="Search date, Sunday, feast or Bible reference…" autocomplete="off"><div class="hint"><span id="resultCount"></span> · Source: LECTIONAR 2027 (Year B and opening of Year C)</div></div>
+<div class="readings" id="lectionaryEntries">
+{% for block in readings.split('\n\n') %}{% set block = block.strip() %}{% if block %}
+<article class="entry" data-search="{{ block|lower|e }}"><pre>{{ block }}</pre></article>
+{% endif %}{% endfor %}
+</div><div class="empty" id="noResults">No matching lectionary entry. Try another date or Scripture reference.</div>
+</main>
+<script>
+(()=>{const input=document.getElementById('lectionarySearch'),cards=[...document.querySelectorAll('.entry')],count=document.getElementById('resultCount'),empty=document.getElementById('noResults');function filter(){const q=input.value.trim().toLocaleLowerCase();let n=0;cards.forEach(card=>{const show=!q||card.dataset.search.includes(q);card.hidden=!show;if(show)n++});count.textContent=n+' entries shown';empty.style.display=n?'none':'block'}input.addEventListener('input',filter);filter()})();
+</script></body></html>
