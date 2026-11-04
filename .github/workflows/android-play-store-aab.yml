@@ -28,8 +28,13 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Verify preinstalled Android SDK
+        run: |
+          echo "ANDROID_HOME=${ANDROID_HOME:-not-set}"
+          test -n "$ANDROID_HOME"
+          test -d "$ANDROID_HOME/platforms"
+          test -d "$ANDROID_HOME/build-tools"
+          echo "Android SDK is available on the GitHub runner."
 
       - name: Restore Android upload keystore
         env:
