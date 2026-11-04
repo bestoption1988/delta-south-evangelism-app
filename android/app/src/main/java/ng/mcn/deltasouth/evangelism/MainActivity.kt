@@ -16,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -138,7 +139,7 @@ private fun NativeDioceseApp() {
         if (Backend.cookies.hasSession()) {
             busy = true
             runCatching { withContext(Dispatchers.IO) { Backend.api.me() } }
-                .onSuccess { profile = it; signedIn = true; selected = "Home"; message = "" }
+                .onSuccess { profile = it; password = ""; signedIn = true; selected = "Home"; message = "" }
             busy = false
         }
     }
@@ -152,7 +153,7 @@ private fun NativeDioceseApp() {
             Text("DELTA SOUTH DIOCESE", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
-            OutlinedTextField(password, { password = it }, label = { Text("Password") }, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(password, { password = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
             Button(enabled = !busy, onClick = {
                 busy = true
@@ -226,9 +227,9 @@ private fun NativeDioceseApp() {
                             }
                         }) { Text("Save profile details") }
                         Text("Change password", style = MaterialTheme.typography.titleMedium)
-                        OutlinedTextField(currentPassword, { currentPassword = it }, label = { Text("Current password") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(newPassword, { newPassword = it }, label = { Text("New password (minimum 8 characters)") }, modifier = Modifier.fillMaxWidth())
-                        OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm new password") }, modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(currentPassword, { currentPassword = it }, label = { Text("Current password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(newPassword, { newPassword = it }, label = { Text("New password (minimum 8 characters)") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                        OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm new password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
                         Button(enabled = !busy && currentPassword.isNotBlank() && newPassword.length >= 8 && newPassword == confirmPassword, onClick = {
                             scope.launch {
                                 busy = true
@@ -1058,6 +1059,11 @@ private fun NativeDioceseApp() {
             OutlinedButton(onClick = {
                 Backend.clearLocalData()
                 signedIn = false
+                username = ""
+                password = ""
+                currentPassword = ""
+                newPassword = ""
+                confirmPassword = ""
                 profile = emptyMap()
                 dashboard = emptyMap()
                 memberRecords = emptyMap()
