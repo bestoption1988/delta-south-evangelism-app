@@ -13367,6 +13367,12 @@ def media_library_admin():
 # --- End media library ---
 
 
+@app.route("/devotional-centre/holy-bible")
+def devotional_holy_bible():
+    """On-site Bible reader. Scripture text is fetched from the public-domain WEB API."""
+    return render_template("devotional_holy_bible.html")
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
