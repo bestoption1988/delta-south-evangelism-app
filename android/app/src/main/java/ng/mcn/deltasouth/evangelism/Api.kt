@@ -43,7 +43,7 @@ class SessionCookieJar : CookieJar {
      if (item.optBoolean("httpOnly")) builder.httpOnly()
      if (item.optBoolean("persistent")) builder.expiresAt(item.getLong("expiresAt"))
      val cookie = builder.build()
-     if (!cookie.hasExpired()) store[cookie.name + "|" + cookie.domain + "|" + cookie.path] = cookie
+     if (!(cookie.expiresAt <= System.currentTimeMillis())) store[cookie.name + "|" + cookie.domain + "|" + cookie.path] = cookie
     }
    }
   }
@@ -51,13 +51,13 @@ class SessionCookieJar : CookieJar {
  override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
   cookies.forEach { cookie ->
    val key = cookie.name + "|" + cookie.domain + "|" + cookie.path
-   if (cookie.hasExpired()) store.remove(key) else store[key] = cookie
+   if ((cookie.expiresAt <= System.currentTimeMillis())) store.remove(key) else store[key] = cookie
   }
   persist()
  }
  override fun loadForRequest(url: HttpUrl): List<Cookie> {
   val valid = store.values.filter { it.matches(url) && !it.hasExpired() }
-  if (valid.size != store.size) { store.entries.removeIf { it.value.hasExpired() }; persist() }
+  if (valid.size != store.size) { store.entries.removeIf { (it.value.expiresAt <= System.currentTimeMillis()) }; persist() }
   return valid
  }
  private fun persist() {
