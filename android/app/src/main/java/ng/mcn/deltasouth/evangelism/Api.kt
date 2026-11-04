@@ -63,7 +63,7 @@ class SessionCookieJar : CookieJar {
  private fun persist() {
   val prefs = preferences ?: return
   val array = JSONArray()
-  store.values.filterNot { it.hasExpired() }.forEach { cookie ->
+  store.values.filter { it.expiresAt > System.currentTimeMillis() }.forEach { cookie ->
    array.put(JSONObject().put("name", cookie.name).put("value", cookie.value).put("domain", cookie.domain).put("path", cookie.path).put("hostOnly", cookie.hostOnly).put("secure", cookie.secure).put("httpOnly", cookie.httpOnly).put("persistent", cookie.persistent).put("expiresAt", cookie.expiresAt))
   }
   prefs.edit().putString("cookies", array.toString()).apply()
