@@ -1,4 +1,5 @@
 package ng.mcn.deltasouth.evangelism
+import android.content.Context
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.FormBody
@@ -14,15 +15,64 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Body
 import retrofit2.http.DELETE
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import org.json.JSONArray
+import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
+
 class SessionCookieJar : CookieJar {
- private val store = ConcurrentHashMap<String, List<Cookie>>()
- override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) { store[url.host] = cookies }
- override fun loadForRequest(url: HttpUrl): List<Cookie> = store[url.host] ?: emptyList()
- fun clear() = store.clear()
+ private val store = ConcurrentHashMap<String, Cookie>()
+ @Volatile private var preferences: android.content.SharedPreferences? = null
+ fun initialize(context: Context) {
+  if (preferences != null) return
+  synchronized(this) {
+   if (preferences != null) return
+   val masterKey = MasterKey.Builder(context.applicationContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+   val prefs = EncryptedSharedPreferences.create(context.applicationContext, "delta_south_secure_session", masterKey, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+   preferences = prefs
+   val saved = prefs.getString("cookies", "[]") ?: "[]"
+   val array = JSONArray(saved)
+   for (i in 0 until array.length()) {
+    val item = array.optJSONObject(i) ?: continue
+    runCatching {
+     val builder = Cookie.Builder().name(item.getString("name")).value(item.getString("value")).path(item.optString("path", "/"))
+     val domain = item.getString("domain")
+     if (item.optBoolean("hostOnly", false)) builder.hostOnlyDomain(domain) else builder.domain(domain)
+     if (item.optBoolean("secure")) builder.secure()
+     if (item.optBoolean("httpOnly")) builder.httpOnly()
+     if (item.optBoolean("persistent")) builder.expiresAt(item.getLong("expiresAt"))
+     val cookie = builder.build()
+     if (!cookie.hasExpired()) store[cookie.name + "|" + cookie.domain + "|" + cookie.path] = cookie
+    }
+   }
+  }
+ }
+ override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+  cookies.forEach { cookie ->
+   val key = cookie.name + "|" + cookie.domain + "|" + cookie.path
+   if (cookie.hasExpired()) store.remove(key) else store[key] = cookie
+  }
+  persist()
+ }
+ override fun loadForRequest(url: HttpUrl): List<Cookie> {
+  val valid = store.values.filter { it.matches(url) && !it.hasExpired() }
+  if (valid.size != store.size) { store.entries.removeIf { it.value.hasExpired() }; persist() }
+  return valid
+ }
+ private fun persist() {
+  val prefs = preferences ?: return
+  val array = JSONArray()
+  store.values.filterNot { it.hasExpired() }.forEach { cookie ->
+   array.put(JSONObject().put("name", cookie.name).put("value", cookie.value).put("domain", cookie.domain).put("path", cookie.path).put("hostOnly", cookie.hostOnly).put("secure", cookie.secure).put("httpOnly", cookie.httpOnly).put("persistent", cookie.persistent).put("expiresAt", cookie.expiresAt))
+  }
+  prefs.edit().putString("cookies", array.toString()).apply()
+ }
+ fun clear() { store.clear(); preferences?.edit()?.remove("cookies")?.apply() }
 }
 object Backend {
  val cookies = SessionCookieJar()
+ fun initialize(context: Context) = cookies.initialize(context)
  val client = OkHttpClient.Builder().cookieJar(cookies).build()
  val api = Retrofit.Builder().baseUrl(BuildConfig.API_BASE_URL).client(client).addConverterFactory(GsonConverterFactory.create()).build().create(DioceseApi::class.java)
  fun login(username: String, password: String): Result<Unit> = runCatching {
