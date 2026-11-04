@@ -134,6 +134,14 @@ private fun NativeDioceseApp() {
     var appointmentEditingId by remember { mutableStateOf<Int?>(null) }
     var selected by remember { mutableStateOf("Home") }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(Unit) {
+        if (Backend.cookies.hasSession()) {
+            busy = true
+            runCatching { withContext(Dispatchers.IO) { Backend.api.me() } }
+                .onSuccess { profile = it; signedIn = true; selected = "Home"; message = "" }
+            busy = false
+        }
+    }
     val role = (profile["role"] ?: "").toString()
     val financeRoles = setOf("Admin", "Finance Officer", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")
     val canReview = role == "Admin" || role == "Evangelism Minister"
