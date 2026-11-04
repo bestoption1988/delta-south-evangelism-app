@@ -26,6 +26,7 @@ import androidx.security.crypto.MasterKey
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.TimeUnit
 
 class SessionCookieJar : CookieJar {
  private val store = ConcurrentHashMap<String, Cookie>()
@@ -126,7 +127,14 @@ object Backend {
  val cookies = SessionCookieJar()
  fun initialize(context: Context) { cookies.initialize(context); OfflineResponseCache.initialize(context) }
  fun clearLocalData() { cookies.clear(); OfflineResponseCache.clear() }
- val client = OkHttpClient.Builder().cookieJar(cookies).addInterceptor(OfflineResponseCache.interceptor).build()
+ val client = OkHttpClient.Builder()
+  .cookieJar(cookies)
+  .connectTimeout(20, TimeUnit.SECONDS)
+  .readTimeout(30, TimeUnit.SECONDS)
+  .writeTimeout(30, TimeUnit.SECONDS)
+  .callTimeout(45, TimeUnit.SECONDS)
+  .addInterceptor(OfflineResponseCache.interceptor)
+  .build()
  val api = Retrofit.Builder().baseUrl(BuildConfig.API_BASE_URL).client(client).addConverterFactory(GsonConverterFactory.create()).build().create(DioceseApi::class.java)
  fun login(username: String, password: String): Result<Unit> = runCatching {
   val body = FormBody.Builder().add("username", username).add("password", password).build()
