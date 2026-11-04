@@ -75,6 +75,7 @@ class SessionCookieJar : CookieJar {
   prefs.edit().putString("cookies", array.toString()).apply()
  }
  fun hasSession(): Boolean = store.values.any { it.expiresAt > System.currentTimeMillis() }
+ fun sessionFingerprint(): String = store.values.sortedBy { it.name }.joinToString("|") { it.name + "=" + it.value }
  fun clear() { store.clear(); preferences?.edit()?.remove("cookies")?.apply() }
 }
 private object OfflineResponseCache {
@@ -94,7 +95,7 @@ private object OfflineResponseCache {
   return allowed.any { path == it || path.startsWith("$it/") }
  }
  private fun key(request: okhttp3.Request): String {
-  val session = request.header("Cookie").orEmpty()
+  val session = Backend.cookies.sessionFingerprint()
   val raw = request.url.toString() + "|" + session
   val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray())
   return "get_" + digest.joinToString("") { "%02x".format(it) }
