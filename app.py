@@ -8854,7 +8854,7 @@ def media_library_public():
         )
 
 
-@app.route("/media-library/file/<int:media_id>")
+@app.route("/media-library/file/<string:media_id>")
 def media_library_document(media_id):
     """Serve published library files through the app for reliable mobile viewing."""
     try:
