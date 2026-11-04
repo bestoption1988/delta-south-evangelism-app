@@ -1,7 +1,10 @@
-name: Build Delta South Evangelism APK
+name: Build Delta South Android App
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - android-standalone-completion
 
 permissions:
   contents: read
@@ -28,11 +31,13 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.10'
-      - name: Build debug APK
-        run: gradle --no-daemon assembleDebug
-      - name: Upload APK
+      - name: Build installable debug APK and test AAB
+        run: gradle --no-daemon assembleDebug bundleDebug
+      - name: Upload Android build outputs
         uses: actions/upload-artifact@v4
         with:
-          name: Delta-South-Evangelism-v1.1-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Delta-South-Android-debug
+          path: |
+            android/app/build/outputs/apk/debug/app-debug.apk
+            android/app/build/outputs/bundle/debug/app-debug.aab
           if-no-files-found: error
