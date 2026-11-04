@@ -74,6 +74,8 @@ class SessionCookieJar : CookieJar {
   }
   prefs.edit().putString("cookies", array.toString()).apply()
  }
+ fun hasSession(): Boolean = store.values.any { it.expiresAt > System.currentTimeMillis() }
+ fun hasSession(): Boolean = store.values.any { it.expiresAt > System.currentTimeMillis() }
  fun clear() { store.clear(); preferences?.edit()?.remove("cookies")?.apply() }
 }
 private object OfflineResponseCache {
