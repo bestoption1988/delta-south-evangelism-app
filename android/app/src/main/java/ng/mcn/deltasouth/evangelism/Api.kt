@@ -1,6 +1,12 @@
 package ng.mcn.deltasouth.evangelism
 import android.content.Context
 import okhttp3.Cookie
+import okhttp3.Interceptor
+import okhttp3.Response
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.IOException
+import java.security.MessageDigest
 import okhttp3.CookieJar
 import okhttp3.FormBody
 import okhttp3.HttpUrl
@@ -70,10 +76,55 @@ class SessionCookieJar : CookieJar {
  }
  fun clear() { store.clear(); preferences?.edit()?.remove("cookies")?.apply() }
 }
+private object OfflineResponseCache {
+ @Volatile private var prefs: android.content.SharedPreferences? = null
+ fun initialize(context: Context) {
+  if (prefs != null) return
+  synchronized(this) {
+   if (prefs == null) {
+    val masterKey = MasterKey.Builder(context.applicationContext).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+    prefs = EncryptedSharedPreferences.create(context.applicationContext, "delta_south_offline_cache", masterKey, EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV, EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM)
+   }
+  }
+ }
+ fun clear() { prefs?.edit()?.clear()?.apply() }
+ private fun cacheable(path: String): Boolean {
+  val allowed = listOf("/api/me", "/api/dashboard", "/api/member/records", "/api/member/id-card", "/api/member/attendance", "/api/member/attendance-summary", "/api/member/giving-history", "/api/member/announcements", "/api/member/events", "/api/member/notifications", "/api/membership/churches", "/api/circuits", "/api/membership-statistics", "/api/conference")
+  return allowed.any { path == it || path.startsWith("$it/") }
+ }
+ private fun key(request: okhttp3.Request): String {
+  val session = request.header("Cookie").orEmpty()
+  val raw = request.url.toString() + "|" + session
+  val digest = MessageDigest.getInstance("SHA-256").digest(raw.toByteArray())
+  return "get_" + digest.joinToString("") { "%02x".format(it) }
+ }
+ val interceptor = Interceptor { chain ->
+  val request = chain.request()
+  if (request.method != "GET" || !cacheable(request.url.encodedPath)) {
+   chain.proceed(request)
+  } else {
+   val cacheKey = key(request)
+   try {
+    val response = chain.proceed(request)
+    val body = response.body
+    if (response.isSuccessful && body != null && body.contentType()?.subtype?.contains("json", true) == true) {
+     val content = body.string()
+     prefs?.edit()?.putString(cacheKey, content)?.apply()
+     response.newBuilder().body(content.toResponseBody(body.contentType())).build()
+    } else response
+   } catch (error: IOException) {
+    val cached = prefs?.getString(cacheKey, null) ?: throw error
+    Response.Builder().request(request).protocol(okhttp3.Protocol.HTTP_1_1).code(200).message("Offline cache").header("X-Delta-Offline-Cache", "true").body(cached.toResponseBody("application/json; charset=utf-8".toMediaType())).build()
+   }
+  }
+ }
+}
+
 object Backend {
  val cookies = SessionCookieJar()
- fun initialize(context: Context) = cookies.initialize(context)
- val client = OkHttpClient.Builder().cookieJar(cookies).build()
+ fun initialize(context: Context) { cookies.initialize(context); OfflineResponseCache.initialize(context) }
+ fun clearLocalData() { cookies.clear(); OfflineResponseCache.clear() }
+ val client = OkHttpClient.Builder().cookieJar(cookies).addInterceptor(OfflineResponseCache.interceptor).build()
  val api = Retrofit.Builder().baseUrl(BuildConfig.API_BASE_URL).client(client).addConverterFactory(GsonConverterFactory.create()).build().create(DioceseApi::class.java)
  fun login(username: String, password: String): Result<Unit> = runCatching {
   val body = FormBody.Builder().add("username", username).add("password", password).build()
