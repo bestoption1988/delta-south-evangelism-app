@@ -1909,7 +1909,7 @@ def page_login_required(fn):
 
 @app.before_request
 def protect_app():
-    public = {"public_home", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "media_document_view", "media_document_download", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai", "fellowship_directory", "fellowship_public_home", "devotional_centre_home", "devotional_centre_collection", "devotional_centre_item", "devotional_holy_bible", "devotional_bible_reader"}
+    public = {"public_home", "privacy_policy", "account_deletion", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "media_document_view", "media_document_download", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai", "fellowship_directory", "fellowship_public_home", "devotional_centre_home", "devotional_centre_collection", "devotional_centre_item", "devotional_holy_bible", "devotional_bible_reader"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if is_setup_needed():
@@ -2683,6 +2683,18 @@ def admin_homepage_media():
         "homepage_media_admin.html", sermons=sermons, events=events,
         message=message, error=error
     )
+
+
+@app.get("/privacy-policy")
+def privacy_policy():
+    """Public privacy notice for the MCN Delta South app and its web services."""
+    return render_template("privacy_policy.html")
+
+
+@app.get("/account-deletion")
+def account_deletion():
+    """Public account/data deletion request instructions."""
+    return render_template("account_deletion.html")
 
 
 @app.route("/prayer-request", methods=["GET", "POST"])
