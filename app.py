@@ -1909,7 +1909,7 @@ def page_login_required(fn):
 
 @app.before_request
 def protect_app():
-    public = {"public_home", "privacy_policy", "account_deletion", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "media_document_view", "media_document_download", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai", "fellowship_directory", "fellowship_public_home", "devotional_centre_home", "devotional_centre_collection", "devotional_centre_item", "devotional_holy_bible", "devotional_bible_reader"}
+    public = {"public_home", "privacy_policy", "account_deletion", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "media_document_view", "media_document_download", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai", "fellowship_directory", "fellowship_public_home", "devotional_centre_home", "devotional_yearly_lectionary", "devotional_centre_collection", "devotional_centre_item", "devotional_holy_bible", "devotional_bible_reader"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if is_setup_needed():
@@ -12451,6 +12451,18 @@ def devotional_centre_home():
         app.logger.exception("Daily devotional Scripture could not be selected")
     return render_template("devotional_centre.html", collections=collections,
                            counts=counts, daily=daily)
+
+
+@app.get("/devotional-centre/lectionary")
+def devotional_yearly_lectionary():
+    """Public searchable view of the uploaded 2027 lectionary source."""
+    source_path = Path(ROOT) / "data" / "yearly_lectionary_2027.txt"
+    try:
+        readings = source_path.read_text(encoding="utf-8")
+    except OSError:
+        app.logger.exception("Yearly lectionary source file could not be read")
+        return "The yearly lectionary is temporarily unavailable.", 503
+    return render_template("devotional_lectionary.html", readings=readings)
 
 
 # Starter Scripture index: one representative passage from every book of the
