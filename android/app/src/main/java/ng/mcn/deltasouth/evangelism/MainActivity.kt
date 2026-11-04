@@ -1,6 +1,10 @@
 package ng.mcn.deltasouth.evangelism
 
 import android.os.Bundle
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -10,6 +14,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +31,21 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun NativeDioceseApp() {
+    val appContext = LocalContext.current
+    var online by remember { mutableStateOf(networkAvailable(appContext)) }
+    DisposableEffect(appContext) {
+        val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) { online = true }
+            override fun onLost(network: Network) { online = networkAvailable(appContext) }
+            override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
+                online = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+            }
+        }
+        runCatching { manager.registerDefaultNetworkCallback(callback) }
+        onDispose { runCatching { manager.unregisterNetworkCallback(callback) } }
+    }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var signedIn by remember { mutableStateOf(false) }
@@ -158,6 +178,7 @@ private fun NativeDioceseApp() {
         }
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Text("MCN Delta South Diocese", style = MaterialTheme.typography.headlineSmall)
+            Text(if (online) "ONLINE • Live diocesan data" else "OFFLINE • Showing saved data where available; changes require internet", color = if (online) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
             Text("Welcome, ${profile["full_name"] ?: profile["username"] ?: "Member"}")
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
@@ -1042,6 +1063,15 @@ private fun NativeDioceseApp() {
             }) { Text("Sign out") }
         }
     }
+}
+
+
+private fun networkAvailable(context: Context): Boolean {
+    val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    val network = manager.activeNetwork ?: return false
+    val capabilities = manager.getNetworkCapabilities(network) ?: return false
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
 }
 
 @Composable
