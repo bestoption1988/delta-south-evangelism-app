@@ -2,6 +2,12 @@ name: Build Delta South Evangelism APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - native-android-foundation
+    paths:
+      - 'android/**'
+      - '.github/workflows/build-apk.yml'
 
 permissions:
   contents: read
