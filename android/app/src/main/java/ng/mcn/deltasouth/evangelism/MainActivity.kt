@@ -149,6 +149,13 @@ private fun NativeDioceseApp() {
             busy = false
         }
     }
+    LaunchedEffect(signedIn) {
+        if (signedIn) {
+            runCatching { withContext(Dispatchers.IO) { Backend.api.dashboard() } }
+                .onSuccess { dashboard = it }
+                .onFailure { message = it.message ?: "Dashboard will load when the connection is available." }
+        }
+    }
     BackHandler(enabled = signedIn && selected != "Home") { selected = "Home"; message = "" }
     val role = (profile["role"] ?: "").toString()
     val financeRoles = setOf("Admin", "Finance Officer", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")
