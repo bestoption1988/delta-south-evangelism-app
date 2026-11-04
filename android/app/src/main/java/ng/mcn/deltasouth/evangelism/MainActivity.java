@@ -150,7 +150,7 @@ public class MainActivity extends Activity {
             request.addRequestHeader("User-Agent", userAgent);
             String cookie = CookieManager.getInstance().getCookie(url);
             if (cookie != null) request.addRequestHeader("Cookie", cookie);
-            request.setTitle(DownloadManager.Request.getDefaultMimeType(url));
+            request.setTitle("Delta South download");
             request.setDescription("Downloading from MCN Delta South Diocese");
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS,
