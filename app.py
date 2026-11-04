@@ -8838,7 +8838,11 @@ def media_library_public():
         "published": "eq.true",
         "order": "created_at.desc",
     }
-    if category:
+    if category == "image":
+        # Some existing image records were catalogued as "document".
+        # Include them by MIME type so the Images filter still finds them.
+        params["or"] = "(media_type.eq.image,mime_type.like.image/*)"
+    elif category:
         params["media_type"] = f"eq.{category}"
 
     try:
