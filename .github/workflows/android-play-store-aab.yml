@@ -69,7 +69,9 @@ jobs:
         run: |
           APK="android/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
-          apksigner verify --verbose "$APK"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER" || { echo "apksigner was not found in Android SDK build-tools"; exit 1; }
+          "$APKSIGNER" verify --verbose "$APK"
 
       - name: Upload Play Store AAB
         uses: actions/upload-artifact@v4
