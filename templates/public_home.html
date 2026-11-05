@@ -109,6 +109,7 @@
       <div class="daily-devotion-full">
         <h3>{{ day_verse.get("reference", "Scripture of the Day") }}</h3>
         <p>{{ day_verse.get("text", "") }}</p>
+        <p><a class="button blue-button" href="/devotional-centre/bible-verses">Browse the Scripture Library →</a></p>
       </div>
     </details>
     <details class="daily-devotion-card">
@@ -137,13 +138,14 @@
           {% endif %}
         {% endfor %}
         {% if day_hymn.get("author") %}<p class="daily-hymn-author"><b>Author:</b> {{ day_hymn.get("author") }}</p>{% endif %}
+        <p><a class="button blue-button" href="/devotional-centre/english-hymns">Browse English Methodist Hymns →</a></p>
       </div>
     </details>
   </div>
 </section>
 
 <nav class="navbar">
-  <button id="menuToggle" aria-label="Open navigation" aria-expanded="false">☰ Menu</button>
+  <button id="menuToggle" type="button" aria-label="Open navigation" aria-controls="navLinks" aria-expanded="false">☰ Menu</button>
   <div id="navLinks">
     <a href="#home">⌂ Home</a>
     <a href="#about">About Us</a>
@@ -643,11 +645,31 @@
   const submenu = document.getElementById("fellowshipsSubmenu");
 
   if (toggle && links) {
-    toggle.addEventListener("click", () => {
-      const open = links.classList.toggle("open");
-      toggle.setAttribute("aria-expanded", String(open));
-    });
+    toggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const open = !links.classList.contains("open");
+      links.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+    }, false);
   }
+
+  // Use an explicit details toggle for Android WebView compatibility.
+  document.querySelectorAll(".daily-devotion-card").forEach(card => {
+    const summary = card.querySelector("summary");
+    if (!summary) return;
+    summary.setAttribute("role", "button");
+    summary.setAttribute("tabindex", "0");
+    const changeOpen = event => {
+      if (event) event.preventDefault();
+      card.open = !card.open;
+    };
+    summary.addEventListener("click", changeOpen, false);
+    summary.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") changeOpen(event);
+    }, false);
+  });
 
   if (dropdown && dropToggle && submenu) {
     dropToggle.addEventListener("click", (event) => {
