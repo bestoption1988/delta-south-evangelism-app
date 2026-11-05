@@ -364,7 +364,7 @@ object OfflineModuleManager {
             .callTimeout(40, TimeUnit.SECONDS)
             .build()
         val prefs = context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-        prefs.edit().putInt("last_web_bible_missing_count", 0).apply()
+        prefs.edit().putInt("last_web_bible_chapter_count", 0).putInt("last_web_bible_missing_count", 0).apply()
 
         val booksRequest = Request.Builder()
             .url("$baseUrl/devotional-centre/holy-bible/books")
