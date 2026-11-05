@@ -1,0 +1,37 @@
+name: Validate devotional Bible backend
+on:
+  push:
+    branches:
+      - postgres-migration-integration
+    paths:
+      - "app.py"
+      - "templates/devotional_holy_bible.html"
+      - ".github/workflows/validate-bible.yml"
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile Flask application
+        run: python -m py_compile app.py
+      - name: Check Bible package modules and SQLite files
+        run: |
+          python - <<'PY'
+          import zipfile, sqlite3
+          archive = zipfile.ZipFile("bibles.zip") if __import__("os").path.exists("bibles.zip") else None
+          if archive is None:
+              print("Uploaded Bible ZIP is supplied at runtime, not committed to the repository.")
+          else:
+              modules = [n for n in archive.namelist() if n.endswith(".bbl.mybible")]
+              assert len(modules) == 17, f"Expected 17 modules, found {len(modules)}"
+              for name in modules:
+                  db = sqlite3.connect(":memory:")
+                  db.deserialize(archive.read(name))
+                  assert db.execute("SELECT COUNT(*) FROM Bible").fetchone()[0] > 0, name
+                  db.close()
+              print(f"Validated {len(modules)} Bible modules.")
+          PY
