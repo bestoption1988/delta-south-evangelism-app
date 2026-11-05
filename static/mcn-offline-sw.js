@@ -71,7 +71,7 @@ async function cachePage(url, pageCache, assetCache) {
         const approvedMediaHost = /(^|\.)supabase\.co$/i.test(asset.hostname) ||
           /(^|\.)supabase\.in$/i.test(asset.hostname);
         const supportedAsset = /\.(css|js|png|jpe?g|webp|gif|svg|woff2?|ttf|pdf|docx?|rtf|txt|xlsx?|pptx?|mp3|m4a|ogg|wav|mp4|webm)(\?|$)/i.test(asset.href) || asset.pathname.startsWith("/media-library/document/");
-        if ((localAsset || (asset.protocol === "https:" && approvedMediaHost)) && supportedAsset) {
+        if ((localAsset && supportedAsset) || (asset.protocol === "https:" && approvedMediaHost)) {
           const cached = await caches.match(asset.href);
           if (!cached) {
             try {
