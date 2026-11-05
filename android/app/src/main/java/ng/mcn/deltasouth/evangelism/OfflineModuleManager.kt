@@ -12,10 +12,84 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import okhttp3.Request
 import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
+import java.util.UUID
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import java.util.concurrent.TimeUnit
 
 data class OfflineDownloadSummary(val downloaded: Int, val unavailable: Int, val failed: Int, val mediaDownloaded: Int = 0)
+
+object OfflineAttendanceQueue {
+    @Volatile private var preferences: android.content.SharedPreferences? = null
+
+    private fun store(context: Context): android.content.SharedPreferences {
+        preferences?.let { return it }
+        synchronized(this) {
+            preferences?.let { return it }
+            val key = MasterKey.Builder(context.applicationContext)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
+            val created = EncryptedSharedPreferences.create(
+                context.applicationContext,
+                "mcn_offline_attendance_queue",
+                key,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+            preferences = created
+            return created
+        }
+    }
+
+    fun enqueueAttendance(context: Context, data: Map<String, String>): String {
+        val prefs = store(context)
+        val queue = JSONArray(prefs.getString("items", "[]") ?: "[]")
+        val id = UUID.randomUUID().toString()
+        val payload = JSONObject()
+        data.forEach { (key, value) -> payload.put(key, value) }
+        queue.put(JSONObject()
+            .put("operation_id", id)
+            .put("type", "attendance")
+            .put("data", payload)
+            .put("queued_at", System.currentTimeMillis()))
+        prefs.edit().putString("items", queue.toString()).apply()
+        return id
+    }
+
+    fun pendingCount(context: Context): Int =
+        runCatching { JSONArray(store(context).getString("items", "[]") ?: "[]").length() }.getOrDefault(0)
+
+    suspend fun syncPending(context: Context): Int {
+        val prefs = store(context)
+        val queue = JSONArray(prefs.getString("items", "[]") ?: "[]")
+        val remaining = JSONArray()
+        var synced = 0
+        for (index in 0 until queue.length()) {
+            val item = queue.optJSONObject(index) ?: continue
+            try {
+                val dataObject = item.optJSONObject("data") ?: JSONObject()
+                val data = mutableMapOf<String, String>()
+                val keys = dataObject.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    data[key] = dataObject.optString(key)
+                }
+                val operation = mapOf(
+                    "operation_id" to item.optString("operation_id"),
+                    "type" to item.optString("type"),
+                    "data" to data
+                )
+                val result = Backend.api.syncOfflineAttendance(mapOf("operation" to operation))
+                if (result["ok"] == true) synced++ else remaining.put(item)
+            } catch (_: Exception) {
+                remaining.put(item)
+            }
+        }
+        prefs.edit().putString("items", remaining.toString()).apply()
+        return synced
+    }
+}
 
 object OfflineModuleManager {
     // These are the native app's role-protected read modules. Server authorization remains authoritative.
@@ -219,6 +293,7 @@ class OfflineRefreshWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         return try {
+            OfflineAttendanceQueue.syncPending(applicationContext)
             val result = OfflineModuleManager.downloadAll(applicationContext)
             if (result.failed == 0) Result.success() else Result.retry()
         } catch (_: Exception) {
