@@ -46,11 +46,14 @@ jobs:
       - name: Verify backend Python syntax
         run: python -m py_compile ../app.py
 
-      - name: Verify toolchain
+      - name: Verify toolchain and install Android signing tools
         run: |
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "platform-tools"
           java -version
           gradle --version
-          sdkmanager --list_installed
+          test -x "$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" version
 
       - name: Prepare release signing key when configured
         env:
@@ -71,7 +74,8 @@ jobs:
 
       - name: Verify APK and AAB packages
         run: |
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          export PATH="$ANDROID_HOME/build-tools/35.0.0:$PATH"
+          apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk
           test -s app/build/outputs/apk/debug/app-debug.apk
           test -s app/build/outputs/bundle/release/app-release.aab
           unzip -t app/build/outputs/bundle/release/app-release.aab
