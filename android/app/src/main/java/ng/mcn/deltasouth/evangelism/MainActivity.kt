@@ -66,6 +66,8 @@ private fun NativeDioceseApp() {
     var online by remember { mutableStateOf(networkAvailable(appContext)) }
     var downloadBusy by remember { mutableStateOf(false) }
     var downloadMessage by remember { mutableStateOf("") }
+    var downloadProgress by remember { mutableIntStateOf(0) }
+    var downloadStage by remember { mutableStateOf("Waiting to download…") }
     var downloadedModules by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_downloaded_count", 0)) }
     var mediaDownloadedCount by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_media_downloaded_count", 0)) }
     var offlineMediaRows by remember { mutableStateOf(emptyList<Map<String, String>>()) }
@@ -1724,7 +1726,10 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
                 ) { Text(type.replaceFirstChar { it.uppercase() }) }
             }
         }
-        if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (busy) {
+            Text("$downloadStage  •  $downloadProgress%", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+            LinearProgressIndicator(progress = { downloadProgress / 100f }, modifier = Modifier.fillMaxWidth())
+        }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
         Text("Saved readings (${resources.size})", style = MaterialTheme.typography.titleMedium)
         if (resources.isEmpty()) Text("No devotional collections have been downloaded yet.")
