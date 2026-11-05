@@ -1659,6 +1659,8 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
+    var downloadProgress by remember { mutableIntStateOf(0) }
+    var downloadStage by remember { mutableStateOf("Waiting to download…") }
     var resources by remember { mutableStateOf(loadOfflineDevotionalRows(context)) }
     var media by remember { mutableStateOf(loadOfflineMediaRows(context)) }
     var selected by remember { mutableStateOf<Map<String, String>?>(null) }
@@ -1689,9 +1691,15 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
         }, modifier = Modifier.fillMaxWidth()) { Text("Download Hymns, Scripture & Worship Books") }
         Button(enabled = online && !busy, onClick = {
             busy = true
+            downloadProgress = 0
+            downloadStage = "Preparing hymn audio…"
             message = "Downloading hymn recordings…"
             scope.launch {
-                val result = withContext(Dispatchers.IO) { runCatching { OfflineModuleManager.downloadHymnAudio(context) } }
+                val result = withContext(Dispatchers.IO) { runCatching {
+                    OfflineModuleManager.downloadHymnAudio(context) { stage, percent ->
+                        scope.launch(Dispatchers.Main) { downloadStage = stage; downloadProgress = percent }
+                    }
+                } }
                 resources = withContext(Dispatchers.IO) { loadOfflineDevotionalRows(context) }
                 message = result.fold({ "Hymn audio download finished. ${it} hymn records checked." }, { it.message ?: "Hymn audio could not be downloaded." })
                 busy = false
@@ -1714,9 +1722,15 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
                     enabled = online && !busy,
                     onClick = {
                         busy = true
+                        downloadProgress = 0
+                        downloadStage = "Preparing $type download…"
                         message = "Downloading published $type files…"
                         scope.launch {
-                            val result = withContext(Dispatchers.IO) { runCatching { OfflineModuleManager.downloadMediaCategory(context, type) } }
+                            val result = withContext(Dispatchers.IO) { runCatching {
+                                OfflineModuleManager.downloadMediaCategory(context, type) { stage, percent ->
+                                    scope.launch(Dispatchers.Main) { downloadStage = stage; downloadProgress = percent }
+                                }
+                            } }
                             media = withContext(Dispatchers.IO) { loadOfflineMediaRows(context) }
                             message = result.fold({ "${it} $type item(s) saved for offline use." }, { it.message ?: "The $type module could not be downloaded." })
                             busy = false
