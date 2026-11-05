@@ -239,7 +239,7 @@ object OfflineModuleManager {
                     val id = item.optString("resource_id").replace(Regex("[^A-Za-z0-9_-]"), "_")
                     val audioUrl = item.optString("audio_url")
                     if (audioUrl.isNotBlank()) {
-                        val ext = mediaExtension(item.optString("audio_path"), "audio")
+                        val ext = mediaExtension(item.optString("audio_extension"), "audio")
                         val target = File(directory, "hymn_" + id + ext)
                         if (downloadSignedFile(longClient, audioUrl, target)) item.put("audio_file", target.name)
                     }
@@ -250,7 +250,7 @@ object OfflineModuleManager {
                             val tune = tunes.optJSONObject(tuneIndex) ?: continue
                             val tuneUrl = tune.optString("signed_url")
                             if (tuneUrl.isBlank()) continue
-                            val tuneExt = mediaExtension(tune.optString("musicFilePath"), "audio")
+                            val tuneExt = mediaExtension(tune.optString("audio_extension"), "audio")
                             val tuneFile = File(directory, "hymn_" + id + "_tune" + tuneIndex + tuneExt)
                             if (downloadSignedFile(longClient, tuneUrl, tuneFile)) tune.put("offline_file", tuneFile.name)
                         }
