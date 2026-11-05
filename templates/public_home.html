@@ -41,6 +41,60 @@
 .pdf-book-preview.pdf-preview-error .pdf-preview-loading {
   color: #9b2525;
 }
+/* Stable 70%-viewport Scripture/Hymn dialog on Android WebView and mobile browsers. */
+.daily-devotion-modal[hidden]{display:none!important}
+.daily-devotion-modal.is-open{
+  position:fixed!important;inset:0!important;z-index:30000!important;
+  display:block!important;width:100vw!important;height:100vh!important;
+  margin:0!important;padding:0!important;overflow:hidden!important;
+  background:rgba(4,16,43,.68)!important;
+}
+.daily-devotion-modal.is-open>.daily-devotion-modal-panel{
+  position:fixed!important;top:15vh!important;left:4vw!important;
+  display:block!important;flex:none!important;transform:none!important;
+  box-sizing:border-box!important;width:92vw!important;max-width:620px!important;
+  height:70vh!important;min-height:70vh!important;max-height:70vh!important;
+  margin:0!important;padding:18px 16px 28px!important;
+  overflow-x:hidden!important;overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;
+  background:#fff!important;color:#172b4d!important;border:1px solid #dce3ed!important;
+  border-radius:16px!important;box-shadow:0 14px 42px #0007!important;
+  visibility:visible!important;opacity:1!important;
+}
+@supports(height:70dvh){
+  .daily-devotion-modal.is-open{height:100dvh!important}
+  .daily-devotion-modal.is-open>.daily-devotion-modal-panel{
+    top:15dvh!important;height:70dvh!important;min-height:70dvh!important;max-height:70dvh!important;
+  }
+}
+.daily-devotion-modal.is-open .daily-devotion-modal-panel>*{visibility:visible!important;opacity:1!important;max-width:100%!important}
+.daily-devotion-modal.is-open .daily-devotion-modal-close{
+  position:sticky!important;top:0!important;float:right!important;z-index:20!important;
+  width:42px!important;height:42px!important;margin:0 0 8px 10px!important;
+}
+.daily-devotion-modal.is-open h2{
+  clear:both!important;white-space:normal!important;overflow-wrap:anywhere!important;
+  font-size:clamp(21px,5.5vw,27px)!important;line-height:1.3!important;
+}
+.daily-devotion-modal.is-open .daily-devotion-full-text,
+.daily-devotion-modal.is-open .daily-hymn-lyrics{
+  display:block!important;width:100%!important;max-width:100%!important;
+  white-space:pre-wrap!important;overflow-wrap:anywhere!important;word-break:normal!important;
+  font-size:clamp(18px,4.5vw,22px)!important;line-height:1.65!important;
+}
+.daily-devotion-modal.is-open audio{display:block!important;width:100%!important;max-width:100%!important;min-height:48px!important}
+body.daily-devotion-modal-open{overflow:hidden!important}
+@media(max-width:700px){
+  .navbar{position:relative!important;z-index:1000!important;isolation:isolate!important}
+  .navbar #menuToggle{display:flex!important;align-items:center!important;width:100%!important;min-height:54px!important;touch-action:manipulation!important;pointer-events:auto!important}
+  .navbar #navLinks{display:none!important;position:absolute!important;top:100%!important;left:0!important;right:0!important;
+    max-height:65vh!important;overflow-y:auto!important;flex-direction:column!important;align-items:stretch!important;
+    background:#08245b!important;z-index:1005!important;visibility:hidden!important;pointer-events:none!important;
+    -webkit-overflow-scrolling:touch!important}
+  .navbar #navLinks.open{display:flex!important;visibility:visible!important;pointer-events:auto!important}
+  .navbar #navLinks a,.navbar #navLinks button{display:flex!important;align-items:center!important;min-height:46px!important;padding:11px 16px!important}
+}
+
 </style>
 
 
@@ -698,23 +752,62 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     });
   }
 
+  // Mobile navigation: use one explicit state function and close on selection/outside tap.
+  const navbar = toggle?.closest(".navbar");
+  function setNavigationOpen(open) {
+    if (!toggle || !links) return;
+    links.classList.toggle("open", !!open);
+    toggle.setAttribute("aria-expanded", open ? "true" : "false");
+    toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+    toggle.textContent = open ? "✕ Close Menu" : "☰ Menu";
+    if (window.matchMedia("(max-width: 700px)").matches) {
+      links.style.setProperty("display", open ? "flex" : "none", "important");
+      links.style.setProperty("visibility", open ? "visible" : "hidden", "important");
+      links.style.setProperty("pointer-events", open ? "auto" : "none", "important");
+    }
+  }
   if (toggle && links) {
-    toggle.addEventListener("click", (event) => {
+    setNavigationOpen(false);
+    toggle.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      const open = !links.classList.contains("open");
-      links.classList.toggle("open", open);
-      toggle.setAttribute("aria-expanded", open ? "true" : "false");
-      toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
-    }, false);
+      setNavigationOpen(toggle.getAttribute("aria-expanded") !== "true");
+    }, true);
+    links.addEventListener("click", event => {
+      if (event.target.closest("a") && !event.target.closest(".nav-submenu")) {
+        setNavigationOpen(false);
+      } else if (event.target.closest(".nav-submenu a")) {
+        setNavigationOpen(false);
+      }
+    });
+    document.addEventListener("click", event => {
+      if (navbar && !navbar.contains(event.target)) setNavigationOpen(false);
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") setNavigationOpen(false);
+    });
+    window.addEventListener("resize", () => {
+      if (!window.matchMedia("(max-width: 700px)").matches) {
+        links.style.removeProperty("display");
+        links.style.removeProperty("visibility");
+        links.style.removeProperty("pointer-events");
+        links.classList.remove("open");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.textContent = "☰ Menu";
+      } else {
+        setNavigationOpen(toggle.getAttribute("aria-expanded") === "true");
+      }
+    });
   }
 
   // Open the full daily Scripture and hymn in an accessible, scrollable popup.
   const dailyModals = Array.from(document.querySelectorAll(".daily-devotion-modal"));
+  dailyModals.forEach(modal => modal.setAttribute("aria-hidden", "true"));
   function closeDailyModal(modal) {
     if (!modal) return;
     modal.classList.remove("is-open");
     modal.hidden = true;
+    modal.setAttribute("aria-hidden", "true");
     document.body.classList.remove("daily-devotion-modal-open");
     modal.querySelectorAll("audio").forEach(player => { player.pause(); });
   }
@@ -727,30 +820,12 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
       modal.classList.add("is-open");
       document.body.classList.add("daily-devotion-modal-open");
       const panel = modal.querySelector(".daily-devotion-modal-panel");
-      if (panel && isAndroidApp) {
-        // Use measured CSS pixels rather than vh/flex sizing: Android WebView
-        // was collapsing the flex item to its title row on some devices.
-        const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
-        const panelHeight = Math.max(320, Math.round(viewportHeight * 0.70));
-        panel.style.setProperty("position", "fixed", "important");
-        panel.style.setProperty("top", Math.round(viewportHeight * 0.15) + "px", "important");
-        panel.style.setProperty("left", "4vw", "important");
-        panel.style.setProperty("transform", "none", "important");
-        panel.style.setProperty("display", "block", "important");
-        panel.style.setProperty("box-sizing", "border-box", "important");
-        panel.style.setProperty("flex", "none", "important");
-        panel.style.setProperty("width", "92vw", "important");
-        panel.style.setProperty("height", panelHeight + "px", "important");
-        panel.style.setProperty("min-height", panelHeight + "px", "important");
-        panel.style.setProperty("max-height", panelHeight + "px", "important");
-        panel.style.setProperty("max-width", "620px", "important");
-        panel.style.setProperty("overflow-x", "hidden", "important");
-        panel.style.setProperty("overflow-y", "auto", "important");
-        panel.style.setProperty("-webkit-overflow-scrolling", "touch", "important");
-        panel.style.setProperty("background", "#fff", "important");
-        panel.style.setProperty("padding", "18px 16px 28px", "important");
-      }
+      // Keep the dialog's size in CSS so Android WebView and normal browsers
+      // use the same stable 70%-viewport layout (no competing inline vh values).
       panel?.scrollTo(0, 0);
+      modal.setAttribute("aria-hidden", "false");
+      const closeButton = modal.querySelector("[data-daily-close]");
+      closeButton?.focus({preventScroll:true});
     });
   });
   dailyModals.forEach(modal => {
