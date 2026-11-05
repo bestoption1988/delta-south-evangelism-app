@@ -259,7 +259,7 @@ object OfflineModuleManager {
         return total
     }
 
-    fun downloadDevotionalCollection(context: Context, collection: String, includeAudio: Boolean = false): Int {
+    fun downloadDevotionalCollection(context: Context, collection: String, includeAudio: Boolean = false, onProgress: (String, Int) -> Unit = { _, _ -> }): Int {
         require(collection in devotionalCollections)
         Backend.initialize(context.applicationContext)
         val directory = devotionalDirectory(context)
@@ -335,7 +335,7 @@ object OfflineModuleManager {
         collections.forEachIndexed { index, collection ->
             try {
                 onProgress("Downloading hymn audio: ${collection.replace('_', ' ')} (${index + 1}/${collections.size})", index * 100 / collections.size)
-                total += downloadDevotionalCollection(context, collection, includeAudio = true)
+                total += downloadDevotionalCollection(context, collection, includeAudio = true, onProgress = onProgress)
             } catch (error: Exception) {
                 failures += "$collection: ${error.message ?: "download failed"}"
             }
@@ -504,7 +504,7 @@ object OfflineModuleManager {
         return if (ext.matches(Regex("[a-z0-9]{2,5}"))) ".$ext" else if (type == "audio") ".mp3" else ".bin"
     }
 
-    private fun downloadSignedFile(client: okhttp3.OkHttpClient, url: String, target: File): Boolean {
+    private fun downloadSignedFile(client: okhttp3.OkHttpClient, url: String, target: File, onBytes: (Long, Long) -> Unit = { _, _ -> }): Boolean {
         return runCatching {
             if (target.exists() && target.length() > 0L) return true
             val temporary = File(target.parentFile, target.name + ".part")
@@ -512,7 +512,20 @@ object OfflineModuleManager {
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw IllegalStateException("Media HTTP " + response.code)
                 val body = response.body ?: throw IllegalStateException("Empty media body")
-                body.byteStream().use { input -> temporary.outputStream().use { output -> input.copyTo(output) } }
+                body.byteStream().use { input ->
+                    temporary.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var copied = 0L
+                        val totalBytes = body.contentLength()
+                        while (true) {
+                            val read = input.read(buffer)
+                            if (read < 0) break
+                            output.write(buffer, 0, read)
+                            copied += read
+                            onBytes(copied, totalBytes)
+                        }
+                    }
+                }
             }
             if (temporary.length() <= 0L) throw IllegalStateException("Empty downloaded file")
             if (target.exists()) target.delete()
