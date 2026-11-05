@@ -12,6 +12,10 @@ import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -66,6 +70,7 @@ private fun NativeDioceseApp() {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var signedIn by remember { mutableStateOf(false) }
+    var showStaffLogin by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var profile by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
@@ -152,14 +157,8 @@ private fun NativeDioceseApp() {
     var appointmentEditingId by remember { mutableStateOf<Int?>(null) }
     var selected by remember { mutableStateOf("Home") }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) {
-        if (Backend.cookies.hasSession()) {
-            busy = true
-            runCatching { withContext(Dispatchers.IO) { Backend.api.me() } }
-                .onSuccess { profile = it; password = ""; signedIn = true; selected = "Home"; message = "" }
-            busy = false
-        }
-    }
+    // Always start on the public diocesan homepage. Authentication is optional and
+    // is requested only when a visitor opens a protected staff feature.
     LaunchedEffect(signedIn, online) {
         if (signedIn && online) {
             runCatching { withContext(Dispatchers.IO) { OfflineAttendanceQueue.syncPending(appContext) } }
@@ -208,10 +207,17 @@ private fun NativeDioceseApp() {
     val financeRoles = setOf("Admin", "Finance Officer", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")
     val canReview = role == "Admin" || role == "Evangelism Minister"
 
-    if (!signedIn) {
+    if (!signedIn && !showStaffLogin) {
+        PublicDiocesanHomepage(
+            onStaffLogin = { showStaffLogin = true },
+            onBackPressed = { }
+        )
+    } else if (!signedIn) {
         Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+            TextButton(onClick = { showStaffLogin = false; message = "" }) { Text("← Back to public homepage") }
             Text("METHODIST CHURCH NIGERIA", style = MaterialTheme.typography.titleLarge)
             Text("DELTA SOUTH DIOCESE", style = MaterialTheme.typography.titleMedium)
+            Text("Staff and authorised officers", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(24.dp))
             OutlinedTextField(username, { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
             OutlinedTextField(password, { password = it }, label = { Text("Password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
@@ -231,8 +237,7 @@ private fun NativeDioceseApp() {
             }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait…" else "Sign in") }
             if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
         }
-    } else {
-        val tabs = buildList {
+    } else {        val tabs = buildList {
             addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Updates", "Member Care", "Directory", "Downloads"))
             if (role == "Member") add("ID Card")
             if (role in setOf("Admin", "Evangelism Minister", "Planting Officer", "Circuit Coordinator", "Local Church Evangelism Officer")) add("Attendance Register")
@@ -1204,6 +1209,7 @@ private fun NativeDioceseApp() {
             OutlinedButton(onClick = {
                 Backend.clearLocalData()
                 signedIn = false
+                showStaffLogin = false
                 username = ""
                 password = ""
                 currentPassword = ""
@@ -1310,6 +1316,67 @@ private fun KeyValueList(values: Map<String, Any?>) {
                 }
             }
         }
+    }
+}
+
+
+@Composable
+private fun PublicDiocesanHomepage(onStaffLogin: () -> Unit, onBackPressed: () -> Unit) {
+    val context = LocalContext.current
+    var pageError by remember { mutableStateOf(false) }
+    var pageLoading by remember { mutableStateOf(true) }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { ctx ->
+                WebView(ctx).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.loadsImagesAutomatically = true
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = true
+                    settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                            pageLoading = true
+                            pageError = false
+                        }
+                        override fun onPageFinished(view: WebView, url: String?) {
+                            pageLoading = false
+                        }
+                        override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
+                            if (request.isForMainFrame) {
+                                pageLoading = false
+                                pageError = true
+                            }
+                        }
+                    }
+                    webChromeClient = WebChromeClient()
+                    loadUrl(BuildConfig.API_BASE_URL)
+                    webView = this
+                }
+            },
+            update = { view -> if (view.url.isNullOrBlank()) view.loadUrl(BuildConfig.API_BASE_URL) }
+        )
+        if (pageLoading) {
+            LinearProgressIndicator(Modifier.fillMaxWidth().align(androidx.compose.ui.Alignment.TopCenter))
+        }
+        if (pageError) {
+            ElevatedCard(Modifier.align(androidx.compose.ui.Alignment.Center).padding(24.dp)) {
+                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("The diocesan homepage could not be reached.", style = MaterialTheme.typography.titleMedium)
+                    Text("Check your internet connection and try again.")
+                    Button(onClick = { pageError = false; pageLoading = true; webView?.reload() }) { Text("Retry homepage") }
+                }
+            }
+        }
+        FilledTonalButton(
+            onClick = onStaffLogin,
+            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(16.dp)
+        ) { Text("Staff sign in") }
     }
 }
 
