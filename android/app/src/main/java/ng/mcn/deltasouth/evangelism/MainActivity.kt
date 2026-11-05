@@ -50,6 +50,10 @@ private fun NativeDioceseApp() {
     var downloadedModules by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_downloaded_count", 0)) }
     var mediaDownloadedCount by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_media_downloaded_count", 0)) }
     var offlineMediaRows by remember { mutableStateOf(emptyList<Map<String, String>>()) }
+    var devotionalResourceCount by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_resources_count", 0)) }
+    var devotionalAudioCount by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_audio_count", 0)) }
+    var offlineDevotionalRows by remember { mutableStateOf(emptyList<Map<String, String>>()) }
+    var selectedDevotional by remember { mutableStateOf<Map<String, String>?>(null) }
     var pendingAttendanceCount by remember { mutableIntStateOf(OfflineAttendanceQueue.pendingCount(appContext)) }
     DisposableEffect(appContext) {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -201,6 +205,38 @@ private fun NativeDioceseApp() {
                     }
                 }.getOrDefault(emptyList())
             }
+            offlineDevotionalRows = withContext(Dispatchers.IO) {
+                runCatching {
+                    val directory = File(appContext.filesDir, "offline_devotional")
+                    val collections = listOf("english_hymns", "yoruba_hymns", "akokun", "bible_verses", "canticles", "communion_english", "communion_yoruba", "creeds")
+                    val output = mutableListOf<Map<String, String>>()
+                    collections.forEach { collection ->
+                        val file = File(directory, collection + ".json")
+                        if (file.exists()) {
+                            val array = JSONArray(file.readText())
+                            for (index in 0 until array.length()) {
+                                val item = array.optJSONObject(index) ?: continue
+                                val payload = item.optJSONObject("payload") ?: runCatching { JSONObject(item.optString("content_json", "{}")) }.getOrDefault(JSONObject())
+                                val body = buildString {
+                                    listOf("reference", "heading", "verse", "content", "firstline", "lyrics", "chorus").forEach { key ->
+                                        val value = payload.optString(key)
+                                        if (value.isNotBlank()) append(value).append("\n\n")
+                                    }
+                                    val stanzas = payload.optJSONArray("stanzas")
+                                    if (stanzas != null) for (s in 0 until stanzas.length()) append(stanzas.optString(s)).append("\n\n")
+                                }.trim()
+                                output.add(mapOf(
+                                    "title" to item.optString("title", "Church resource"),
+                                    "collection" to collection.replace('_', ' '),
+                                    "content" to body,
+                                    "audio_file" to item.optString("audio_file")
+                                ))
+                            }
+                        }
+                    }
+                    output
+                }.getOrDefault(emptyList())
+            }
         }
     }
     BackHandler(enabled = signedIn && selected != "Home") { selected = "Home"; message = "" }
@@ -302,6 +338,50 @@ private fun NativeDioceseApp() {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(if (downloadBusy) "Downloading…" else "Download All Modules") }
+                    Text("Devotional & Worship Centre", style = MaterialTheme.typography.titleMedium)
+                    Text("Saved devotional readings: $devotionalResourceCount")
+                    Text("Hymn audio records checked: $devotionalAudioCount")
+                    Button(
+                        enabled = online && !downloadBusy,
+                        onClick = {
+                            downloadBusy = true
+                            downloadMessage = "Downloading hymns, Scripture, canticles, Communion and creeds…"
+                            scope.launch {
+                                val count = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAllDevotionalResources(appContext) }
+                                devotionalResourceCount = count
+                                downloadMessage = "$count devotional resources saved for offline reading."
+                                downloadBusy = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Download Hymns, Scripture & Worship Books") }
+                    Button(
+                        enabled = online && !downloadBusy,
+                        onClick = {
+                            downloadBusy = true
+                            downloadMessage = "Downloading hymn recordings…"
+                            scope.launch {
+                                val count = withContext(Dispatchers.IO) { OfflineModuleManager.downloadHymnAudio(appContext) }
+                                devotionalAudioCount = count
+                                downloadMessage = "Hymn audio download finished. $count hymn records checked."
+                                downloadBusy = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Download Hymn Audio") }
+                    Button(
+                        enabled = online && !downloadBusy,
+                        onClick = {
+                            downloadBusy = true
+                            downloadMessage = "Downloading the uploaded CSB Bible…"
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) { runCatching { OfflineModuleManager.downloadCsbBible(appContext) } }
+                                downloadMessage = result.fold({ "The uploaded CSB Bible is saved for offline use." }, { it.message ?: "The CSB Bible is not available." })
+                                downloadBusy = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Download Uploaded CSB Bible") }
                     Text("Download published media by module", style = MaterialTheme.typography.titleMedium)
                     val downloadMediaModule: (String, String) -> Unit = { mediaType, label ->
                         downloadBusy = true
@@ -376,6 +456,21 @@ private fun NativeDioceseApp() {
                                         appContext.startActivity(intent)
                                     }.onFailure { downloadMessage = it.message ?: "No compatible viewer is installed." }
                                 }) { Text("Open") }
+                            }
+                        }
+                    }
+                    Text("Saved devotional readings — available without internet", style = MaterialTheme.typography.titleMedium)
+                    if (offlineDevotionalRows.isEmpty()) Text("Download the devotional collections above to read hymns, Scripture and worship materials offline.")
+                    LazyColumn(modifier = Modifier.heightIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(offlineDevotionalRows.take(80)) { item ->
+                            ElevatedCard(Modifier.fillMaxWidth()) {
+                                Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(item["title"] ?: "Church resource", style = MaterialTheme.typography.bodyLarge)
+                                        Text(item["collection"] ?: "Devotional", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    TextButton(onClick = { selectedDevotional = item }) { Text("Read") }
+                                }
                             }
                         }
                     }
@@ -1434,6 +1529,33 @@ private fun PublicDiocesanHomepage(onStaffLogin: () -> Unit, onBackPressed: () -
             }
         }
     }
+    selectedDevotional?.let { item ->
+        AlertDialog(
+            onDismissRequest = { selectedDevotional = null },
+            title = { Text(item["title"] ?: "Church resource") },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    Text(item["content"].orEmpty().ifBlank { "This resource is saved. Its full text will appear after the collection has downloaded." })
+                }
+            },
+            confirmButton = {
+                Row {
+                    val audioName = item["audio_file"].orEmpty()
+                    if (audioName.isNotBlank()) {
+                        TextButton(onClick = {
+                            runCatching {
+                                val file = File(appContext.filesDir, "offline_devotional/" + audioName)
+                                val uri = FileProvider.getUriForFile(appContext, appContext.packageName + ".fileprovider", file)
+                                appContext.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "audio/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
+                            }.onFailure { downloadMessage = it.message ?: "Could not open saved hymn audio." }
+                        }) { Text("Play audio") }
+                    }
+                    TextButton(onClick = { selectedDevotional = null }) { Text("Close") }
+                }
+            }
+        )
+    }
+
 }
 
 @Composable
