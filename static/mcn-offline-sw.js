@@ -60,7 +60,7 @@ async function cachePage(url, pageCache, assetCache) {
     while ((match = hrefPattern.exec(html)) !== null) {
       try {
         const target = new URL(match[1], url.href);
-        if (safePage(target) && target.pathname !== url.pathname) links.push(target);
+        if (safePage(target) && (target.pathname !== url.pathname || target.search !== url.search)) links.push(target);
       } catch (_) {}
     }
     const assetPattern = /(?:src|href)\s*=\s*["']([^"']+)["']/gi;
