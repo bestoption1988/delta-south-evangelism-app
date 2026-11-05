@@ -5,6 +5,8 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.ExistingWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -30,6 +32,7 @@ object OfflineModuleManager {
         "api/member/appreciations",
         "api/membership/churches",
         "api/circuits",
+        "api/members",
         "api/membership-statistics",
         "api/conference",
         "api/finance-summary",
@@ -84,6 +87,20 @@ object OfflineModuleManager {
             .putInt("last_failed_count", failed)
             .apply()
         return OfflineDownloadSummary(downloaded, unavailable, failed)
+    }
+
+    fun scheduleImmediateUpdate(context: Context) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val request = OneTimeWorkRequestBuilder<OfflineRefreshWorker>()
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
+            "mcn-delta-south-offline-refresh-now",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
     }
 
     fun scheduleAutomaticUpdates(context: Context) {
