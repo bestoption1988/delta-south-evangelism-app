@@ -153,6 +153,7 @@ object Backend {
 }
 interface DioceseApi {
  @GET("api/me") suspend fun me(): Map<String, Any?>
+ @POST("api/change-password") suspend fun forceChangePassword(@Body body: Map<String, String>): Map<String, Any?>
  @GET("api/dashboard") suspend fun dashboard(): Map<String, Any?>
  @GET("api/member/records") suspend fun memberRecords(): Map<String, Any?>
  @PUT("api/member/profile") suspend fun updateMemberProfile(@Body body: Map<String, String>): Map<String, Any?>
