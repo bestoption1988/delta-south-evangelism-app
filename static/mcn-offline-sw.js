@@ -2,7 +2,7 @@
  * Public pages and assets are cached for offline reading. Protected API writes,
  * payment routes and authenticated private responses are never cached here.
  */
-const CACHE_VERSION = "mcn-delta-south-shell-v2";
+const CACHE_VERSION = "mcn-delta-south-shell-v3";
 const PAGE_CACHE = CACHE_VERSION + "-pages";
 const ASSET_CACHE = CACHE_VERSION + "-assets";
 const PUBLIC_ROUTES = [
@@ -55,7 +55,7 @@ async function cachePage(url, pageCache, assetCache) {
     await pageCache.put(url.href, response.clone());
     const html = await response.clone().text();
     const links = [];
-    const hrefPattern = /href\s*=\s*["']([^"']+)["']/gi;
+    const hrefPattern = /<a\b[^>]*\bhref\s*=\s*["']([^"']+)["']/gi;
     let match;
     while ((match = hrefPattern.exec(html)) !== null) {
       try {
@@ -94,14 +94,21 @@ async function cacheEntireApp() {
   const queue = PUBLIC_ROUTES.map(path => new URL(path, self.location.origin));
   const visited = new Set();
   let count = 0;
-  while (queue.length && visited.size < 180) {
-    const url = queue.shift();
-    if (!url || visited.has(url.href) || !safePage(url)) continue;
-    visited.add(url.href);
-    const discovered = await cachePage(url, pageCache, assetCache);
-    count++;
-    for (const next of discovered) {
-      if (!visited.has(next.href) && queue.length < 180) queue.push(next);
+  while (queue.length && visited.size < 4000) {
+    const batch = [];
+    while (queue.length && batch.length < 6 && visited.size + batch.length < 4000) {
+      const candidate = queue.shift();
+      if (!candidate || visited.has(candidate.href) || !safePage(candidate)) continue;
+      visited.add(candidate.href);
+      batch.push(candidate);
+    }
+    if (!batch.length) continue;
+    const discoveredPages = await Promise.all(batch.map(url => cachePage(url, pageCache, assetCache)));
+    count += batch.length;
+    for (const discovered of discoveredPages) {
+      for (const next of discovered) {
+        if (!visited.has(next.href) && queue.length < 4000) queue.push(next);
+      }
     }
   }
   return count;
