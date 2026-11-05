@@ -652,8 +652,8 @@
     saveOffline.addEventListener("click", event => {
       event.preventDefault();
       if (window.mcnCacheEntireApp) window.mcnCacheEntireApp();
-      if (window.MCNOfflineBridge && window.MCNOfflineBridge.downloadOffline) {
-        window.MCNOfflineBridge.downloadOffline();
+      if (navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1) {
+        window.location.href = "mcn-app://offline";
       } else {
         saveOffline.textContent = "Offline pages are being saved…";
       }
@@ -661,9 +661,9 @@
   }
   if (staffSignIn) {
     staffSignIn.addEventListener("click", event => {
-      if (window.MCNOfflineBridge && window.MCNOfflineBridge.openStaffSignIn) {
+      if (navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1) {
         event.preventDefault();
-        window.MCNOfflineBridge.openStaffSignIn();
+        window.location.href = "mcn-app://staff-login";
       } else {
         staffSignIn.href = "/login";
       }
