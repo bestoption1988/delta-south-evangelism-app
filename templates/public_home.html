@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261102-responsive-featured-video">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261105-70percent-popup-navigation">
 
 <style>
 .pdf-book-preview {
@@ -728,15 +728,21 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
       document.body.classList.add("daily-devotion-modal-open");
       const panel = modal.querySelector(".daily-devotion-modal-panel");
       if (panel && isAndroidApp) {
-        // Set dimensions directly at open time: some Android WebViews ignore
-        // the flex item's CSS height and collapse the dialog to its heading.
+        // Use measured CSS pixels rather than vh/flex sizing: Android WebView
+        // was collapsing the flex item to its title row on some devices.
+        const viewportHeight = Math.max(window.innerHeight || 0, document.documentElement.clientHeight || 0);
+        const panelHeight = Math.max(320, Math.round(viewportHeight * 0.70));
+        panel.style.setProperty("position", "fixed", "important");
+        panel.style.setProperty("top", Math.round(viewportHeight * 0.15) + "px", "important");
+        panel.style.setProperty("left", "4vw", "important");
+        panel.style.setProperty("transform", "none", "important");
         panel.style.setProperty("display", "block", "important");
         panel.style.setProperty("box-sizing", "border-box", "important");
-        panel.style.setProperty("flex", "0 0 70vh", "important");
-        panel.style.setProperty("width", "calc(100vw - 28px)", "important");
-        panel.style.setProperty("height", "70vh", "important");
-        panel.style.setProperty("min-height", "70vh", "important");
-        panel.style.setProperty("max-height", "70vh", "important");
+        panel.style.setProperty("flex", "none", "important");
+        panel.style.setProperty("width", "92vw", "important");
+        panel.style.setProperty("height", panelHeight + "px", "important");
+        panel.style.setProperty("min-height", panelHeight + "px", "important");
+        panel.style.setProperty("max-height", panelHeight + "px", "important");
         panel.style.setProperty("max-width", "620px", "important");
         panel.style.setProperty("overflow-x", "hidden", "important");
         panel.style.setProperty("overflow-y", "auto", "important");
