@@ -12472,10 +12472,10 @@ def devotional_centre_home():
         today = datetime.now().strftime("%Y-%m-%d")
         day_hash = hashlib.sha256(today.encode("utf-8")).hexdigest()
         verses = db().execute(
-            "SELECT resource_id,title,content_json FROM devotional_resources
+            """SELECT resource_id,title,content_json FROM devotional_resources
             WHERE collection='bible_verses'
               AND LOWER(CAST(published AS TEXT)) IN ('1','true','t')
-            ORDER BY resource_id LIMIT 497"
+            ORDER BY resource_id LIMIT 497"""
         ).fetchall()
         if verses:
             daily = dict(verses[int(day_hash[:8], 16) % len(verses)])
