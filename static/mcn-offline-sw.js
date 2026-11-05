@@ -181,7 +181,7 @@ self.addEventListener("fetch", event => {
       const live = await fetch(request);
       if (live.ok && (url.pathname.startsWith("/static/") ||
           url.pathname.startsWith("/api/offline/") ||
-          url.pathname.startsWith("/api/public/") || url.pathname.startsWith("/media-library/document/"))) {
+          url.pathname.startsWith("/api/public/") || url.pathname.startsWith("/media-library/document/") || url.pathname.startsWith("/devotional-centre/holy-bible/books") || url.pathname.startsWith("/devotional-centre/holy-bible/chapter"))) {
         await cache.put(request, live.clone());
       }
       return live;
