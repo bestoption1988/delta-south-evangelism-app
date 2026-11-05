@@ -1186,7 +1186,7 @@ def login_required(fn):
         u = current_user()
         if not u or not u["active"]:
             return jsonify({"error": "Authentication required"}), 401
-        if u["must_change_password"] and request.endpoint not in {"member_change_password", "api_change_password", "logout"}:
+        if u["must_change_password"] and request.endpoint not in {"member_change_password", "api_change_password", "api_me", "logout"}:
             return jsonify({"error": "Password change required", "code": "PASSWORD_CHANGE_REQUIRED"}), 403
         return fn(*args, **kwargs)
     return wrapper
@@ -2951,7 +2951,8 @@ def _daily_scripture_and_hymn():
                 hymn_number = hymn_number_match.group(1) if hymn_number_match else ""
                 hymn_row = db().execute(
                     """SELECT audio_path,content_json FROM devotional_resources
-                       WHERE published=1 AND collection='english_hymns'
+                       WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+                         AND collection='english_hymns'
                          AND (LOWER(title)=LOWER(?) OR item_number=?)
                        ORDER BY CASE WHEN LOWER(title)=LOWER(?) THEN 0 ELSE 1 END
                        LIMIT 1""",
@@ -5123,6 +5124,35 @@ def api_me():
         "member_id",
     )
     return jsonify({key: u[key] for key in safe_fields if key in u.keys()})
+
+
+
+@app.post("/api/change-password")
+@login_required
+def api_change_password():
+    """Authenticated password update for native clients and forced first-login changes."""
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    current = str(data.get("current_password") or "")
+    new = str(data.get("new_password") or "")
+    confirm = str(data.get("confirm_password") or "")
+    if not current or not new or not confirm:
+        return jsonify({"error": "Current password, new password and confirmation are required."}), 400
+    if not check_password_hash(user["password"], current):
+        return jsonify({"error": "Current password is incorrect."}), 400
+    if len(new) < 8:
+        return jsonify({"error": "New password must be at least 8 characters."}), 400
+    if new != confirm:
+        return jsonify({"error": "New passwords do not match."}), 400
+    db().execute(
+        "UPDATE users SET password=?,must_change_password=0 WHERE id=?",
+        (generate_password_hash(new), user["id"])
+    )
+    db().commit()
+    audit("PASSWORD_CHANGE", "users", user["id"], "Password changed through native client")
+    return jsonify({"success": True, "message": "Password changed successfully."})
+
+
 
 
 def get_connection_url():
@@ -12442,7 +12472,10 @@ def devotional_centre_home():
         today = datetime.now().strftime("%Y-%m-%d")
         day_hash = hashlib.sha256(today.encode("utf-8")).hexdigest()
         verses = db().execute(
-            "SELECT resource_id,title,content_json FROM devotional_resources WHERE collection='bible_verses' AND published=1 ORDER BY resource_id LIMIT 497"
+            """SELECT resource_id,title,content_json FROM devotional_resources
+            WHERE collection='bible_verses'
+              AND LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+            ORDER BY resource_id LIMIT 497"""
         ).fetchall()
         if verses:
             daily = dict(verses[int(day_hash[:8], 16) % len(verses)])
@@ -13395,6 +13428,232 @@ def media_library_admin():
 def devotional_holy_bible():
     """On-site Bible reader. Scripture text is fetched from the public-domain WEB API."""
     return render_template("devotional_holy_bible.html")
+
+
+
+# Public read-only endpoints used by the native app's offline resource modules.
+@app.get("/api/offline/devotional-resources")
+def api_offline_devotional_resources():
+    allowed = {
+        "english_hymns", "yoruba_hymns", "akokun", "bible_verses",
+        "canticles", "communion_english", "communion_yoruba", "creeds"
+    }
+    collection = (request.args.get("collection") or "").strip()
+    if collection not in allowed:
+        return jsonify({"error": "Unknown devotional collection."}), 400
+    include_audio = request.args.get("include_audio", "0").strip() == "1"
+    page = max(1, min(request.args.get("page", 1, type=int) or 1, 10000))
+    per_page = max(1, min(request.args.get("per_page", 100, type=int) or 100, 100))
+    # Support both PostgreSQL BOOLEAN and legacy SQLite INTEGER publication flags.
+    published_filter = "LOWER(CAST(published AS TEXT)) IN ('1','true','t')"
+    total_row = db().execute(
+        "SELECT COUNT(*) AS total FROM devotional_resources WHERE collection=? AND " + published_filter,
+        (collection,)
+    ).fetchone()
+    total = int(total_row["total"] or 0)
+    rows = db().execute(
+        """SELECT resource_id,collection,item_number,title,content_json,audio_path,author_path
+           FROM devotional_resources
+           WHERE collection=? AND """ + published_filter + """
+           ORDER BY item_number,title
+           LIMIT ? OFFSET ?""",
+        (collection, per_page, (page - 1) * per_page)
+    ).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        try:
+            payload = json.loads(item.get("content_json") or "{}")
+        except Exception:
+            payload = {}
+        audio_path = item.pop("audio_path", "") or payload.get("musicFilePath") or ""
+        item.pop("author_path", None)
+        item.pop("content_json", None)
+        payload["musicFilePath"] = ""
+        item["payload"] = payload
+        item["audio_extension"] = os.path.splitext(audio_path)[1].lower()
+        item["audio_url"] = _dc_signed(audio_path) if include_audio else ""
+        item["author_url"] = ""
+        if include_audio:
+            for tune in payload.get("otherTunes") or []:
+                tune_path = tune.get("musicFilePath") or tune.get("audio_path") or ""
+                tune["audio_extension"] = os.path.splitext(tune_path)[1].lower()
+                tune["musicFilePath"] = ""
+                tune.pop("audio_path", None)
+                tune["signed_url"] = _dc_signed(tune_path)
+        items.append(item)
+    return jsonify({
+        "collection": collection,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": max(1, (total + per_page - 1) // per_page),
+        "items": items
+    })
+
+
+@app.get("/api/offline/daily-devotion")
+def api_offline_daily_devotion():
+    try:
+        return jsonify(_daily_scripture_and_hymn())
+    except Exception:
+        app.logger.exception("Daily offline devotion could not be prepared")
+        return jsonify({"error": "Daily devotion is temporarily unavailable."}), 503
+
+
+@app.get("/api/offline/csb-bible")
+def api_offline_csb_bible():
+    try:
+        signed_url = _dc_signed(_CSB_BIBLE_OBJECT_KEY)
+        if not signed_url:
+            return jsonify({"available": False, "error": "The uploaded CSB Bible is not available."}), 404
+        return jsonify({"available": True, "download_url": signed_url, "title": "Christian Standard Bible — 2017 Pew Bible"})
+    except Exception:
+        app.logger.exception("Offline CSB Bible link could not be created")
+        return jsonify({"available": False, "error": "The CSB Bible is temporarily unavailable."}), 503
+
+
+@app.get("/api/offline/lectionary")
+def api_offline_lectionary():
+    source_path = Path(ROOT) / "data" / "yearly_lectionary_2027.txt"
+    try:
+        return jsonify({"title": "2027 Methodist Lectionary", "content": source_path.read_text(encoding="utf-8")})
+    except OSError:
+        return jsonify({"error": "The yearly lectionary is temporarily unavailable."}), 503
+
+
+@app.get("/api/offline/media-catalogue")
+def api_offline_media_catalogue():
+    """Public, published-only media catalogue for offline audio/video/document downloads."""
+    try:
+        rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,created_at",
+                "published": "eq.true",
+                "order": "created_at.desc",
+                "limit": "1000",
+            },
+        )
+        items = []
+        for row in rows:
+            try:
+                signed_url = _ml_signed(row["storage_path"])
+            except Exception:
+                app.logger.warning("Could not sign published offline media item %s", row.get("id"))
+                continue
+            items.append({
+                "id": row.get("id"),
+                "title": row.get("title") or "Church media",
+                "description": row.get("description") or "",
+                "mime_type": row.get("mime_type") or "application/octet-stream",
+                "media_type": row.get("media_type") or "document",
+                "created_at": row.get("created_at"),
+                "download_url": signed_url,
+            })
+        return jsonify({"items": items, "count": len(items)})
+    except Exception:
+        app.logger.exception("Offline media catalogue could not be loaded")
+        return jsonify({"error": "Offline media catalogue is temporarily unavailable."}), 503
+
+
+
+
+@app.post("/api/offline/sync")
+@login_required
+def api_offline_sync():
+    """Idempotent synchronization for queued attendance records only."""
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    operation = data.get("operation") or {}
+    operation_id = str(operation.get("operation_id") or "").strip()
+    if not operation_id or len(operation_id) > 100:
+        return jsonify({"error": "A valid operation_id is required."}), 400
+    if operation.get("type") != "attendance":
+        return jsonify({"error": "Unsupported offline operation."}), 400
+    allowed_roles = {
+        "Admin", "Evangelism Minister", "Planting Officer",
+        "Circuit Coordinator", "Local Church Evangelism Officer"
+    }
+    if user["role"] not in allowed_roles:
+        return jsonify({"error": "Attendance recording access denied."}), 403
+
+    conn = db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS offline_sync_receipts (
+            operation_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    existing = conn.execute(
+        "SELECT username,result_json FROM offline_sync_receipts WHERE operation_id=?",
+        (operation_id,)
+    ).fetchone()
+    if existing:
+        if existing["username"] != user["username"]:
+            return jsonify({"error": "Operation ID already belongs to another account."}), 409
+        return jsonify(json.loads(existing["result_json"]))
+
+    payload = operation.get("data") or {}
+    try:
+        member_id = int(payload.get("member_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid member_id is required."}), 400
+    attendance_date = str(payload.get("attendance_date") or "").strip()
+    meeting_type = str(payload.get("meeting_type") or "").strip()
+    status = str(payload.get("status") or "Present").strip().title()
+    if not attendance_date:
+        return jsonify({"error": "attendance_date is required."}), 400
+    if status not in {"Present", "Absent"}:
+        return jsonify({"error": "Status must be Present or Absent."}), 400
+    try:
+        datetime.strptime(attendance_date, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "attendance_date must use YYYY-MM-DD."}), 400
+
+    member = conn.execute(
+        "SELECT id,circuit,church_name FROM members WHERE id=?",
+        (member_id,)
+    ).fetchone()
+    if not member:
+        return jsonify({"error": "Member record not found."}), 404
+    if user["role"] == "Circuit Coordinator" and user["circuit"] and member["circuit"] != user["circuit"]:
+        return jsonify({"error": "Member is outside your circuit."}), 403
+    if user["role"] == "Local Church Evangelism Officer" and (
+        member["circuit"] != user["circuit"] or member["church_name"] != user["church_name"]
+    ):
+        return jsonify({"error": "Member is outside your local church."}), 403
+
+    try:
+        inserted = conn.execute(
+            """INSERT INTO member_attendance
+               (member_id,attendance_date,meeting_type,status,circuit,church_name,recorded_by,notes)
+               VALUES(?,?,?,?,?,?,?,?) RETURNING id""",
+            (member_id, attendance_date, meeting_type, status, member["circuit"],
+             member["church_name"], user["username"], str(payload.get("notes") or "").strip())
+        ).fetchone()
+        result = {
+            "ok": True, "status": "synced",
+            "operation_id": operation_id, "id": inserted["id"]
+        }
+        conn.execute(
+            "INSERT INTO offline_sync_receipts(operation_id,username,result_json) VALUES(?,?,?)",
+            (operation_id, user["username"], json.dumps(result))
+        )
+        conn.commit()
+        return jsonify(result), 201
+    except Exception:
+        conn.rollback()
+        existing = conn.execute(
+            "SELECT username,result_json FROM offline_sync_receipts WHERE operation_id=?",
+            (operation_id,)
+        ).fetchone()
+        if existing and existing["username"] == user["username"]:
+            return jsonify(json.loads(existing["result_json"]))
+        app.logger.exception("Offline attendance synchronization failed")
+        return jsonify({"error": "Offline attendance could not be synchronized."}), 500
 
 
 if __name__ == "__main__":

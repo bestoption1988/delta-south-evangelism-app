@@ -998,3 +998,20 @@ white-space:normal;border-bottom:1px solid #ffffff20}
 @media(prefers-reduced-motion:reduce) {
   .photo-gallery-slide { transition: none; }
 }
+
+
+/* Native Android WebView: reliable navigation, devotion cards and media sizing */
+#menuToggle { cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.navbar { isolation:isolate; }
+@media(max-width:700px) {
+  .navbar { position:sticky; top:0; z-index:1000; }
+  .navbar #menuToggle { display:block; width:100%; min-height:54px; text-align:left; position:relative; z-index:1001; pointer-events:auto; touch-action:manipulation; }
+  .navbar #navLinks { display:none !important; }
+  .navbar #navLinks.open { display:flex !important; }
+  .navbar #navLinks a, .navbar #navLinks .nav-drop-toggle { min-height:44px; display:flex; align-items:center; }
+}
+.daily-devotion-card summary { cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.daily-devotion-card[open] .daily-devotion-full { display:block; }
+.daily-devotion-full .button { display:inline-block; margin-top:10px; }
+audio,video { display:block; width:100%; max-width:100%; }
+video { height:auto; max-height:70vh; background:#071331; object-fit:contain; }
