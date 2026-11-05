@@ -76,6 +76,7 @@ private fun NativeDioceseApp() {
     var password by remember { mutableStateOf("") }
     var signedIn by remember { mutableStateOf(false) }
     var showStaffLogin by remember { mutableStateOf(false) }
+    var showOfflineLibrary by remember { mutableStateOf(false) }
     var mustChangePassword by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -245,12 +246,15 @@ private fun NativeDioceseApp() {
     val financeRoles = setOf("Admin", "Finance Officer", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")
     val canReview = role == "Admin" || role == "Evangelism Minister"
 
-    if (!signedIn && !showStaffLogin) {
+    if (!signedIn && !showStaffLogin && !showOfflineLibrary) {
         PublicDiocesanHomepage(
             online = online,
             onStaffLogin = { showStaffLogin = true },
+            onOfflineLibrary = { showOfflineLibrary = true },
             onBackPressed = { }
         )
+    } else if (!signedIn && showOfflineLibrary) {
+        PublicOfflineLibrary(online = online, onBack = { showOfflineLibrary = false })
     } else if (!signedIn && mustChangePassword) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
             Text("Password update required", style = MaterialTheme.typography.headlineSmall)
@@ -1524,7 +1528,7 @@ private fun KeyValueList(values: Map<String, Any?>) {
 
 
 @Composable
-private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, onOfflineLibrary: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -1599,8 +1603,13 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
             shape = MaterialTheme.shapes.large,
             shadowElevation = 3.dp
         ) {
-            TextButton(onClick = onStaffLogin, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
-                Text("Staff sign in")
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                TextButton(onClick = onOfflineLibrary, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                    Text("Offline Library")
+                }
+                TextButton(onClick = onStaffLogin, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
+                    Text("Staff sign in")
+                }
             }
         }
     }
