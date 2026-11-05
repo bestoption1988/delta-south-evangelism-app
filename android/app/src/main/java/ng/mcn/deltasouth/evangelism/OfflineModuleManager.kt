@@ -140,12 +140,16 @@ object OfflineModuleManager {
         "api/church-accounts",
     )
 
-    fun downloadAll(context: Context): OfflineDownloadSummary {
+    fun downloadAll(context: Context, onProgress: (String, Int) -> Unit = { _, _ -> }): OfflineDownloadSummary {
         Backend.initialize(context.applicationContext)
         var downloaded = 0
         var unavailable = 0
         var failed = 0
         var mediaDownloaded = 0
+        val totalSteps = moduleRequests.size + 6
+        var completedSteps = 0
+        fun report(stage: String) { completedSteps++; onProgress(stage, (completedSteps * 100 / totalSteps).coerceIn(0, 99)) }
+        onProgress("Preparing secure offline package…", 0)
         moduleRequests.forEach { path ->
             try {
                 val request = Request.Builder()
@@ -167,45 +171,57 @@ object OfflineModuleManager {
             } catch (_: Exception) {
                 failed++
             }
+            report("Saving account data: ${path.substringAfterLast('/')}")
         }
         try {
+            onProgress("Downloading hymns, Scripture and worship books…", completedSteps * 100 / totalSteps)
             val devotionalCount = downloadAllDevotionalResources(context)
             if (devotionalCount > 0) downloaded++
         } catch (_: Exception) {
             failed++
         }
+        report("Devotional readings saved")
         // Save published hymn recordings as part of the same whole-app package.
         try {
-            downloadHymnAudio(context)
+            downloadHymnAudio(context) { stage, percent -> onProgress(stage, ((completedSteps + percent / 100f) * 100 / totalSteps).toInt().coerceIn(0, 99)) }
         } catch (_: Exception) {
             failed++
         }
+        report("Hymn recordings processed")
         try {
+            onProgress("Saving today's Scripture and hymn…", completedSteps * 100 / totalSteps)
             downloadDailyDevotion(context)
             downloaded++
         } catch (_: Exception) {
             failed++
         }
+        report("Daily devotion saved")
         try {
+            onProgress("Saving lectionary…", completedSteps * 100 / totalSteps)
             downloadLectionary(context)
             downloaded++
         } catch (_: Exception) {
             failed++
         }
+        report("Lectionary saved")
         // The app's official Bible reader uses the public-domain World English Bible (WEB).
         // Save all 1,189 chapters so the same reader can work without a network connection.
         try {
+            onProgress("Downloading World English Bible chapters…", completedSteps * 100 / totalSteps)
             val savedChapters = downloadWebBible(context)
             if (savedChapters > 0) downloaded++
             else failed++
         } catch (_: Exception) {
             failed++
         }
+        report("WEB Bible saved")
         try {
-            mediaDownloaded = downloadPublishedMedia(context, null)
+            mediaDownloaded = downloadPublishedMedia(context, null) { stage, percent -> onProgress(stage, ((completedSteps + percent / 100f) * 100 / totalSteps).toInt().coerceIn(0, 99)) }
         } catch (_: Exception) {
             failed++
         }
+        report("Church audio, video and documents saved")
+        onProgress("Offline package complete", 100)
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
             .edit()
             .putLong("last_download_at", System.currentTimeMillis())
@@ -312,15 +328,18 @@ object OfflineModuleManager {
         return if (includeAudio) audioDownloaded else allItems.length()
     }
 
-    fun downloadHymnAudio(context: Context): Int {
+    fun downloadHymnAudio(context: Context, onProgress: (String, Int) -> Unit = { _, _ -> }): Int {
         var total = 0
         val failures = mutableListOf<String>()
-        listOf("english_hymns", "yoruba_hymns", "akokun").forEach { collection ->
+        val collections = listOf("english_hymns", "yoruba_hymns", "akokun")
+        collections.forEachIndexed { index, collection ->
             try {
+                onProgress("Downloading hymn audio: ${collection.replace('_', ' ')} (${index + 1}/${collections.size})", index * 100 / collections.size)
                 total += downloadDevotionalCollection(context, collection, includeAudio = true)
             } catch (error: Exception) {
                 failures += "$collection: ${error.message ?: "download failed"}"
             }
+            onProgress("Hymn audio: ${collection.replace('_', ' ')} processed", (index + 1) * 100 / collections.size)
         }
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
             .edit().putInt("last_devotional_audio_count", total).apply()
@@ -505,9 +524,9 @@ object OfflineModuleManager {
         }.getOrDefault(false)
     }
 
-    fun downloadMediaCategory(context: Context, mediaType: String): Int {
+    fun downloadMediaCategory(context: Context, mediaType: String, onProgress: (String, Int) -> Unit = { _, _ -> }): Int {
         require(mediaType in setOf("audio", "video", "document"))
-        val count = downloadPublishedMedia(context, setOf(mediaType))
+        val count = downloadPublishedMedia(context, setOf(mediaType), onProgress)
         val directory = offlineMediaDirectory(context)
         val index = runCatching { JSONArray(File(directory, "index.json").readText()) }.getOrDefault(JSONArray())
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
@@ -515,7 +534,7 @@ object OfflineModuleManager {
         return count
     }
 
-    private fun downloadPublishedMedia(context: Context, filterTypes: Set<String>?): Int {
+    private fun downloadPublishedMedia(context: Context, filterTypes: Set<String>?, onProgress: (String, Int) -> Unit = { _, _ -> }): Int {
         val catalogueRequest = Request.Builder()
             .url(BuildConfig.API_BASE_URL + "api/offline/media-catalogue")
             .get()
@@ -545,11 +564,11 @@ object OfflineModuleManager {
             oldEntries[old.optString("id")] = old
             oldVersions[old.optString("id")] = old.optString("created_at")
         }
+        val selectedItems = (0 until items.length()).mapNotNull { items.optJSONObject(it) }.filter { filterTypes == null || it.optString("media_type", "document") in filterTypes }
+        val totalItems = selectedItems.size
         var count = 0
-        for (i in 0 until items.length()) {
-            val item = items.optJSONObject(i) ?: continue
+        for ((position, item) in selectedItems.withIndex()) {
             val mediaType = item.optString("media_type", "document")
-            if (filterTypes != null && mediaType !in filterTypes) continue
             val id = item.optString("id")
             val url = item.optString("download_url")
             if (id.isBlank() || url.isBlank()) continue
@@ -606,6 +625,8 @@ object OfflineModuleManager {
             } catch (_: Exception) {
                 // One unavailable media object must not cancel the rest of the library.
             }
+            val title = item.optString("title", "media item")
+            onProgress("Downloading $mediaType: $title (${position + 1}/$totalItems)", if (totalItems == 0) 100 else (position + 1) * 100 / totalItems)
         }
         val index = JSONArray()
         oldEntries.values.forEach { entry ->
