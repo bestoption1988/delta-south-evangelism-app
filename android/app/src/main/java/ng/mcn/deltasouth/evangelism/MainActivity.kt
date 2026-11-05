@@ -371,6 +371,7 @@ private fun NativeDioceseApp() {
                                 val result = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAll(appContext) }
                                 downloadedModules = result.downloaded
                                 mediaDownloadedCount = result.mediaDownloaded
+                                devotionalResourceCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_resources_count", 0)
                                 offlineMediaRows = withContext(Dispatchers.IO) {
                                     runCatching {
                                         val file = File(OfflineModuleManager.offlineMediaDirectory(appContext), "index.json")
