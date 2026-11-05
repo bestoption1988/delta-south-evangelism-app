@@ -75,7 +75,7 @@ async function cachePage(url, pageCache, assetCache) {
           const cached = await caches.match(asset.href);
           if (!cached) {
             try {
-              const file = await fetch(asset.href, { credentials: localAsset ? "same-origin" : "omit" });
+              const file = await fetch(asset.href, { mode: localAsset ? "same-origin" : "no-cors", credentials: localAsset ? "same-origin" : "omit" });
               if (file.ok || file.type === "opaque") await assetCache.put(asset.href, file.clone());
             } catch (_) {}
           }
