@@ -292,14 +292,22 @@ private fun NativeDioceseApp() {
         PublicDiocesanHomepage(
             online = online,
             offlineDownloadBusy = downloadBusy,
+            offlineDownloadProgress = downloadProgress,
+            offlineDownloadStage = downloadStage,
             onStaffLogin = { showStaffLogin = true },
             onOfflineDownload = {
                 if (online && !downloadBusy) {
                     downloadBusy = true
                     downloadMessage = "Saving the diocesan homepage, devotional resources, media and permitted records for offline use…"
+                    downloadProgress = 0
+                    downloadStage = "Preparing offline package…"
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
-                            runCatching { OfflineModuleManager.downloadAll(appContext) }
+                            runCatching {
+                                OfflineModuleManager.downloadAll(appContext) { stage, percent ->
+                                    scope.launch(Dispatchers.Main) { downloadStage = stage; downloadProgress = percent }
+                                }
+                            }
                         }
                         result.onSuccess { summary ->
                             downloadedModules = summary.downloaded
@@ -1807,7 +1815,7 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -1903,8 +1911,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 if (view.url.isNullOrBlank()) view.loadUrl(BuildConfig.API_BASE_URL)
             }
         )
-        if (pageLoading || offlineDownloadBusy) {
+        if (pageLoading) {
             LinearProgressIndicator(Modifier.fillMaxWidth().align(androidx.compose.ui.Alignment.TopCenter))
+        }
+        if (offlineDownloadBusy) {
+            ElevatedCard(Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth().padding(12.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("$offlineDownloadStage • $offlineDownloadProgress%", style = MaterialTheme.typography.bodyMedium)
+                    LinearProgressIndicator(progress = { offlineDownloadProgress / 100f }, modifier = Modifier.fillMaxWidth())
+                }
+            }
         }
         if (pageError) {
             ElevatedCard(Modifier.align(androidx.compose.ui.Alignment.Center).padding(24.dp)) {
