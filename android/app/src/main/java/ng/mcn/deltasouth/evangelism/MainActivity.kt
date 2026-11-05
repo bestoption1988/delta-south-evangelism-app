@@ -250,6 +250,7 @@ private fun NativeDioceseApp() {
     if (!signedIn && !showStaffLogin && !showOfflineLibrary) {
         PublicDiocesanHomepage(
             online = online,
+            offlineDownloadBusy = downloadBusy,
             onStaffLogin = { showStaffLogin = true },
             onOfflineDownload = {
                 if (online && !downloadBusy) {
@@ -1742,7 +1743,7 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -1754,6 +1755,7 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
             factory = { ctx ->
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
+                    settings.userAgentString = settings.userAgentString + " MCNDeltaSouthAndroid"
                     settings.domStorageEnabled = true
                     settings.loadsImagesAutomatically = true
                     settings.javaScriptCanOpenWindowsAutomatically = true
@@ -1763,16 +1765,6 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
                     settings.loadWithOverviewMode = false
                     settings.allowFileAccess = false
                     settings.allowContentAccess = true
-                    addJavascriptInterface(object {
-                        @android.webkit.JavascriptInterface
-                        fun downloadOffline() {
-                            android.os.Handler(android.os.Looper.getMainLooper()).post { onOfflineDownload() }
-                        }
-                        @android.webkit.JavascriptInterface
-                        fun openStaffSignIn() {
-                            android.os.Handler(android.os.Looper.getMainLooper()).post { onStaffLogin() }
-                        }
-                    }, "MCNOfflineBridge")
                     settings.cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
                     isFocusable = true
                     isFocusableInTouchMode = true
@@ -1781,6 +1773,17 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
                     overScrollMode = android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS
                     setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                     webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
+                            if (request.url.scheme == "mcn-app" && request.url.host == "offline") {
+                                onOfflineDownload()
+                                return true
+                            }
+                            if (request.url.scheme == "mcn-app" && request.url.host == "staff-login") {
+                                onStaffLogin()
+                                return true
+                            }
+                            return super.shouldOverrideUrlLoading(view, request)
+                        }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
                             if (!online && request.url.host == "bible-api.com") {
                                 val cachedChapter = OfflineModuleManager.cachedWebBibleChapter(ctx, request.url.toString())
@@ -1822,7 +1825,7 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
                 if (view.url.isNullOrBlank()) view.loadUrl(BuildConfig.API_BASE_URL)
             }
         )
-        if (pageLoading) {
+        if (pageLoading || offlineDownloadBusy) {
             LinearProgressIndicator(Modifier.fillMaxWidth().align(androidx.compose.ui.Alignment.TopCenter))
         }
         if (pageError) {
