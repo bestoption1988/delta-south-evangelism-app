@@ -6,7 +6,80 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261010-logo-fix">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261102-responsive-featured-video">
+
+<style>
+.pdf-book-preview {
+  position: relative;
+  width: 180px;
+  max-width: 100%;
+  height: 240px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 10px 0;
+  border: 1px solid #d8deea;
+  border-radius: 8px;
+  background: #f5f7fb;
+  box-shadow: 0 2px 6px rgba(0,0,0,.08);
+}
+.pdf-book-preview canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.pdf-preview-loading {
+  padding: 12px;
+  text-align: center;
+  font: 12px system-ui, sans-serif;
+  color: #536174;
+}
+.pdf-book-preview.pdf-preview-error .pdf-preview-loading {
+  color: #9b2525;
+}
+</style>
+
+
+<style>
+/* Scripture and Hymn of the Day — original compact preview with full-reading popups */
+.daily-devotion{padding:0;background:#f5f7fc;border-bottom:1px solid #d6dce8}
+.daily-devotion-heading{display:none}
+.daily-devotion-grid{width:100%;max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:0}
+.daily-devotion-card{min-width:0;margin:0;background:#f5f7fc;border:0;border-bottom:1px solid #d6dce8;border-radius:0;box-shadow:none;overflow:hidden}
+.daily-devotion-card:nth-child(2){border-left:0}
+.daily-devotion-open{display:block;width:100%;border:0;background:transparent;color:#172b4d;text-align:left;padding:18px 20px 16px;cursor:pointer}
+.daily-devotion-open:focus-visible{outline:3px solid #d8aa25;outline-offset:-3px}
+.daily-devotion-type{display:block;margin:0 0 8px;color:#102d60;font:800 clamp(16px,2.2vw,21px)/1.3 Arial,Helvetica,sans-serif}
+.daily-devotion-reference{display:block;margin:0 0 7px;color:#102d60;font-weight:800;font-size:clamp(16px,2vw,20px)}
+.daily-devotion-preview{display:block;width:100%;min-width:0;overflow:hidden;white-space:nowrap;color:#25314a;font:italic clamp(19px,3vw,27px)/1.45 Georgia,serif}
+.daily-devotion-marquee{display:flex;width:max-content;min-width:200%;max-width:none;align-items:center;gap:4rem;animation:dailyDevotionRightToLeft 38s linear infinite;will-change:transform}
+.daily-devotion-marquee span{display:block;flex:0 0 auto;white-space:nowrap}
+@keyframes dailyDevotionRightToLeft{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.daily-devotion-open:hover .daily-devotion-marquee,.daily-devotion-open:focus-visible .daily-devotion-marquee{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){.daily-devotion-marquee{display:block;width:auto;min-width:0;animation:none;white-space:normal}.daily-devotion-marquee span:nth-child(2){display:none}}
+.daily-devotion-hymn-preview{padding-left:8px}
+.daily-devotion-tap{display:none}
+.daily-devotion-modal{position:fixed;inset:0;z-index:20000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(4,16,43,.38)}
+.daily-devotion-modal.is-open{display:flex!important}
+.daily-devotion-modal-panel{position:relative;display:block;flex:0 1 auto;width:min(92vw,680px);height:auto;min-height:180px;max-height:76vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#172b4d;border:1px solid #dce3ed;border-radius:16px;padding:22px clamp(18px,4vw,30px);box-shadow:0 14px 42px #0003}
+.daily-devotion-modal-close{position:sticky;top:0;float:right;width:42px;height:42px;border:0;border-radius:50%;background:#eef1f6;color:#102d60;font-size:28px;cursor:pointer;z-index:2}
+.daily-devotion-modal h2{clear:both;margin:4px 0 14px;color:#102d60;font:700 clamp(22px,4vw,30px)/1.3 Georgia,serif}
+.daily-devotion-modal .daily-devotion-type{font-size:15px}
+.daily-devotion-full-text{font:clamp(19px,3vw,25px)/1.8 Georgia,serif;white-space:pre-line;color:#263a59}
+.daily-hymn-lyrics{white-space:pre-wrap;line-height:1.8;font:clamp(19px,3vw,25px)/1.8 Georgia,serif;color:#263a59}
+.daily-hymn-audio{margin:20px 0;padding:18px;border-radius:13px;background:#f1f5f8}
+.daily-hymn-audio p{margin:0 0 12px;font-weight:800;color:#172b4d;font-size:18px}
+.daily-hymn-audio audio{display:block;width:100%;max-width:100%;min-height:48px}
+.daily-hymn-author{font-size:14px;color:#657087}
+.daily-devotion-modal .button{margin-top:18px}
+body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{display:none!important}\n.daily-devotion-modal.is-open .daily-devotion-modal-panel{visibility:visible!important;opacity:1!important}\n.daily-devotion-modal-panel>*{visibility:visible}
+@media(max-width:650px){.daily-devotion-open{padding:16px 19px}.daily-devotion-type{font-size:17px}.daily-devotion-preview{font-size:22px}.daily-devotion-modal{padding:16px;align-items:center}.daily-devotion-modal-panel{display:block;width:100%;max-width:560px;min-height:220px;max-height:76vh;border-radius:15px;padding:18px 18px 22px}.daily-hymn-audio{padding:14px}.daily-devotion-modal h2{font-size:25px}}
+</style>
+
 </head>
 <body>
 
@@ -29,18 +102,95 @@
   </div>
 </div>
 
+{% set day_verse = daily_devotion.get("verse", {}) %}
+{% set day_hymn = daily_devotion.get("hymn", {}) %}
+<section id="daily-devotion" class="daily-devotion" aria-label="Scripture and Hymn of the Day">
+  <div class="daily-devotion-heading">
+    <h2>Scripture &amp; Hymn of the Day</h2>
+  </div>
+  <div class="daily-devotion-grid">
+    <article class="daily-devotion-card">
+      <button type="button" class="daily-devotion-open" data-daily-open="dailyScriptureModal" aria-haspopup="dialog">
+        <span class="daily-devotion-type">SCRIPTURE OF THE DAY: {{ day_verse.get("reference", "Scripture") }}</span>
+        <span class="daily-devotion-preview"><span class="daily-devotion-marquee"><span>{{ day_verse.get("text", "The daily Scripture will appear here.")|truncate(150, True, "…") }}</span><span aria-hidden="true">{{ day_verse.get("text", "The daily Scripture will appear here.")|truncate(150, True, "…") }}</span></span></span>
+        <span class="daily-devotion-tap">Tap to read the full Scripture</span>
+      </button>
+    </article>
+    <article class="daily-devotion-card">
+      <button type="button" class="daily-devotion-open" data-daily-open="dailyHymnModal" aria-haspopup="dialog">
+        <span class="daily-devotion-type">{{ day_hymn.get("title", "HYMN OF THE DAY") }}</span>
+        <span class="daily-devotion-preview daily-devotion-hymn-preview"><span class="daily-devotion-marquee"><span>{{ day_hymn.get("lyrics", "The daily hymn will appear here.").split("\n")[0]|truncate(120, True, "…") }}</span><span aria-hidden="true">{{ day_hymn.get("lyrics", "The daily hymn will appear here.").split("\n")[0]|truncate(120, True, "…") }}</span></span></span>
+        <span class="daily-devotion-tap">Tap to read the full hymn and listen</span>
+      </button>
+    </article>
+  </div>
+</section>
+
+<div class="daily-devotion-modal" id="dailyScriptureModal" role="dialog" aria-modal="true" aria-labelledby="dailyScriptureTitle" hidden>
+  <div class="daily-devotion-modal-panel">
+    <button type="button" class="daily-devotion-modal-close" data-daily-close aria-label="Close Scripture">×</button>
+    <span class="daily-devotion-type">SCRIPTURE OF THE DAY</span>
+    <h2 id="dailyScriptureTitle">{{ day_verse.get("reference", "Scripture of the Day") }}</h2>
+    <div class="daily-devotion-full-text">{{ day_verse.get("text", "") }}</div>
+    <a class="button blue-button" href="/devotional-centre/bible-verses">Browse the Scripture Library →</a>
+  </div>
+</div>
+
+<div class="daily-devotion-modal" id="dailyHymnModal" role="dialog" aria-modal="true" aria-labelledby="dailyHymnTitle" hidden>
+  <div class="daily-devotion-modal-panel">
+    <button type="button" class="daily-devotion-modal-close" data-daily-close aria-label="Close hymn">×</button>
+    <span class="daily-devotion-type">HYMN OF THE DAY</span>
+    <h2 id="dailyHymnTitle">{{ day_hymn.get("title", "Hymn of the Day") }}</h2>
+    {% if day_hymn.get("meter") %}<p><b>Meter:</b> {{ day_hymn.get("meter") }}</p>{% endif %}
+    <div class="daily-hymn-lyrics">{{ day_hymn.get("lyrics", "") }}</div>
+    {% if day_hymn.get("audio_url") %}
+      <div class="daily-hymn-audio">
+        <p>{{ day_hymn.get("audio_tune_name", "Main tune") }}</p>
+        <audio controls preload="none" playsinline src="{{ day_hymn.get('audio_url') }}"></audio>
+      </div>
+    {% endif %}
+    {% for tune in day_hymn.get("other_tunes", []) %}
+      {% if tune.get("audio_url") %}
+        <div class="daily-hymn-audio">
+          <p>{{ tune.get("title", tune.get("musicTitle", "Additional hymn tune")) }}</p>
+          <audio controls preload="none" playsinline src="{{ tune.get('audio_url') }}"></audio>
+        </div>
+      {% endif %}
+    {% endfor %}
+    {% if day_hymn.get("author") %}<p class="daily-hymn-author"><b>Author:</b> {{ day_hymn.get("author") }}</p>{% endif %}
+    <a class="button blue-button" href="/devotional-centre/english-hymns">Browse English Methodist Hymns →</a>
+  </div>
+</div>
+
 <nav class="navbar">
-  <button id="menuToggle" aria-label="Open navigation" aria-expanded="false">☰ Menu</button>
+  <button id="menuToggle" type="button" aria-label="Open navigation" aria-controls="navLinks" aria-expanded="false">☰ Menu</button>
   <div id="navLinks">
     <a href="#home">⌂ Home</a>
     <a href="#about">About Us</a>
     <a href="#diocese">Our Diocese</a>
+    <div class="nav-dropdown" id="fellowshipsDropdown">
+      <button type="button" class="nav-drop-toggle"
+              aria-expanded="false" aria-controls="fellowshipsSubmenu">
+        Our Fellowships ▾
+      </button>
+      <div class="nav-submenu" id="fellowshipsSubmenu">
+        <a href="/fellowship/methodist-mens-fellowship">Men</a>
+        <a href="/fellowship/methodist-womens-fellowship">Women</a>
+        <a href="/fellowship/methodist-youth-fellowship">Youth</a>
+        <a href="/fellowship/methodist-campus-fellowship">MCF</a>
+        <a href="/fellowships">View All Fellowships</a>
+      </div>
+    </div>
     <a href="#ministries">Ministries</a>
     <a href="#watch">Sermons & Media</a>
+    <a href="/devotional-centre">Devotional Centre</a>
+    <a href="#photo-gallery">Photo Gallery</a>
     <a href="#events">Events</a>
     <a href="#online">Online Services</a>
     <a href="#resources">Resources</a>
     <a href="#contact">Contact</a>
+    <a href="#" id="saveOfflineApp">Save app offline</a>
+    <a href="/login" id="nativeStaffSignIn">Staff sign in</a>
   </div>
 </nav>
 
@@ -52,6 +202,7 @@
     <p class="verse">“Go into all the world and preach the Gospel to every creature.” — Mark 16:15</p>
     <div class="hero-actions">
       <a class="button red" href="/live">▶ Watch Live Service</a>
+      <a class="button red" href="/giving">♥ Give Online</a>
       <a class="button outline" href="#churches">⌖ Find a Church Near You</a>
     </div>
   </div>
@@ -97,6 +248,8 @@
   </div>
 </section>
 
+
+
 <section class="quick-links" id="ministries">
   <a class="quick-card" href="{{ url_for('public_member_registration_page') }}"><span class="icon purple">♟</span><b>Church Membership</b><small>Register or Login</small></a>
   <a class="quick-card" href="{{ url_for('public_member_registration_page') }}?type=new-convert"><span class="icon green">▤</span><b>New Converts</b><small>Start Your Journey</small></a>
@@ -130,11 +283,9 @@
 
   <article class="feature-card announcements" id="events">
     <div class="section-heading"><h2>📣 Latest Announcements</h2><a href="#resources">View All →</a></div>
-    <div class="announcement"><span class="date">10<br><small>OCT</small></span><div><b>Diocesan Harvest Thanksgiving</b><p>Join the Diocese in thanksgiving and praise.</p></div></div>
-    <div class="announcement"><span class="date">08<br><small>OCT</small></span><div><b>Evangelism Outreach Programme</b><p>Join us in reaching communities across our circuits.</p></div></div>
-    <div class="announcement"><span class="date">05<br><small>OCT</small></span><div><b>Workers' Meeting</b><p>Ministers, stewards and workers are encouraged to participate.</p></div></div>
-    <div class="announcement"><span class="date">01<br><small>OCT</small></span><div><b>New Member Registration</b><p>Begin your membership registration online.</p></div></div>
-    <p class="notice">Sample announcements are shown here. Replace them with verified diocesan announcements and actual dates.</p>
+    {% for event in homepage_events %}
+    <div class="announcement"><span class="date">{% if event.event_date and event.event_date|length >= 10 %}{{ event.event_date[8:10] }}<br><small>{{ event.event_date[5:7] }}</small>{% else %}NEWS{% endif %}</span><div><b>{{ event.title }}</b>{% if event.description %}<p>{{ event.description }}</p>{% endif %}{% if event.venue %}<p>{{ event.venue }}</p>{% endif %}</div></div>
+    {% else %}<p class="notice">There are no published announcements at the moment. Please check again soon.</p>{% endfor %}
   </article>
 </section>
 
@@ -145,34 +296,120 @@
 <p>Worship, witness, service and discipleship.</p>
 </div>
 <div class="leadership-grid">
+{% set leadership_defaults = {
+  "Prelate": {"name": "His Eminence, Dr. Oliver Ali Aba (JP)", "bio": "Prelate of the Methodist Church Nigeria.", "photo": "uploads/leadership/prelate.jpg"},
+  "Archbishop": {"name": "The Most Revd Samuel Nortey", "bio": "Archbishop of the Edo-Delta Archdiocese.", "photo": "uploads/leadership/archbishop.jpg"},
+  "Bishop": {"name": "The Right Revd Dr. Nosa O. Nosayaba", "bio": "Bishop of the Delta South Diocese.", "photo": "uploads/leadership/bishop.jpg"},
+  "Synod Secretary": {"name": "The Very Rev FearGod Chibueze", "bio": "Serving as Synod Secretary of the Delta South Diocese.", "photo": "uploads/leadership/synod-secretary.jpg"},
+  "Minister of Evangelism": {"name": "The Revd Christopher Ighoevwogue", "bio": "Serving as Minister of Evangelism of the Delta South Diocese.", "photo": "uploads/leadership/minister-of-evangelism.jpg"},
+  "Lay President": {"name": "Sir Engr. Maduabuchi Orji", "bio": "Serving as Lay President of the Delta South Diocese.", "photo": "uploads/leadership/lay-president.jpg"},
+  "Evangelism Coordinator": {"name": "Sir Engr. Nicolas Akpotowho", "bio": "Serving as Evangelism Coordinator of the Delta South Diocese.", "photo": "uploads/leadership/evangelism-coordinator.jpg"},
+  "Men Fellowship President": {"name": "Bro. Stephen Agbai JP", "bio": "President of the Men Fellowship.", "photo": "uploads/leadership/men-fellowship-president.jpg"},
+  "Women Fellowship President": {"name": "Dame Pastor Glory Udauk Nosayaba", "bio": "President of the Women Fellowship.", "photo": "uploads/leadership/women-fellowship-president.jpg"},
+  "Youth Fellowship President": {"name": "To Be Announced", "bio": "The Youth Fellowship leadership name will be announced when confirmed.", "photo": "uploads/leadership/youth-fellowship-president.jpg"}
+} %}
 {% for profile in leadership_profiles %}
+{% set defaults = leadership_defaults.get(profile.title, {}) %}
+{% if not defaults and 'Bishop' in profile.title %}
+{% set defaults = leadership_defaults.get('Bishop', {}) %}
+{% endif %}
+{% set leader_name = profile.full_name or defaults.get("name") or "Profile coming soon" %}
+{% set leader_bio = profile.biography or defaults.get("bio") or "Official profile information will be published here." %}
+{% set leader_photo = profile.photo_path or defaults.get("photo", "") %}
 <article class="leader-card">
-{% if profile.photo_path %}
-<img class="leader-photo" src="{{ url_for('static', filename=profile.photo_path) }}" alt="{{ profile.title }}">
+{% if leader_photo %}
+<img class="leader-photo" src="{{ leader_photo if leader_photo.startswith('https://') or leader_photo.startswith('http://') else url_for('static', filename=leader_photo) }}" alt="{{ leader_name }}" loading="lazy" onerror="this.onerror=null;this.src='/static/uploads/leadership/{{ profile.title|lower|replace(' ', '-') }}.jpg';">
 {% else %}
 <div class="leader-photo leader-placeholder">✝</div>
 {% endif %}
 <div class="leader-info">
 <p class="eyebrow">{{ profile.title }}</p>
-<h3>{{ profile.full_name or "Profile coming soon" }}</h3>
-<p>{{ profile.biography or "Official profile information will be published here." }}</p>
+<h3>{{ leader_name }}</h3>
+<p>{{ leader_bio }}</p>
 </div>
 </article>
 {% endfor %}
 </div>
 </section>
 
+<section class="photo-gallery-section" id="photo-gallery" aria-label="Diocesan photo gallery">
+  <div class="photo-gallery-heading">
+    <p class="eyebrow">LIFE IN OUR DIOCESE</p>
+    <h2>📸 Our Church Gallery</h2>
+    <p>Moments of worship, fellowship, outreach and service across Delta South Diocese.</p>
+  </div>
+  {% if homepage_gallery_items %}
+  <div class="photo-gallery-shell" data-gallery>
+    <div class="photo-gallery-stage">
+      {% for photo in homepage_gallery_items %}
+      <figure class="photo-gallery-slide{% if loop.first %} is-active{% endif %}" data-gallery-slide aria-hidden="{{ 'false' if loop.first else 'true' }}">
+        <button class="photo-gallery-open" type="button" data-gallery-open aria-label="View {{ photo.title }}">
+          <img src="{{ photo.signed_url or url_for('media_document_view', media_id=photo.id, raw=1) }}"
+               alt="Church gallery photo" loading="{{ 'eager' if loop.first else 'lazy' }}">
+        </button>
+      </figure>
+      {% endfor %}
+    </div>
+    {% if homepage_gallery_items|length > 1 %}
+    <div class="photo-gallery-controls">
+      <button type="button" data-gallery-prev aria-label="Previous photo">‹</button>
+      <div class="photo-gallery-dots" aria-label="Choose a photo">
+        {% for photo in homepage_gallery_items %}
+        <button type="button" data-gallery-dot="{{ loop.index0 }}" class="{% if loop.first %}is-active{% endif %}" aria-label="Show photo {{ loop.index }}"></button>
+        {% endfor %}
+      </div>
+      <button type="button" data-gallery-next aria-label="Next photo">›</button>
+    </div>
+    {% endif %}
+  </div>
+  <dialog class="photo-gallery-lightbox" data-gallery-lightbox>
+    <button type="button" data-gallery-close aria-label="Close photo">×</button>
+    <img data-gallery-lightbox-image alt="">
+    <p data-gallery-lightbox-caption></p>
+  </dialog>
+  {% else %}
+  <div class="photo-gallery-empty">
+    <span>✦</span>
+    <h3>Our diocesan memories will appear here</h3>
+    <p>Church photographs will be added to the gallery as they are published.</p>
+  </div>
+  {% endif %}
+</section>
+
 <section class="watch-section" id="watch">
   <div class="section-title"><h2>WATCH & LISTEN</h2><p>Live streaming, sermons, teachings and more</p></div>
   <div class="media-grid">
     <a href="/live" class="media-card"><span>▶</span><b>Live Service</b><small>Join Us in Worship</small></a>
-    <a href="/media-library" class="media-card"><span>🎙</span><b>Recent Sermons</b><small>Watch & Listen</small></a>
-    <a href="/media-library?type=document" class="media-card"><span>📖</span><b>Bible Teachings</b><small>Grow in the Word</small></a>
+    <a href="/media-library/sermons" class="media-card"><span>🎙</span><b>Recent Sermons</b><small>Watch & Listen</small></a>
+    <a href="/media-library/bible-teachings" class="media-card"><span>📖</span><b>Bible Teachings</b><small>Grow in the Word</small></a>
     <a href="/media-library?type=video" class="media-card"><span>🎤</span><b>Special Programmes</b><small>Watch on Demand</small></a>
-    <a href="/media-library?type=audio" class="media-card"><span>♫</span><b>Choir & Music</b><small>Inspiration Through Music</small></a>
+    <a href="/media-library/choir-music" class="media-card"><span>♫</span><b>Choir & Music</b><small>Inspiration Through Music</small></a>
     <a href="#resources" class="media-card"><span>♡</span><b>Testimonies</b><small>Be Encouraged</small></a>
   </div>
 </section>
+
+{% if homepage_video_items %}
+<section class="homepage-video-section" id="featured-videos">
+  <div class="section-title">
+    <h2>FEATURED CHURCH VIDEOS</h2>
+    <p>Watch the latest programmes and messages from Methodist Church Nigeria, Delta South Diocese.</p>
+  </div>
+  <div class="homepage-video-grid">
+    {% for video in homepage_video_items %}
+    <article class="homepage-video-card">
+      <video controls playsinline webkit-playsinline preload="metadata" width="1280" height="720"
+             aria-label="{{ video.title }}"
+             src="{{ video.signed_url or url_for('media_document_view', media_id=video.id, raw=1) }}"></video>
+      <div class="homepage-video-copy">
+        <h3>{{ video.title }}</h3>
+        {% if video.description %}<p>{{ video.description }}</p>{% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  <p class="homepage-video-more"><a href="/media-library?type=video">View all church videos →</a></p>
+</section>
+{% endif %}
 
 <section class="bottom-grid" id="resources">
   <article class="feature-card">
@@ -217,6 +454,7 @@
       <a href="/giving">♡<small>Online Giving</small></a>
       <a href="/prayer-request">🙏<small>Prayer Request</small></a>
       <a href="/media-library">📚<small>Church Media Library</small></a>
+      <a href="/devotional-centre">📖<small>Devotional Centre</small></a>
       <a href="#churches">⌖<small>Church Locator</small></a>
       <a href="#contact">✉<small>Contact Us</small></a>
     </div>
@@ -224,27 +462,7 @@
 </section>
 
 
-<section class="feature-card" id="published-media-preview">
-  <div class="section-heading">
-    <h2>📚 From Our Media Library</h2>
-    <a href="/media-library">View All Media →</a>
-  </div>
-  {% for item in homepage_media_items %}
-  <article class="sermon-entry">
-    <h3>{{ item.title }}</h3>
-    {% if item.description %}<p>{{ item.description }}</p>{% endif %}
-    {% if item.media_type == 'audio' and item.signed_url %}
-      <audio controls preload="none" style="width:100%" src="{{ item.signed_url }}"></audio>
-    {% elif item.media_type == 'video' and item.signed_url %}
-      <video controls playsinline preload="metadata" style="width:100%;max-height:320px" src="{{ item.signed_url }}"></video>
-    {% elif item.signed_url %}
-      <a class="button blue-button" href="{{ item.signed_url }}" target="_blank" rel="noopener">Open Document</a>
-    {% endif %}
-  </article>
-  {% else %}
-  <p>Church messages, music and documents will appear here when published.</p>
-  {% endfor %}
-</section>
+
 
 <section class="church-finder feature-card" id="churches">
   <p class="eyebrow">WORSHIP WITH US</p>
@@ -252,7 +470,38 @@
   <p>Explore congregations across Effurun, Warri, Sapele and Steel Town circuits.</p>
 
   <div class="church-list">
-    {% for circuit, churches in homepage_churches|groupby('circuit') %}
+    {# Keep the diocese-approved circuit order. #}
+    {% set circuit_order = ['Effurun', 'Warri', 'Sapele', 'Steel Town'] %}
+    {% for circuit_name in circuit_order %}
+      {% set churches = (homepage_churches|selectattr('circuit', 'equalto', circuit_name)|list)
+          + (homepage_churches|selectattr('circuit', 'equalto', circuit_name ~ ' Circuit')|list) %}
+      {% if churches %}
+      <div class="circuit-group">
+        <h3>{{ circuit_name }} Circuit</h3>
+        <div class="church-grid">
+          {% for church in churches %}
+          <article class="church-card">
+            <h4>{{ church.church_name }}</h4>
+            <p>{{ church.circuit }}</p>
+{% set church_address = church.address|default(church.church_address|default('', true), true) %}
+{% set church_location = church.location|default(church.town|default(church.city|default('', true), true), true) %}
+{% set church_state = church.state|default('Delta State', true) %}
+{% if church_address %}<p><strong>Address:</strong> {{ church_address }}</p>{% endif %}
+{% if church_location or church_state %}<p><strong>Location:</strong> {{ church_location }}{% if church_location and church_state %}, {% endif %}{{ church_state }}</p>{% endif %}
+{% if true %}
+<p><a class="button blue-button church-map-button" href="{{ church.maps_url|default("", true)|trim or ('https://www.google.com/maps/search/?api=1&query=' ~ (church.church_name ~ ' ' ~ church_address ~ ' ' ~ church_location ~ ' ' ~ church_state)|urlencode) }}" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">📍</span> Get Directions</a></p>
+{% endif %}
+            {% if church.contact_person %}<p>Contact: {{ church.contact_person }}</p>{% endif %}
+            {% if church.phone %}<p>Telephone: <a href="tel:{{ church.phone }}">{{ church.phone }}</a></p>{% endif %}
+          </article>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    {% endfor %}
+    {% set known_circuits = ['Effurun', 'Warri', 'Sapele', 'Steel Town', 'Effurun Circuit', 'Warri Circuit', 'Sapele Circuit', 'Steel Town Circuit'] %}
+    {% set other_churches = homepage_churches|rejectattr('circuit', 'in', known_circuits)|list %}
+    {% for circuit, churches in other_churches|groupby('circuit') %}
     <div class="circuit-group">
       <h3>{{ circuit }}</h3>
       <div class="church-grid">
@@ -260,22 +509,65 @@
         <article class="church-card">
           <h4>{{ church.church_name }}</h4>
           <p>{{ church.circuit }}</p>
-          {% if church.contact_person %}
-          <p>Contact: {{ church.contact_person }}</p>
-          {% endif %}
-          {% if church.phone %}
-          <p>Telephone: <a href="tel:{{ church.phone }}">{{ church.phone }}</a></p>
-          {% endif %}
+{% set church_address = church.address|default(church.church_address|default('', true), true) %}
+{% set church_location = church.location|default(church.town|default(church.city|default('', true), true), true) %}
+{% set church_state = church.state|default('Delta State', true) %}
+{% if church_address %}<p><strong>Address:</strong> {{ church_address }}</p>{% endif %}
+{% if church_location or church_state %}<p><strong>Location:</strong> {{ church_location }}{% if church_location and church_state %}, {% endif %}{{ church_state }}</p>{% endif %}
+{% if true %}
+<p><a class="button blue-button church-map-button" href="{{ church.maps_url|default("", true)|trim or ('https://www.google.com/maps/search/?api=1&query=' ~ (church.church_name ~ ' ' ~ church_address ~ ' ' ~ church_location ~ ' ' ~ church_state)|urlencode) }}" target="_blank" rel="noopener noreferrer"><span aria-hidden="true">📍</span> Get Directions</a></p>
+{% endif %}
+          {% if church.contact_person %}<p>Contact: {{ church.contact_person }}</p>{% endif %}
+          {% if church.phone %}<p>Telephone: <a href="tel:{{ church.phone }}">{{ church.phone }}</a></p>{% endif %}
         </article>
         {% endfor %}
       </div>
     </div>
-    {% else %}
-    <p>Church listings are being updated. Please contact the diocesan office for assistance.</p>
     {% endfor %}
+    {% if not homepage_churches %}
+    <p>Church listings are being updated. Please contact the diocesan office for assistance.</p>
+    {% endif %}
   </div>
 
   <a class="button blue-button" href="{{ url_for('public_member_registration_page') }}">Register Your Interest</a>
+</section>
+
+
+<section class="mission-map-section" id="mission-map"
+         aria-labelledby="mission-map-title">
+  <div class="mission-map-inner">
+    <header class="mission-map-heading">
+      <p class="mission-map-eyebrow">
+        REACHING PEOPLE · PLANTING CHURCHES · TRANSFORMING COMMUNITIES
+      </p>
+      <h2 id="mission-map-title">MISSION MAP</h2>
+      <h3>5–10 Year Church Planting Strategic Map</h3>
+      <p>
+        Explore the Diocese's church-planting axes, strategic locations,
+        and opportunities to reach more communities.
+      </p>
+    </header>
+
+    <a class="mission-map-image-link"
+       href="{{ url_for('static', filename='uploads/mission-map.png') }}"
+       target="_blank" rel="noopener noreferrer"
+       aria-label="Open the complete Mission Map">
+      <img class="mission-map-image"
+           src="{{ url_for('static', filename='uploads/mission-map.png') }}"
+           alt="Methodist Church Nigeria, Delta South Diocese, 5–10 Year Church Planting Strategic Map showing 11 church-planting axes, strategic locations, institutional mission opportunities, and rolling targets."
+           loading="lazy">
+    </a>
+
+    <div class="mission-map-caption">
+      <p><strong>11 Church Planting Axes · 70+ Strategic Locations · 1 Mission</strong></p>
+      <p>Rolling target: five new churches per year — 25 in five years and 50 in ten years.</p>
+      <a class="mission-map-open-button"
+         href="{{ url_for('static', filename='uploads/mission-map.png') }}"
+         target="_blank" rel="noopener noreferrer">
+        View Full Mission Map ↗
+      </a>
+    </div>
+  </div>
 </section>
 
 <section class="contact-section" id="contact">
@@ -301,18 +593,522 @@
   <div class="copyright">© <span id="year"></span> Methodist Church Nigeria, Delta South Diocese. All rights reserved.</div>
 </footer>
 
+<!-- Floating Member Care button: public homepage -->
+<button id="publicMemberCareButton" type="button" aria-label="Open public Member Care chat" aria-controls="publicMemberCarePanel" title="Member Care">
+  <span class="public-care-icon" aria-hidden="true">💬</span><span class="public-care-label">Member Care</span>
+</button>
+
+<style>
+  #publicMemberCareButton {
+    appearance: none; cursor: pointer;
+    position: fixed;
+    right: max(18px, env(safe-area-inset-right));
+    bottom: max(20px, env(safe-area-inset-bottom));
+    z-index: 99980;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 54px;
+    padding: 0 20px;
+    border-radius: 999px;
+    background: #086b3c;
+    color: #fff;
+    font: 700 15px/1.2 system-ui, sans-serif;
+    text-decoration: none;
+    box-shadow: 0 6px 24px rgba(0,0,0,.24);
+    border: 2px solid rgba(255,255,255,.92);
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+
+  #publicMemberCareButton:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 9px 28px rgba(0,0,0,.28);
+  }
+
+  #publicMemberCareButton:focus-visible {
+    outline: 3px solid #e7bd54;
+    outline-offset: 3px;
+  }
+
+  #publicMemberCareButton .public-care-icon {
+    font-size: 23px;
+    line-height: 1;
+  }
+
+  @media (max-width: 480px) {
+    #publicMemberCareButton {
+      right: 12px;
+      bottom: max(14px, env(safe-area-inset-bottom));
+      min-height: 50px;
+      padding: 0 16px;
+      font-size: 14px;
+    }
+  }
+
+  @media (max-width: 600px) and (orientation: landscape) {
+    #publicMemberCareButton {
+      min-height: 44px;
+      bottom: 10px;
+    }
+  }
+</style>
+
+
+<script src="{{ url_for('static', filename='public-member-care.js') }}?v=20261016-guest-chat"></script>
 <script>
-const toggle = document.getElementById("menuToggle");
-const links = document.getElementById("navLinks");
-toggle.addEventListener("click", () => {
-  const open = links.classList.toggle("open");
-  toggle.setAttribute("aria-expanded", String(open));
-});
-links.querySelectorAll("a").forEach(a => a.addEventListener("click", () => {
-  links.classList.remove("open");
-  toggle.setAttribute("aria-expanded", "false");
-}));
-document.getElementById("year").textContent = new Date().getFullYear();
+(() => {
+  const toggle = document.getElementById("menuToggle");
+  const links = document.getElementById("navLinks");
+  const dropdown = document.getElementById("fellowshipsDropdown");
+  const dropToggle = dropdown?.querySelector(".nav-drop-toggle");
+  const submenu = document.getElementById("fellowshipsSubmenu");
+  const saveOffline = document.getElementById("saveOfflineApp");
+  const staffSignIn = document.getElementById("nativeStaffSignIn");
+  const isAndroidApp = navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1;
+  if (isAndroidApp) {
+    document.documentElement.classList.add("mcn-android-app");
+    const quickActions = document.createElement("div");
+    quickActions.id = "mcnAppQuickActions";
+    quickActions.innerHTML = '<a href="mcn-app://offline" aria-label="Save offline">Offline</a><a href="mcn-app://staff-login" aria-label="Staff sign in">Staff</a>';
+    document.body.appendChild(quickActions);
+    quickActions.querySelector('a[href="mcn-app://offline"]').addEventListener("click", event => { event.preventDefault(); window.location.href = "mcn-app://offline"; });
+    quickActions.querySelector('a[href="mcn-app://staff-login"]').addEventListener("click", event => { event.preventDefault(); window.location.href = "mcn-app://staff-login"; });
+    if (saveOffline) saveOffline.style.display = "none";
+    if (staffSignIn) staffSignIn.style.display = "none";
+  }
+
+  if (saveOffline) {
+    saveOffline.addEventListener("click", event => {
+      event.preventDefault();
+      if (window.mcnCacheEntireApp) window.mcnCacheEntireApp();
+      if (navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1) {
+        window.location.href = "mcn-app://offline";
+      } else {
+        saveOffline.textContent = "Offline pages are being saved…";
+      }
+    });
+  }
+  if (staffSignIn) {
+    staffSignIn.addEventListener("click", event => {
+      if (navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1) {
+        event.preventDefault();
+        window.location.href = "mcn-app://staff-login";
+      }
+    });
+  }
+
+  if (toggle && links) {
+    toggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const open = !links.classList.contains("open");
+      links.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+    }, false);
+  }
+
+  // Open the full daily Scripture and hymn in an accessible, scrollable popup.
+  const dailyModals = Array.from(document.querySelectorAll(".daily-devotion-modal"));
+  function closeDailyModal(modal) {
+    if (!modal) return;
+    modal.classList.remove("is-open");
+    modal.hidden = true;
+    document.body.classList.remove("daily-devotion-modal-open");
+    modal.querySelectorAll("audio").forEach(player => { player.pause(); });
+  }
+  document.querySelectorAll("[data-daily-open]").forEach(button => {
+    button.addEventListener("click", () => {
+      const modal = document.getElementById(button.dataset.dailyOpen);
+      if (!modal) return;
+      dailyModals.forEach(item => closeDailyModal(item));
+      modal.hidden = false;
+      modal.classList.add("is-open");
+      document.body.classList.add("daily-devotion-modal-open");
+      modal.querySelector(".daily-devotion-modal-panel")?.scrollTo(0, 0);
+    });
+  });
+  dailyModals.forEach(modal => {
+    modal.querySelector("[data-daily-close]")?.addEventListener("click", () => closeDailyModal(modal));
+    modal.addEventListener("click", event => { if (event.target === modal) closeDailyModal(modal); });
+  });
+
+  if (dropdown && dropToggle && submenu) {
+    dropToggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const open = dropdown.classList.toggle("open");
+      dropToggle.setAttribute("aria-expanded", String(open));
+    });
+
+    fetch("/api/public/fellowships", {headers: {"Accept": "application/json"}})
+      .then(response => {
+        if (!response.ok) throw new Error("Fellowship list unavailable");
+        return response.json();
+      })
+      .then(items => {
+        if (!Array.isArray(items) || !items.length) return;
+        submenu.replaceChildren();
+
+        const preferred = [
+          ["methodist-mens-fellowship", "Men"],
+          ["methodist-womens-fellowship", "Women"],
+          ["methodist-youth-fellowship", "Youth"],
+          ["methodist-campus-fellowship", "MCF"]
+        ];
+
+        const bySlug = new Map(items.map(item => [item.slug, item]));
+        const used = new Set();
+
+        for (const [slug, label] of preferred) {
+          const item = bySlug.get(slug);
+          if (item) {
+            const a = document.createElement("a");
+            a.href = "/fellowship/" + encodeURIComponent(item.slug);
+            a.textContent = label;
+            submenu.appendChild(a);
+            used.add(slug);
+          }
+        }
+
+        for (const item of items) {
+          if (used.has(item.slug)) continue;
+          const a = document.createElement("a");
+          a.href = "/fellowship/" + encodeURIComponent(item.slug);
+          a.textContent = item.name;
+          submenu.appendChild(a);
+        }
+
+        const all = document.createElement("a");
+        all.href = "/fellowships";
+        all.textContent = "View All Fellowships";
+        submenu.appendChild(all);
+      })
+      .catch(() => {
+        // Keep the four known links as a fallback if the API is unavailable.
+      });
+  }
+
+  if (links) {
+    links.addEventListener("click", event => {
+      const anchor = event.target.closest("a");
+      if (!anchor) return;
+
+      if (dropdown && !dropdown.contains(anchor)) {
+        dropdown.classList.remove("open");
+        dropToggle?.setAttribute("aria-expanded", "false");
+      }
+
+      links.classList.remove("open");
+      toggle?.setAttribute("aria-expanded", "false");
+    });
+  }
+
+  document.addEventListener("click", event => {
+    if (dropdown && !dropdown.contains(event.target)) {
+      dropdown.classList.remove("open");
+      dropToggle?.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") {
+      dropdown?.classList.remove("open");
+      dropToggle?.setAttribute("aria-expanded", "false");
+      links?.classList.remove("open");
+      toggle?.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  const year = document.getElementById("year");
+  if (year) year.textContent = new Date().getFullYear();
+})();
 </script>
+
+<script type="module">
+(async function () {
+  const boxes = [...document.querySelectorAll(".pdf-book-preview")];
+  if (!boxes.length) return;
+
+  try {
+    const pdfjs = await import(
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs"
+    );
+
+    pdfjs.GlobalWorkerOptions.workerSrc =
+      "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+
+    for (const box of boxes) {
+      const url = box.dataset.pdfUrl;
+      const canvas = box.querySelector("canvas");
+      const label = box.querySelector(".pdf-preview-loading");
+
+      try {
+        const pdf = await pdfjs.getDocument({ url }).promise;
+        const page = await pdf.getPage(1);
+        const availableWidth = Math.max(120, box.clientWidth - 12);
+        const availableHeight = Math.max(160, box.clientHeight - 12);
+        const original = page.getViewport({ scale: 1 });
+        const scale = Math.min(
+          availableWidth / original.width,
+          availableHeight / original.height
+        );
+        const viewport = page.getViewport({ scale });
+
+        const ratio = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(viewport.width * ratio);
+        canvas.height = Math.floor(viewport.height * ratio);
+        canvas.style.width = Math.floor(viewport.width) + "px";
+        canvas.style.height = Math.floor(viewport.height) + "px";
+
+        const context = canvas.getContext("2d");
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        await page.render({ canvasContext: context, viewport }).promise;
+
+        label.remove();
+      } catch (error) {
+        console.error("PDF thumbnail failed:", url, error);
+        label.textContent = "Preview unavailable — tap View Document";
+        box.classList.add("pdf-preview-error");
+      }
+    }
+  } catch (error) {
+    console.error("PDF.js could not load:", error);
+    boxes.forEach(box => {
+      const label = box.querySelector(".pdf-preview-loading");
+      label.textContent = "Preview unavailable — tap View Document";
+      box.classList.add("pdf-preview-error");
+    });
+  }
+})();
+</script>
+
+
+<!-- MCN Delta South: automatic birthday celebration -->
+{% if birthday_celebration_members %}
+<div id="ds-birthday-modal" class="ds-birthday-overlay"
+     role="dialog" aria-modal="true"
+     aria-labelledby="ds-birthday-heading" hidden>
+  <section class="ds-birthday-card">
+    <button type="button" class="ds-birthday-close"
+            id="ds-birthday-close" aria-label="Close birthday celebration">×</button>
+    <div class="ds-birthday-icon" aria-hidden="true">🎂</div>
+    <p class="ds-birthday-eyebrow">METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE</p>
+    <h2 id="ds-birthday-heading">Happy Birthday!</h2>
+    <p class="ds-birthday-intro">
+      Let us thank God for the gift of life and celebrate our members today.
+    </p>
+
+    <div class="ds-birthday-members">
+      {% for member in birthday_celebration_members %}
+      <article class="ds-birthday-member">
+        {% if member.photo_url %}
+        <img src="{{ member.photo_url }}" alt="Photograph of {{ member.full_name }}"
+             loading="lazy" referrerpolicy="no-referrer">
+        {% else %}
+        <div class="ds-birthday-avatar" aria-hidden="true">🎉</div>
+        {% endif %}
+        <div>
+          <h3>{{ member.full_name }}</h3>
+          {% if member.church_name %}
+          <p>{{ member.church_name }}</p>
+          {% endif %}
+          {% if member.circuit %}
+          <small>{{ member.circuit }}{% if 'circuit' not in member.circuit|lower %} Circuit{% endif %}</small>
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+
+    <p class="ds-birthday-blessing">
+      May the Lord bless you, strengthen your faith, and grant you many more
+      fruitful years in His service. Amen.
+    </p>
+    <button type="button" id="ds-birthday-celebrate" class="ds-birthday-action">
+      🎉 Celebrate with us
+    </button>
+  </section>
+</div>
+
+<style>
+.ds-birthday-overlay[hidden] { display:none !important; }
+.ds-birthday-overlay {
+  position:fixed; inset:0; z-index:99999;
+  display:flex; align-items:center; justify-content:center;
+  padding:16px; overflow-y:auto;
+  background:rgba(3,17,48,.78);
+  backdrop-filter:blur(4px);
+}
+.ds-birthday-card {
+  position:relative; box-sizing:border-box;
+  width:min(100%,520px); max-height:90vh; overflow-y:auto;
+  padding:26px 22px; border-radius:20px; text-align:center;
+  background:#fffdf5; color:#15264a;
+  border:2px solid #d8b34b;
+  box-shadow:0 18px 65px rgba(0,0,0,.3);
+}
+.ds-birthday-close {
+  position:absolute; top:8px; right:12px;
+  width:38px; height:38px; border:0; border-radius:50%;
+  background:#edf0f6; color:#17264a; font-size:27px; cursor:pointer;
+}
+.ds-birthday-icon { font-size:45px; margin:2px 0 8px; }
+.ds-birthday-eyebrow {
+  color:#876511; font-size:10px; font-weight:800;
+  letter-spacing:1px; line-height:1.6;
+}
+.ds-birthday-card h2 {
+  margin:8px 0; color:#08245b; font-size:clamp(25px,6vw,34px);
+}
+.ds-birthday-intro,.ds-birthday-blessing { line-height:1.65; font-size:14px; }
+.ds-birthday-members {
+  display:grid; gap:10px; margin:18px 0; text-align:left;
+}
+.ds-birthday-member {
+  display:flex; align-items:center; gap:13px;
+  padding:11px; border:1px solid #e6dfc9; border-radius:12px;
+  background:#fff;
+}
+.ds-birthday-member img,.ds-birthday-avatar {
+  flex:0 0 62px; width:62px; height:62px;
+  border-radius:50%; object-fit:cover;
+}
+.ds-birthday-avatar {
+  display:flex; align-items:center; justify-content:center;
+  background:#f7edca; font-size:27px;
+}
+.ds-birthday-member h3 { margin:0 0 4px; font-size:16px; color:#08245b; }
+.ds-birthday-member p { margin:3px 0; font-size:13px; }
+.ds-birthday-member small { color:#69758a; }
+.ds-birthday-action {
+  width:100%; min-height:45px; padding:11px 16px;
+  border:0; border-radius:10px; background:#08245b;
+  color:white; font-size:15px; font-weight:700; cursor:pointer;
+}
+@media(max-width:480px) {
+  .ds-birthday-card { padding:24px 14px 17px; border-radius:15px; }
+  .ds-birthday-member img,.ds-birthday-avatar {
+    flex-basis:52px; width:52px; height:52px;
+  }
+}
+</style>
+
+<script>
+(function () {
+  var modal = document.getElementById("ds-birthday-modal");
+  if (!modal) return;
+
+  var closeButton = document.getElementById("ds-birthday-close");
+  var celebrateButton = document.getElementById("ds-birthday-celebrate");
+
+  function closeBirthdayModal() {
+    modal.hidden = true;
+    document.body.style.overflow = "";
+  }
+
+  closeButton.addEventListener("click", closeBirthdayModal);
+  celebrateButton.addEventListener("click", function () {
+    celebrateButton.textContent = "🎉 We celebrate you!";
+    celebrateButton.disabled = true;
+    window.setTimeout(closeBirthdayModal, 1200);
+  });
+
+  modal.addEventListener("click", function (event) {
+    if (event.target === modal) closeBirthdayModal();
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape" && !modal.hidden) closeBirthdayModal();
+  });
+
+  // Show automatically once per Nigerian calendar day on this browser.
+  var nigeriaDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(new Date());
+
+  var storageKey = "mcn-ds-birthday-seen-" + nigeriaDate;
+  var alreadyShown = false;
+
+  try {
+    alreadyShown = localStorage.getItem(storageKey) === "1";
+  } catch (_) {}
+
+  if (!alreadyShown) {
+    window.setTimeout(function () {
+      modal.hidden = false;
+      document.body.style.overflow = "hidden";
+      try { localStorage.setItem(storageKey, "1"); } catch (_) {}
+    }, 900);
+  }
+})();
+</script>
+
+
+{% endif %}
+<script>
+(function () {
+  var gallery = document.querySelector("[data-gallery]");
+  if (!gallery) return;
+  var slides = Array.from(gallery.querySelectorAll("[data-gallery-slide]"));
+  var dots = Array.from(gallery.querySelectorAll("[data-gallery-dot]"));
+  var index = 0;
+  var timer = null;
+  var stage = gallery.querySelector(".photo-gallery-stage");
+  var lightbox = document.querySelector("[data-gallery-lightbox]");
+  var lightboxImage = lightbox && lightbox.querySelector("[data-gallery-lightbox-image]");
+  var lightboxCaption = lightbox && lightbox.querySelector("[data-gallery-lightbox-caption]");
+
+  function show(next) {
+    if (!slides.length) return;
+    index = (next + slides.length) % slides.length;
+    slides.forEach(function (slide, i) {
+      slide.classList.toggle("is-active", i === index);
+      slide.setAttribute("aria-hidden", i === index ? "false" : "true");
+    });
+    dots.forEach(function (dot, i) {
+      dot.classList.toggle("is-active", i === index);
+      dot.setAttribute("aria-current", i === index ? "true" : "false");
+    });
+  }
+  function stop() { if (timer) window.clearInterval(timer); timer = null; }
+  function start() {
+    stop();
+    if (slides.length > 1 && !document.hidden) {
+      timer = window.setInterval(function () { show(index + 1); }, 5000);
+    }
+  }
+  gallery.querySelector("[data-gallery-prev]")?.addEventListener("click", function () { show(index - 1); start(); });
+  gallery.querySelector("[data-gallery-next]")?.addEventListener("click", function () { show(index + 1); start(); });
+  dots.forEach(function (dot) {
+    dot.addEventListener("click", function () { show(Number(dot.dataset.galleryDot)); start(); });
+  });
+  gallery.addEventListener("mouseenter", stop);
+  gallery.addEventListener("mouseleave", start);
+  gallery.addEventListener("focusin", stop);
+  gallery.addEventListener("focusout", start);
+  document.addEventListener("visibilitychange", function () { document.hidden ? stop() : start(); });
+
+  gallery.querySelectorAll("[data-gallery-open]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      if (!lightbox || !lightboxImage) return;
+      var image = button.querySelector("img");
+      lightboxImage.src = image.src;
+      lightboxImage.alt = image.alt;
+      if (lightboxCaption) lightboxCaption.textContent = image.alt;
+      if (typeof lightbox.showModal === "function") lightbox.showModal();
+    });
+  });
+  lightbox?.querySelector("[data-gallery-close]")?.addEventListener("click", function () { lightbox.close(); });
+  lightbox?.addEventListener("click", function (event) {
+    if (event.target === lightbox) lightbox.close();
+  });
+  start();
+})();
+</script>
+<footer style="text-align:center;padding:24px 14px;font:14px Arial,sans-serif;background:#f4f6fa"><a href="/privacy-policy">Privacy Policy</a> · <a href="/account-deletion">Account and Data Deletion</a> · <a href="mailto:bestoption1988@gmail.com">Support</a></footer>
 </body>
 </html>

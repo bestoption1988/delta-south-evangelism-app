@@ -1,1 +1,118 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Church Media Library Admin</title><style>body{font:16px system-ui;margin:0;background:#f3f7f4;color:#19382d}main{max-width:950px;margin:24px auto;padding:18px;background:white;border-radius:14px}input,textarea,button{font:inherit;box-sizing:border-box;padding:10px}input,textarea{width:100%}button{border:0;border-radius:7px;background:#126b4b;color:white;margin:4px 0}article{border:1px solid #ddd;border-radius:10px;padding:14px;margin:12px 0}.error{color:#9b1515}.success{color:#126b4b}a{color:#126b4b}</style></head><body><main><h1>Church Media Library</h1><p>Upload PDF, DOCX, audio or video. Maximum 50 MB per file.</p>{% if message %}<p class="success">{{ message }}</p>{% endif %}{% if error %}<p class="error">{{ error }}</p>{% endif %}<form method="post" enctype="multipart/form-data"><p><label>Title<input name="title" maxlength="180" required></label></p><p><label>Description<textarea name="description" rows="3" maxlength="2000"></textarea></label></p><p><label>File<input type="file" name="file" accept=".pdf,.docx,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.webm,.mov" required></label></p><button>Upload</button></form><p><a href="{{ url_for('media_library_public') }}">Public media library</a> · <a href="/">Homepage</a></p><h2>Uploaded items</h2>{% for x in items %}<article><h3>{{ x.title }}</h3><p>{{ x.description or '' }}</p><small>{{ x.original_name }} · {{ x.media_type }} · {{ 'Published' if x.published else 'Unpublished' }}</small><form method="post"><input type="hidden" name="action" value="toggle"><input type="hidden" name="media_id" value="{{ x.id }}"><button>{{ 'Unpublish' if x.published else 'Publish' }}</button></form><form method="post" onsubmit="return confirm('Delete permanently?')"><input type="hidden" name="action" value="delete"><input type="hidden" name="media_id" value="{{ x.id }}"><button>Delete</button></form></article>{% else %}<p>No uploads yet.</p>{% endfor %}</main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Church Media Library Admin</title>
+<style>
+*{box-sizing:border-box}body{font:16px system-ui;margin:0;background:#f3f7f4;color:#19382d}
+main{max-width:950px;margin:24px auto;padding:18px;background:white;border-radius:14px}
+input,textarea,button{font:inherit;box-sizing:border-box;padding:10px}input,textarea{width:100%}
+button{border:0;border-radius:7px;background:#126b4b;color:white;margin:4px 0;cursor:pointer}
+article,.upload-panel{border:1px solid #ddd;border-radius:10px;padding:14px;margin:12px 0}
+.upload-panel{background:#f7fbf8}.error{color:#9b1515}.success{color:#126b4b}a{color:#126b4b}
+label{display:block;margin:10px 0 5px;font-weight:600}small{overflow-wrap:anywhere}
+</style>
+</head>
+<body><main>
+<h1>Church Media Library</h1>
+<p>Manage the homepage photo gallery and upload resources into their own public sections. Each resource section has its own upload handle.</p>
+{% if message %}<p class="success">{{ message }}</p>{% endif %}{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<section class="upload-panel">
+<h2>📸 Homepage Photo Gallery</h2>
+<p>Upload up to 10 church photographs. They are published automatically in the rotating homepage gallery.</p>
+<form method="post" enctype="multipart/form-data" id="multiPhotoUpload">
+<input type="hidden" name="collection" value="gallery">
+<label>Choose photos</label><input type="file" name="photos" id="galleryPhotos" accept="image/*" multiple required>
+<p id="galleryPhotoSelection">No photos selected yet.</p>
+<label>Caption / description (optional)</label><textarea name="description" rows="2" maxlength="2000"></textarea>
+<button type="submit">Upload Gallery Photos</button>
+</form>
+</section>
+
+<section class="upload-panel">
+<h2>🎙 Recent Sermons — Upload Handle</h2>
+<p>Upload sermon notes and text, books, PDF/DOC/DOCX, audio recordings or sermon videos. Items appear only in the Recent Sermons section.</p>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="collection" value="sermons">
+<label>Title</label><input name="title" maxlength="180" required placeholder="Sermon title or book name">
+<label>Description / sermon summary / text</label><textarea name="description" rows="3" maxlength="2000" placeholder="Enter a sermon summary or accompanying text"></textarea>
+<label>Select sermon files (optional if you enter sermon text above; multiple files allowed)</label><input type="file" name="file" multiple accept=".txt,.md,.pdf,.doc,.docx,.jpg,.jpeg,.png,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.webm,.mov">
+<button type="submit">Upload to Recent Sermons</button>
+</form>
+</section>
+
+<section class="upload-panel">
+<h2>📖 Bible Teaching — Upload Handle</h2>
+<p>Upload Bible study text, PDF, JPEG/PNG images, DOC/DOCX documents, audio lessons or teaching videos. Items appear only in Bible Teaching.</p>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="collection" value="bible-teachings">
+<label>Title</label><input name="title" maxlength="180" required placeholder="Bible teaching topic">
+<label>Description / teaching text</label><textarea name="description" rows="3" maxlength="2000" placeholder="Add the lesson summary or teaching text"></textarea>
+<label>Select teaching files (optional if you enter lesson text above; multiple files allowed)</label><input type="file" name="file" multiple accept=".txt,.md,.pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp,.mp3,.wav,.ogg,.m4a,.aac,.mp4,.webm,.mov">
+<button type="submit">Upload to Bible Teaching</button>
+</form>
+</section>
+
+<section class="upload-panel">
+<h2>♫ Choir & Music — Upload Handle</h2>
+<p>Upload hymn lyrics and text, music-note or sheet-music images/PDFs, DOC/DOCX, choir audio, instrumental recordings, MIDI files or videos. Items appear only in Choir & Music.</p>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="collection" value="choir-music">
+<label>Title</label><input name="title" maxlength="180" required placeholder="Hymn title, music piece or choir programme">
+<label>Description / lyrics / notes</label><textarea name="description" rows="3" maxlength="2000" placeholder="Add hymn lyrics, music notes or a description"></textarea>
+<label>Select music files (optional if you enter lyrics or music notes above; multiple files allowed)</label><input type="file" name="file" multiple accept=".txt,.md,.pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp,.mp3,.mid,.midi,.wav,.ogg,.m4a,.aac,.mp4,.webm,.mov">
+<button type="submit">Upload to Choir & Music</button>
+</form>
+</section>
+
+<section class="upload-panel">
+<h2>Other Media Library Upload</h2>
+<p>For general church media that does not belong to the three dedicated collections.</p>
+<form method="post" enctype="multipart/form-data">
+<input type="hidden" name="collection" value="library">
+<label>Title</label><input name="title" maxlength="180" required>
+<label>Description</label><textarea name="description" rows="2" maxlength="2000"></textarea>
+<label>Select files</label><input type="file" name="file" multiple required accept=".txt,.md,.pdf,.doc,.docx,.jpg,.jpeg,.png,.gif,.webp,.mp3,.mid,.midi,.wav,.ogg,.m4a,.aac,.mp4,.webm,.mov">
+<button type="submit">Upload General Media</button>
+</form>
+</section>
+
+<script>
+(function(){
+  var picker=document.getElementById("galleryPhotos"),output=document.getElementById("galleryPhotoSelection");
+  if(!picker||!output)return;
+  picker.addEventListener("change",function(){
+    var files=Array.from(picker.files||[]);
+    picker.setCustomValidity(files.length>10?"Select no more than 10 photos per batch.":"");
+    output.textContent=files.length?files.length+" photo(s) selected: "+files.map(function(f){return f.name;}).join(", "):"No photos selected yet.";
+  });
+  document.getElementById("multiPhotoUpload").addEventListener("submit",function(e){
+    if((picker.files||[]).length>10){e.preventDefault();picker.reportValidity();}
+  });
+})();
+</script>
+
+<p><a href="{{ url_for('media_library_public') }}">Public media library</a> · <a href="/">Homepage</a></p>
+<h2>Uploaded Media — Manage Publication</h2>
+{% for x in items %}
+<article>
+<h3>{{ x.title }}</h3>
+{% if x.mime_type and x.mime_type.startswith('image/') and x.published %}
+<img src="{{ url_for('media_document_view', media_id=x.id) }}" alt="{{ x.title }}" loading="lazy" style="display:block;width:100%;max-width:320px;max-height:220px;object-fit:contain;background:#eef2ef;border-radius:8px;margin:8px 0">
+{% endif %}
+<p>{{ x.description or '' }}</p>
+<small>
+{{ x.original_name }} · {{ x.media_type }} ·
+{% if '/sermons/' in x.storage_path %}Recent Sermons
+{% elif '/bible-teachings/' in x.storage_path %}Bible Teaching
+{% elif '/choir-music/' in x.storage_path %}Choir & Music
+{% elif '/library/' in x.storage_path %}General Media
+{% else %}Photo Gallery{% endif %}
+· {{ 'Published' if x.published else 'Unpublished' }}
+</small>
+<form method="post"><input type="hidden" name="action" value="toggle"><input type="hidden" name="media_id" value="{{ x.id }}"><button>{{ 'Unpublish' if x.published else 'Publish' }}</button></form>
+<form method="post" onsubmit="return confirm('Delete permanently?')"><input type="hidden" name="action" value="delete"><input type="hidden" name="media_id" value="{{ x.id }}"><button>Delete</button></form>
+</article>
+{% else %}<p>No uploads yet.</p>{% endfor %}
+</main></body></html>

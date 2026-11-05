@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Devotional & Worship Centre | MCN Delta South</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+.hero{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:#fff;padding:42px 18px 50px}.wrap{max-width:1150px;margin:auto}.eyebrow{font-size:11px;letter-spacing:2px;color:#f4d36e;font-weight:800;text-transform:uppercase}.hero h1{font:800 clamp(30px,5vw,48px)/1.08 Georgia,serif;margin:9px 0}.hero p{color:#e3ebf7;max-width:720px}.goldline{height:4px;width:78px;background:#e6bb40;border-radius:9px;margin-top:20px}
+main{max-width:1150px;margin:auto;padding:24px 16px 55px}.toplinks{display:flex;gap:15px;flex-wrap:wrap;margin-bottom:20px}.toplinks a{color:#12664b;text-decoration:none;font-weight:700}
+.daily{background:#fff;border-radius:17px;padding:23px;box-shadow:0 8px 25px #102b5510;margin:18px 0 28px;border-left:5px solid #d7a92e}.daily h2{margin:4px 0 10px}.daily .verse{font:20px/1.6 Georgia,serif;color:#273c60}.daily .ref{font-weight:800;color:#a77b13}
+.section-title{margin:28px 0 14px}.section-title h2{margin:0;font-size:24px}.section-title p{margin:4px 0;color:#69768b}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,245px),1fr));gap:17px}.tile{background:white;border:1px solid #e1e7ef;border-radius:15px;padding:20px;text-decoration:none;color:#172b4d;box-shadow:0 5px 18px #102b5509;transition:transform .15s}.tile:hover{transform:translateY(-3px)}.tile .icon{font-size:35px}.tile h3{margin:8px 0 4px;font-size:18px}.tile p{color:#6a7689;margin:0;font-size:13px}.count{display:inline-block;margin-top:13px;border-radius:30px;background:#edf4f0;color:#176247;padding:5px 10px;font-size:11px;font-weight:800}
+.admin{display:inline-block;margin-top:22px;background:#102d60;color:#fff;padding:10px 15px;border-radius:8px;text-decoration:none;font-weight:700}
+footer{text-align:center;color:#7c8799;font-size:12px;margin-top:35px}
+@media(max-width:520px){.hero{padding:30px 16px 35px}.daily{padding:17px}.grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.tile{padding:14px}.tile h3{font-size:15px}.tile p{font-size:12px}}
+</style></head><body>
+<header class="hero"><div class="wrap"><div class="eyebrow">Methodist Church Nigeria · Delta South Diocese</div><h1>Devotional &<br>Worship Centre</h1><p>Grow in the Word. Worship in Spirit. Live in Faith. Explore Methodist hymns, Scripture, canticles and worship resources in one public digital library.</p><div class="goldline"></div></div></header>
+<main><nav class="toplinks"><a href="/">← Diocesan Homepage</a><a href="/media-library">Church Media Library</a></nav>
+{% if daily and daily.payload %}
+<section class="daily"><div class="eyebrow">Today's Scripture</div><h2>{{ daily.title }}</h2><div class="verse">{{ daily.payload.get('verse','') }}</div><div class="ref">{{ daily.payload.get('reference','') }}</div><a class="admin" href="{{ url_for('devotional_centre_item', resource_id=daily.resource_id) }}">Read Scripture</a></section>
+{% endif %}
+<div class="section-title"><h2>Explore the Library</h2><p>Choose a collection to search, read and study.</p></div>
+<div class="grid">{% for slug,title,subtitle,icon,description in collections %}
+{% set db_key = {'english-hymns':'english_hymns','yoruba-hymns':'yoruba_hymns','akokun':'akokun','bible-verses':'bible_verses','canticles':'canticles','communion':'communion_english','yoruba-communion':'communion_yoruba','creeds':'creeds'}.get(slug,'') %}
+<a class="tile" href="{{ url_for('devotional_centre_collection', collection_slug=slug) }}"><div class="icon">{{ icon }}</div><h3>{{ title }}</h3><p>{{ description }}</p><span class="count">{{ counts.get(db_key, 0) }} resources</span></a>
+{% endfor %}
+<a class="tile" href="/devotional-centre/holy-bible"><div class="icon">📖</div><h3>Complete Holy Bible</h3><p>Read all 66 books and chapters from the installed offline WEB Bible database. No external Bible API is required.</p><span class="count">WEB · Offline · 66 books</span></a>
+<a class="tile" href="/devotional-centre/lectionary"><div class="icon">📅</div><h3>Yearly Lectionary</h3><p>Follow the appointed readings for Sundays, feast days and special services in 2027.</p><span class="count">YEAR B · 2027 / YEAR C · 2028</span></a>
+</div>
+<a class="admin" href="/admin/devotional-centre">Administrator: Import & Manage Library</a>
+<footer>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE · TOGETHER IN MISSION</footer></main></body></html>

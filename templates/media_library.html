@@ -1,1 +1,133 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Church Media Library</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f8f6;color:#17342a;font:16px system-ui}header{background:#125d43;color:white;padding:24px 16px}header div,main{max-width:1050px;margin:auto}main{padding:20px 14px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px}.card{background:white;border:1px solid #dce7e1;border-radius:14px;padding:16px;min-width:0}p{line-height:1.5;overflow-wrap:anywhere}a{color:#126b4b}.media{width:100%;max-height:360px;margin-top:10px;border-radius:8px}</style></head><body><header><div><h1>Church Media Library</h1><p>Messages, church documents, music and videos — Methodist Church Nigeria, Delta South Diocese.</p></div></header><main><p><a href="/">← Back to homepage</a></p>{% if not items %}<article class="card"><h2>No published media yet</h2><p>Please check again later.</p></article>{% endif %}<div class="grid">{% for x in items %}<article class="card"><h2>{{ x.title }}</h2>{% if x.description %}<p>{{ x.description }}</p>{% endif %}{% if not x.signed_url %}<p>Temporarily unavailable. Please try again later.</p>{% elif x.media_type == 'audio' %}<audio class="media" controls preload="none" src="{{ x.signed_url }}"></audio>{% elif x.media_type == 'video' %}<video class="media" controls playsinline preload="metadata" src="{{ x.signed_url }}"></video>{% else %}<p><a href="{{ x.signed_url }}" target="_blank" rel="noopener">Open / read document: {{ x.original_name }}</a></p>{% endif %}</article>{% endfor %}</div></main></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{ collection_title }}</title>
+<style>
+:root{--navy:#10285a;--green:#116b4b;--gold:#e9b82d;--ink:#172b4d;--muted:#69758a}
+*{box-sizing:border-box}
+body{margin:0;background:#f1f4f8;color:var(--ink);font:15px/1.55 system-ui,-apple-system,Segoe UI,sans-serif}
+.site-head{background:linear-gradient(120deg,#071b48,#153b79 65%,#0c6049);color:white;padding:34px 18px 42px}
+.head-inner,main{max-width:1160px;margin:auto}
+.eyebrow{text-transform:uppercase;letter-spacing:2px;font-size:11px;font-weight:800;color:#f4ce56}
+.site-head h1{font-size:clamp(28px,5vw,42px);line-height:1.1;margin:8px 0}
+.site-head p{margin:6px 0;color:#e1e9f7}
+.head-rule{width:76px;height:4px;background:var(--gold);border-radius:9px;margin-top:18px}
+main{padding:22px 16px 55px}
+.navline{display:flex;gap:16px;flex-wrap:wrap;margin:0 0 22px}
+.navline a{color:var(--green);font-weight:700;text-decoration:none}
+.intro{display:flex;justify-content:space-between;align-items:end;gap:15px;margin:20px 0}
+.intro h2{font-size:23px;margin:0}.intro p{margin:4px 0;color:var(--muted)}
+.resource-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,265px),1fr));gap:22px;align-items:stretch}
+.resource-card{background:white;border:1px solid #e1e6ef;border-radius:16px;overflow:hidden;box-shadow:0 8px 24px #142a4a0c;display:flex;flex-direction:column;min-width:0}
+.cover{height:260px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;padding:22px;color:white;text-align:center;background:linear-gradient(145deg,#10285a,#1d4d86 60%,#0e684d)}
+.cover:before{content:"";position:absolute;inset:12px;border:1px solid #ffffff55;border-radius:7px;pointer-events:none}
+.cover:after{content:"";position:absolute;width:220px;height:220px;border:1px solid #ffffff20;border-radius:50%;right:-100px;bottom:-110px;box-shadow:0 0 0 18px #ffffff08,0 0 0 38px #ffffff06}
+.cover-inner{position:relative;z-index:1;width:100%;display:flex;flex-direction:column;align-items:center;gap:10px}
+.cover-brand{font-size:9px;letter-spacing:1.5px;font-weight:800;opacity:.86;text-transform:uppercase}
+.cover-icon{font-size:48px;line-height:1.1;text-shadow:0 3px 12px #0005}
+.cover-title{font-family:Georgia,serif;font-size:clamp(19px,2vw,25px);line-height:1.16;font-weight:800;max-width:100%;overflow-wrap:anywhere;text-shadow:0 2px 8px #0005}
+.cover-subtitle{font-size:11px;max-width:90%;opacity:.9}
+.cover-footer{font-size:9px;letter-spacing:1.4px;text-transform:uppercase;border-top:1px solid #ffffff65;padding-top:9px;margin-top:7px}
+.cover.audio{background:linear-gradient(145deg,#30215d,#69418b 58%,#172b61)}
+.cover.video{background:linear-gradient(145deg,#4a1e2d,#8b3340 60%,#142a59)}
+.cover.book{background:linear-gradient(145deg,#0b3d35,#16735a 58%,#12385b)}
+.cover.word{background:linear-gradient(145deg,#153c78,#3975b7 58%,#112d58)}
+.cover.hymn{background:linear-gradient(145deg,#593f13,#b18426 58%,#183c51)}
+.cover.image-cover{padding:0;background:#e9edf3}
+.cover.image-cover:before{display:none}
+.cover.image-cover img{width:100%;height:100%;object-fit:contain;background:#e9edf3}
+.pdf-cover{height:260px;background:#e9edf3;position:relative;display:flex;justify-content:center;align-items:center;padding:10px}
+.pdf-cover canvas{max-width:100%;max-height:100%;box-shadow:0 5px 18px #142a4a22;background:white}
+.pdf-cover .pdf-preview-loading{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:11px;color:#52617a}
+.card-body{padding:16px 17px 18px;display:flex;flex-direction:column;flex:1}
+.type-row{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:9px}
+.pill{display:inline-flex;align-items:center;border-radius:99px;padding:4px 9px;font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;background:#edf3f8;color:#38516f}
+.pill.gold{background:#fff5d9;color:#805d0b}
+.card-body h3{font-size:18px;line-height:1.25;margin:0 0 8px;color:#12274c;overflow-wrap:anywhere}
+.description{color:#647187;font-size:13px;margin:0 0 12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.player{width:100%;margin:8px 0 12px}
+.player video{width:100%;max-height:180px;border-radius:9px;background:#111}
+.text-preview{width:100%;height:155px;border:1px solid #e1e6ef;border-radius:8px;background:#fff;margin:8px 0}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:12px}
+.actions a{flex:1;text-align:center;min-width:105px;padding:10px 11px;border-radius:8px;background:var(--navy);color:white;text-decoration:none;font-size:12px;font-weight:800}
+.actions a.secondary{background:#edf2f8;color:var(--navy)}
+.empty{background:white;border:1px dashed #cbd5e1;border-radius:14px;padding:35px;text-align:center;color:var(--muted)}
+.footer-note{text-align:center;color:#778399;font-size:12px;margin-top:36px}
+@media(max-width:520px){.site-head{padding:25px 16px 30px}.resource-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.cover,.pdf-cover{height:190px}.cover{padding:15px}.cover-icon{font-size:36px}.cover-title{font-size:17px}.card-body{padding:12px}.card-body h3{font-size:15px}.description{font-size:12px}.actions{flex-direction:column}.actions a{width:100%}}
+</style>
+</head>
+<body>
+<header class="site-head"><div class="head-inner">
+<div class="eyebrow">Methodist Church Nigeria · Delta South Diocese</div>
+<h1>{{ collection_title }}</h1>
+<p>Faith resources, teaching materials and media for worship and spiritual growth.</p>
+<div class="head-rule"></div>
+</div></header>
+<main>
+<nav class="navline"><a href="/">← Homepage</a><a href="/media-library">All Media</a></nav>
+<div class="intro"><div><h2>Explore the collection</h2><p>Open, read, watch or listen to published resources.</p></div></div>
+{% if not items %}<div class="empty"><div style="font-size:38px">📚</div><h2>No published resources yet</h2><p>New materials will appear here as soon as the administrator publishes them.</p></div>{% endif %}
+<div class="resource-grid">
+{% for x in items %}
+{% set name = (x.original_name or '').lower() %}
+{% set is_audio = x.media_type == 'audio' %}
+{% set is_video = x.media_type == 'video' %}
+{% set is_image = x.mime_type and x.mime_type.startswith('image/') %}
+{% set is_pdf = x.mime_type == 'application/pdf' %}
+{% set is_word = x.mime_type in ['application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'] %}
+{% set is_text = x.mime_type in ['text/plain','text/markdown'] %}
+<article class="resource-card">
+{% if is_image %}
+<div class="cover image-cover"><img src="{{ url_for('media_document_view', media_id=x.id, raw=1) }}" alt="{{ x.title }}" loading="lazy"></div>
+{% elif is_pdf %}
+<div class="pdf-cover" data-pdf-url="{{ url_for('media_document_view', media_id=x.id, raw=1) }}"><canvas></canvas><div class="pdf-preview-loading">Preparing document cover…</div></div>
+{% elif is_video %}
+<div class="cover video"><div class="cover-inner"><div class="cover-brand">MCN Delta South · Video</div><div class="cover-icon">▶</div><div class="cover-title">{{ x.title }}</div><div class="cover-subtitle">VIDEO MESSAGE · WATCH ON DEMAND</div><div class="cover-footer">Worship · Teaching · Mission</div></div></div>
+{% elif is_audio %}
+<div class="cover audio"><div class="cover-inner"><div class="cover-brand">MCN Delta South · Audio</div><div class="cover-icon">♫</div><div class="cover-title">{{ x.title }}</div><div class="cover-subtitle">LISTEN · LEARN · WORSHIP</div><div class="cover-footer">Faith through sound</div></div></div>
+{% elif is_word %}
+<div class="cover word"><div class="cover-inner"><div class="cover-brand">Methodist Church Nigeria</div><div class="cover-icon">▤</div><div class="cover-title">{{ x.title }}</div><div class="cover-subtitle">OFFICIAL DOCUMENT · DELTA SOUTH DIOCESE</div><div class="cover-footer">Read · Study · Grow</div></div></div>
+{% elif is_text %}
+<div class="cover hymn"><div class="cover-inner"><div class="cover-brand">MCN Delta South Diocese</div><div class="cover-icon">✎</div><div class="cover-title">{{ x.title }}</div><div class="cover-subtitle">WRITTEN RESOURCE</div><div class="cover-footer">Faith · Service · Mission</div></div></div>
+{% else %}
+<div class="cover book"><div class="cover-inner"><div class="cover-brand">Methodist Church Nigeria</div><div class="cover-icon">📖</div><div class="cover-title">{{ x.title }}</div><div class="cover-subtitle">CHURCH RESOURCE · DELTA SOUTH DIOCESE</div><div class="cover-footer">Faith · Service · Mission</div></div></div>
+{% endif %}
+<div class="card-body">
+<div class="type-row"><span class="pill">{{ 'VIDEO' if is_video else 'AUDIO' if is_audio else 'PDF' if is_pdf else 'IMAGE' if is_image else 'WORD DOCUMENT' if is_word else 'TEXT' if is_text else 'BOOK / RESOURCE' }}</span><span class="pill gold">{{ collection_title }}</span></div>
+{% if not is_image %}
+<h3>{{ x.title }}</h3>
+{% if x.description %}<p class="description">{{ x.description }}</p>{% else %}<p class="description">A resource from the Methodist Church Nigeria, Delta South Diocese.</p>{% endif %}
+{% endif %}
+{% if is_audio and x.signed_url %}
+<audio class="player" controls preload="none" src="{{ x.signed_url }}"></audio>
+{% elif is_video and x.signed_url %}
+<div class="player"><video controls playsinline preload="metadata" src="{{ x.signed_url }}"></video></div>
+{% elif is_text %}
+<iframe class="text-preview" title="Text preview: {{ x.title }}" src="{{ url_for('media_document_view', media_id=x.id) }}" sandbox></iframe>
+{% endif %}
+<div class="actions">
+<a href="{{ url_for('media_document_view', media_id=x.id) }}">Open / View</a>
+<a class="secondary" href="{{ url_for('media_document_download', media_id=x.id) }}">Download</a>
+</div>
+</div></article>
+{% endfor %}
+</div>
+<div class="footer-note">METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE · TOGETHER IN MISSION</div>
+</main>
+<script type="module">
+(async function(){
+ const boxes=[...document.querySelectorAll(".pdf-cover")];if(!boxes.length)return;
+ try{
+  const pdfjs=await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs");
+  pdfjs.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
+  for(const box of boxes){const label=box.querySelector(".pdf-preview-loading"),canvas=box.querySelector("canvas");
+   try{const pdf=await pdfjs.getDocument({url:box.dataset.pdfUrl}).promise,page=await pdf.getPage(1);
+    const original=page.getViewport({scale:1}),scale=Math.min((box.clientWidth-20)/original.width,(box.clientHeight-25)/original.height),viewport=page.getViewport({scale}),ratio=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=Math.floor(viewport.width*ratio);canvas.height=Math.floor(viewport.height*ratio);canvas.style.width=Math.floor(viewport.width)+"px";canvas.style.height=Math.floor(viewport.height)+"px";
+    const ctx=canvas.getContext("2d");ctx.setTransform(ratio,0,0,ratio,0,0);await page.render({canvasContext:ctx,viewport}).promise;label.remove();
+   }catch(e){label.textContent="PDF cover preview unavailable";}}
+ }catch(e){boxes.forEach(b=>b.querySelector(".pdf-preview-loading").textContent="Open document to view cover");}
+})();
+</script>
+</body></html>

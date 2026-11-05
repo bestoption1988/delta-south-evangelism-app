@@ -1,6 +1,7 @@
 const $=s=>document.querySelector(s);
-const labels={online_giving:"Online Giving",church_accounts:"Church Accounts",customer_care:"Customer Care",conference:"Conference",command_centre:"Command Centre",communications:"Communications",reports:"Reports & Analytics",testimonies:"Testimonies",appreciations:"Special Appreciation",churches:"Local Churches",members:"Church Membership",commitments:"Pledges & Commitments",income:"Income Receipts",expenses:"Expenses",equipment:"Equipment Inventory",trust_fund:"Evangelism Trust Fund",mission_budgets:"Mission Budgets",procurement_requests:"Procurement & Equipment Requests",planting_prospects:"Church Planting Prospects",church_plants:"Church Planting",outreach:"Outreach & Missions",mission_calendar:"Mission Calendar & Follow-up",mission_teams:"Mission Teams",mission_contacts:"Evangelism Contacts & Follow-up",sponsors:"Partners & Sponsors",users:"User Management",audit:"Audit Log",security:"Security & Backup",system_health:"System Health",report_periods:"Reporting Periods",circuit_reports:"Circuit Reports",action_points:"Action Points",meetings:"Meetings & Minutes",diocesan_reviews:"Diocesan Executive Reviews"};
+const labels={online_giving:"Online Giving",church_accounts:"Church Accounts",customer_care:"Customer Care",conference:"Conference",command_centre:"Command Centre",communications:"Communications",reports:"Reports & Analytics",testimonies:"Testimonies",appreciations:"Special Appreciation",churches:"Local Churches",circuits:"Circuit Management",members:"Church Membership",commitments:"Pledges & Commitments",income:"Income Receipts",expenses:"Expenses",equipment:"Equipment Inventory",trust_fund:"Evangelism Trust Fund",mission_budgets:"Mission Budgets",procurement_requests:"Procurement & Equipment Requests",planting_prospects:"Church Planting Prospects",church_plants:"Church Planting",outreach:"Outreach & Missions",mission_calendar:"Mission Calendar & Follow-up",mission_teams:"Mission Teams",mission_contacts:"Evangelism Contacts & Follow-up",sponsors:"Partners & Sponsors",users:"User Management",audit:"Audit Log",security:"Security & Backup",system_health:"System Health",report_periods:"Reporting Periods",circuit_reports:"Circuit Reports",action_points:"Action Points",meetings:"Meetings & Minutes",diocesan_reviews:"Diocesan Executive Reviews"};
 const schemas={
+ circuits:[["name","Circuit name","text"],["status","Status","select",["Active","Inactive"]],["notes","Notes","textarea"]],
  church_accounts:[["account_level","Account Level","select",["Diocese","Circuit","Local Church"]],["circuit","Circuit","select",["Diocesan","Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]],["church_name","Local Church","select",[]],["bank_name","Bank Name","text"],["account_name","Account Name","text"],["account_number","Account Number","text"],["account_type","Account Type","select",["Current","Savings","Domiciliary","Other"]],["branch","Bank Branch","text"],["notes","Notes","textarea"]],
  members:[
   ["role_position","Church Position / Office","select",["Bishop","Lay President","Evangelism Minister","Circuit Presbyter","Circuit Steward","Local Church Minister","Local Church Steward","Other"]],["circuit","Circuit","select",["Diocesan","Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]],
@@ -17,7 +18,7 @@ const schemas={
   ["death","Death","select",["No","Yes"]],["death_date","Death Date","date"],
   ["seed_of_faith_payment","Seed of Faith Payment (₦)","number"],["tithe_payment","Tithe Payment (₦)","number"],["notes","Notes","textarea"]
  ],
- churches:[["circuit","Circuit","select",["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]],["church_name","Church name","text"],["annual_target","Annual target (₦)","number"],["contact_person","Contact person","text"],["phone","Phone","tel"],["notes","Notes","textarea"]],
+ churches:[["circuit","Circuit","select",["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]],["church_name","Church name","text"],["address","Physical address","text"],["town","Town / City","text"],["state","State","text"],["maps_url","Google Maps URL","url"],["annual_target","Annual target (₦)","number"],["contact_person","Contact person","text"],["phone","Phone","tel"],["notes","Notes","textarea"]],
  commitments:[["date","Date","date"],["donor_name","Donor / partner name","text"],["donor_type","Donor type","select",["Individual","Local Church","Business","Major Patron","Mission Partner"]],["phone","Phone","tel"],["purpose","Purpose","select",["General Evangelism","Equipment Fund","Outreach Fund","Church Planting Fund","Training Fund","Mission Support Fund"]],["amount","Amount pledged (₦)","number"],["frequency","Frequency","select",["One-time","Monthly","Quarterly","Annual"]],["status","Status","select",["Pledged","Part-paid","Paid","Cancelled"]],["notes","Notes","textarea"]],
  income:[["date","Date received","date"],["donor_name","Donor name","text"],["source","Source","select",["Local Church","Evangelism Partner","Major Patron","Business Sponsor","Special Offering","Fundraising Event","In-kind converted value","Other"]],["fund","Fund / purpose","select",["General Evangelism","Equipment Fund","Outreach Fund","Church Planting Fund","Training Fund","Mission Support Fund"]],["amount","Amount received (₦)","number"],["method","Payment method","select",["Transfer","Cash","POS","Cheque","In-kind"]],["reference","Receipt / transaction reference","text"],["received_by","Received by","text"],["notes","Notes","textarea"]],
  expenses:[["date","Date paid","date"],["category","Category","select",["Outreach","Church Planting","Transport","Equipment","Training","Publicity / Media","Mission Support","Administration","Maintenance","Other"]],["description","Description","text"],["circuit","Circuit","select",["Diocesan","Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]],["church_name","Local Church","select",[]],["amount","Amount (₦)","number"],["approved_by","Approved by","text"],["paid_by","Paid by","text"],["receipt_ref","Receipt / voucher reference","text"],["notes","Notes","textarea"]],
@@ -62,10 +63,15 @@ church_plants:[["year","Target year","number"],["circuit","Circuit","select",["E
 let current="dashboard",records=[],me=null,circuitOptions=["Diocesan","Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"];
 const money=n=>n===null||n===undefined?"—":"₦"+Number(n||0).toLocaleString("en-NG",{maximumFractionDigits:0});
 function setStatus(s){$("#status").textContent=s}
-async function checkPaystackReturn(){
+async function checkPaymentReturn(){
   const params = new URLSearchParams(window.location.search);
-  const reference = params.get("reference") || params.get("trxref");
-  if(!reference) return;
+
+  const flutterwaveRef = params.get("tx_ref");
+  const transactionId = params.get("transaction_id");
+  const gatewayStatus = (params.get("status") || "").toLowerCase();
+
+  // Preserve historical Paystack callback verification.
+  const paystackReference = params.get("reference") || params.get("trxref");
 
   const box = $("#paymentResult");
   const title = $("#paymentResultTitle");
@@ -73,29 +79,66 @@ async function checkPaystackReturn(){
   const refEl = $("#paymentResultReference");
   const amountEl = $("#paymentResultAmount");
 
-  if(box) box.hidden = false;
-  if(title) title.textContent = "Verifying Payment";
-  if(message) message.textContent = "Please wait while we verify your Paystack transaction.";
-  if(refEl) refEl.textContent = reference;
+  if (!flutterwaveRef && !paystackReference && params.get("payment") !== "return") {
+    return;
+  }
 
-  try{
-    const result = await api("/api/payment/verify/" + encodeURIComponent(reference));
+  if (box) box.hidden = false;
 
-    if(result.paid){
-      if(title) title.textContent = "Payment Successful";
-      if(message) message.textContent = "Your payment has been verified and recorded successfully.";
-      if(amountEl) amountEl.textContent = result.amount != null ? money(result.amount) : "Verified";
-    }else{
-      if(title) title.textContent = "Payment Not Completed";
-      if(message) message.textContent = "Paystack has not marked this transaction as successful.";
-      if(amountEl) amountEl.textContent = result.amount != null ? money(result.amount) : "Pending";
+  if (gatewayStatus === "cancelled") {
+    if (title) title.textContent = "Payment Cancelled";
+    if (message) message.textContent = "The checkout was cancelled. No successful payment has been confirmed.";
+    if (refEl) refEl.textContent = flutterwaveRef || "";
+    if (amountEl) amountEl.textContent = "";
+    return;
+  }
+
+  if (title) title.textContent = "Verifying Payment";
+  if (message) message.textContent = "Please wait while we verify your transaction.";
+  if (refEl) refEl.textContent = flutterwaveRef || paystackReference || "";
+
+  try {
+    let result;
+
+    if (flutterwaveRef) {
+      if (!transactionId) {
+        throw Error("Flutterwave did not return a transaction ID. Please contact the church finance office with your payment reference.");
+      }
+
+      // Never trust the browser's status parameter.
+      // The backend independently verifies the transaction with Flutterwave.
+      result = await api(
+        "/api/payment/verify/" + encodeURIComponent(flutterwaveRef) +
+        "?transaction_id=" + encodeURIComponent(transactionId)
+      );
+    } else if (paystackReference) {
+      // Historical Paystack transactions continue using their existing route.
+      result = await api(
+        "/api/payment/verify/" + encodeURIComponent(paystackReference)
+      );
+    } else {
+      if (title) title.textContent = "Payment Verification";
+      if (message) message.textContent = "Your checkout has returned. If you have a payment reference, contact the church finance office for verification.";
+      return;
     }
-  }catch(err){
-    if(title) title.textContent = "Payment Verification Error";
-    if(message) message.textContent = err.message;
+
+    if (result.paid) {
+      if (title) title.textContent = "Payment Successful";
+      if (message) message.textContent = "Your payment has been verified and recorded successfully.";
+      if (amountEl) amountEl.textContent =
+        result.amount != null ? money(result.amount) : "Verified";
+    } else {
+      if (title) title.textContent = "Payment Not Confirmed";
+      if (message) message.textContent =
+        result.error || "The payment has not been confirmed as successful. Please do not make another payment until you check with the finance office.";
+      if (amountEl) amountEl.textContent =
+        result.amount != null ? money(result.amount) : "Pending";
+    }
+  } catch (err) {
+    if (title) title.textContent = "Payment Verification Error";
+    if (message) message.textContent = err.message;
   }
 }
-
 async function loadOnlineGiving(){
   try{
     const accounts=await api("/api/church-accounts");
@@ -122,7 +165,7 @@ async function loadOnlineGiving(){
   }
 }
 
-checkPaystackReturn();
+checkPaymentReturn();
 
 document.addEventListener("submit",async function(e){
   if(e.target.id!=="onlineGivingForm")return;
@@ -148,12 +191,12 @@ document.addEventListener("submit",async function(e){
     return;
   }
 
-  const btn=$("#paystackPayBtn");
+  const btn=$("#paystackPayBtn") || $("#flutterwavePayBtn");
   const status=$("#givingStatus");
 
   try{
     if(btn)btn.disabled=true;
-    if(status)status.textContent="Connecting securely to Paystack...";
+    if(status)status.textContent="Connecting securely to the selected payment provider...";
 
     const result=await api("/api/payment/initiate",{
       method:"POST",
@@ -167,15 +210,27 @@ document.addEventListener("submit",async function(e){
         donor_name:$("#givingName")?.value.trim()||"",
         donor_email:email,
         donor_phone:$("#givingPhone")?.value.trim()||"",
-        payment_method:"Paystack"
+        payment_method:"Online Payment"
       })
     });
 
+    if(result.bank_transfer){
+      const bank=result.bank_transfer;
+      if(status)status.textContent=
+        "BANK TRANSFER DETAILS | Reference: "+result.reference+
+        " | Bank: "+bank.bank_name+
+        " | Account Name: "+bank.account_name+
+        " | Account Number: "+bank.account_number+
+        " | "+(bank.instructions||"Use the reference as your transfer narration.")+
+        " | Payment remains pending until Finance confirms receipt.";
+      if(btn)btn.disabled=false;
+      return;
+    }
     if(!result.authorization_url){
-      throw Error("Paystack did not return a checkout URL.");
+      throw Error("The selected payment provider did not return a checkout URL.");
     }
 
-    if(status)status.textContent="Opening secure Paystack checkout...";
+    if(status)status.textContent="Opening secure payment checkout...";
     window.location.href=result.authorization_url;
   }catch(err){
     if(status)status.textContent=err.message;
@@ -193,9 +248,9 @@ function canPage(page){
 
   const access = {
     Admin: [
-      "dashboard","communications","conference","command_centre","churches",
+      "dashboard","communications","conference","command_centre","churches","circuits",
       "members","mission_teams","mission_contacts","testimonies","appreciations",
-      "commitments","income","church_accounts","online_giving","payment_management",
+      "commitments","income","church_accounts","online_giving","payment_settings","payment_management",
       "payment_reconciliation","finance_summary","financial_accountability","expenses",
       "equipment","trust_fund","mission_budgets","procurement_requests","planting_prospects",
       "church_plants","outreach","mission_calendar","sponsors","report_periods",
@@ -297,8 +352,9 @@ function configureNav(){
     `${me.role}${me.circuit?" · "+me.circuit:""}`;
 }
 
-function nav(page){if(!canPage(page))return;current=page;document.querySelectorAll("#menuPanel button[data-page]").forEach(b=>b.classList.toggle("active",b.dataset.page===page));const chosen=document.querySelector(`#menuPanel button[data-page="${page}"]`);if(chosen){const label=$("#menuCurrent");if(label)label.textContent=chosen.textContent.trim();}closeMenu();document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));if(page==="dashboard"){$("#dashboard").classList.add("active");loadDashboard();loadReportingSummary();loadConnection()}else if(page==="command_centre"){$("#command_centre").classList.add("active");loadCommandCentre()}else if(page==="communications"){$("#communications").classList.add("active");loadCommunications()}else if(page==="customer_care"){$("#customer_care").classList.add("active");loadCustomerCare()}else if(page==="conference"){$("#conference").classList.add("active");loadConference()}else if(page==="reports"){$("#reports").classList.add("active");loadReports()}else if(page==="security"){$("#security").classList.add("active");loadSecurityCentre()}else if(page==="system_health"){$("#system_health").classList.add("active");loadSystemHealth()}else if(page==="online_giving"){$("#online_giving").classList.add("active");loadOnlineGiving()}else if(page==="payment_management"){$("#payment_management").classList.add("active");loadPaymentManagement()}else if(page==="payment_reconciliation"){$("#payment_reconciliation").classList.add("active");loadPaymentReconciliation()}else if(page==="finance_summary"){$("#finance_summary").classList.add("active");loadFinanceSummary()}else if(page==="financial_accountability"){$("#financial_accountability").classList.add("active");loadFinancialAccountabilityReport()}else{$("#dataPage").classList.add("active");$("#sectionTitle").textContent=labels[page];$("#sectionEyebrow").textContent=page==="audit"?"SECURITY & ACCOUNTABILITY":page==="users"?"SECURE ACCESS":"MANAGE RECORDS";$("#formWrap").hidden=true;$("#search").value="";$("#addBtn").hidden=page==="audit"||me.role==="Auditor";loadTable();if(page==="members")loadMemberRegistrations();else if(page==="users")loadAccountRequests();else{if($("#memberRegistrationsPanel"))$("#memberRegistrationsPanel").hidden=true;if($("#accountRequestsPanel"))$("#accountRequestsPanel").hidden=true}}}
+function nav(page){if(!canPage(page))return;current=page;document.querySelectorAll("#menuPanel button[data-page]").forEach(b=>b.classList.toggle("active",b.dataset.page===page));const chosen=document.querySelector(`#menuPanel button[data-page="${page}"]`);if(chosen){const label=$("#menuCurrent");if(label)label.textContent=chosen.textContent.trim();}closeMenu();document.querySelectorAll(".page").forEach(p=>p.classList.remove("active"));if(page==="dashboard"){$("#dashboard").classList.add("active");loadDashboard();loadReportingSummary();loadConnection()}else if(page==="command_centre"){$("#command_centre").classList.add("active");loadCommandCentre()}else if(page==="communications"){$("#communications").classList.add("active");loadCommunications()}else if(page==="customer_care"){$("#customer_care").classList.add("active");loadCustomerCare()}else if(page==="conference"){$("#conference").classList.add("active");loadConference()}else if(page==="reports"){$("#reports").classList.add("active");loadReports()}else if(page==="security"){$("#security").classList.add("active");loadSecurityCentre()}else if(page==="system_health"){$("#system_health").classList.add("active");loadSystemHealth()}else if(page==="online_giving"){$("#online_giving").classList.add("active");loadOnlineGiving()}else if(page==="payment_settings"){$("#payment_settings").classList.add("active");loadPaymentSettings()}else if(page==="payment_management"){$("#payment_management").classList.add("active");loadPaymentManagement()}else if(page==="payment_reconciliation"){$("#payment_reconciliation").classList.add("active");loadPaymentReconciliation()}else if(page==="finance_summary"){$("#finance_summary").classList.add("active");loadFinanceSummary()}else if(page==="financial_accountability"){$("#financial_accountability").classList.add("active");loadFinancialAccountabilityReport()}else{$("#dataPage").classList.add("active");$("#sectionTitle").textContent=labels[page];$("#sectionEyebrow").textContent=page==="audit"?"SECURITY & ACCOUNTABILITY":page==="users"?"SECURE ACCESS":"MANAGE RECORDS";$("#formWrap").hidden=true;$("#search").value="";$("#addBtn").hidden=page==="audit"||me.role==="Auditor";loadTable();if(page==="members")loadMemberRegistrations();else if(page==="users")loadAccountRequests();else{if($("#memberRegistrationsPanel"))$("#memberRegistrationsPanel").hidden=true;if($("#accountRequestsPanel"))$("#accountRequestsPanel").hidden=true}}}
 document.querySelectorAll("#menuPanel button[data-page]").forEach(b=>b.addEventListener("click",()=>nav(b.dataset.page)));
+document.getElementById("paymentSettingsShortcut")?.addEventListener("click",()=>nav("payment_settings"));
 function closeMenu(){const panel=$("#menuPanel"),toggle=$("#menuToggle");if(panel)panel.classList.remove("open");if(toggle){toggle.setAttribute("aria-expanded","false")}}
 $("#menuToggle")?.addEventListener("click",()=>{const panel=$("#menuPanel"),toggle=$("#menuToggle");if(!panel||!toggle)return;const open=panel.classList.toggle("open");toggle.setAttribute("aria-expanded",String(open))});
 document.addEventListener("click",e=>{if(!e.target.closest(".nav-dropdown"))closeMenu()});
@@ -1507,7 +1563,7 @@ if(current==="members"){
   keys=memberOrder.filter(k=>list.some(r=>Object.prototype.hasOwnProperty.call(r,k)));
 }else{
   keys=[...new Set(list.flatMap(r=>Object.keys(r)))].filter(k=>!( ["id","password"].includes(k) ));
-}let showAction=current!=="audit"&&me.role!=="Auditor";let canUpgrade=current==="churches"&&me.role==="Admin";$("#tableWrap").innerHTML=`<table><thead><tr>${keys.map(k=>`<th>${esc(k.replaceAll("_"," "))}</th>`).join("")}${showAction?"<th>Action</th>":""}</tr></thead><tbody>${list.map(r=>`<tr>${keys.map(k=>`<td class="${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?"amount":""}">${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?money(r[k]):esc(r[k]??"—")}</td>`).join("")}${showAction?`<td class="actions-cell">${canUpgrade&&r.church_status!=="Circuit Headquarters"?`<button class="upgrade" data-upgrade="${r.id}">Upgrade to Circuit</button>`:""}${canUpgrade&&r.church_status==="Circuit Headquarters"?`<span class="status-badge">Circuit HQ</span>`:""}${current==="circuit_reports"&&me.role==="Admin"?`<button class="upgrade" data-review="${r.id}" data-status="Approved">Approve</button><button class="delete" data-review="${r.id}" data-status="Returned">Return</button>`:""}${current==="users"&&me.role==="Admin"?`<button class="secondary" data-link-user="${r.id}">Link member</button><button class="secondary" data-edit-user="${r.id}">Edit access</button><button class="secondary" data-toggle-user="${r.id}">${r.active?"Deactivate":"Activate"}</button>`:""}${current==="planting_prospects"&&me.role!=="Local Church Evangelism Officer"&&r.status!=="Converted to Church Plant"&&r.status!=="Closed"?`<button class="upgrade" data-convert-prospect="${r.id}">Convert to Church Plant</button>`:""}${current==="members"?`<button class="secondary" data-edit-member="${r.id}">Edit Member</button><button class="upgrade" data-manage-offices="${r.id}">Manage Offices</button>`:""}<button class="delete" data-del="${r.id}">Delete</button></td>`:""}</tr>`).join("")}</tbody></table>`;document.querySelectorAll("[data-convert-prospect]").forEach(b=>b.onclick=async()=>{
+}let showAction=current!=="audit"&&me.role!=="Auditor";let canUpgrade=current==="churches"&&me.role==="Admin";$("#tableWrap").innerHTML=`<table><thead><tr>${keys.map(k=>`<th>${esc(k.replaceAll("_"," "))}</th>`).join("")}${showAction?"<th>Action</th>":""}</tr></thead><tbody>${list.map(r=>`<tr>${keys.map(k=>`<td class="${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?"amount":""}">${["amount","budget","annual_target","unit_cost","cost","seed_of_faith_payment","tithe_payment"].includes(k)?money(r[k]):esc(r[k]??"—")}</td>`).join("")}${showAction?`<td class="actions-cell">${canUpgrade&&r.church_status!=="Circuit Headquarters"?`<button class="upgrade" data-upgrade="${r.id}">Upgrade to Circuit</button>`:""}${canUpgrade&&r.church_status==="Circuit Headquarters"?`<span class="status-badge">Circuit HQ</span>`:""}${current==="circuit_reports"&&me.role==="Admin"?`<button class="upgrade" data-review="${r.id}" data-status="Approved">Approve</button><button class="delete" data-review="${r.id}" data-status="Returned">Return</button>`:""}${current==="users"&&me.role==="Admin"?`<button class="secondary" data-link-user="${r.id}">Link member</button><button class="secondary" data-edit-user="${r.id}">Edit access</button><button class="secondary" data-toggle-user="${r.id}">${r.active?"Deactivate":"Activate"}</button>`:""}${current==="planting_prospects"&&me.role!=="Local Church Evangelism Officer"&&r.status!=="Converted to Church Plant"&&r.status!=="Closed"?`<button class="upgrade" data-convert-prospect="${r.id}">Convert to Church Plant</button>`:""}${current==="churches"&&me.role==="Admin"?`<button class="secondary" data-edit-church="${r.id}">Edit Church</button>`:""}${current==="circuits"&&me.role==="Admin"?`<button class="secondary" data-edit-circuit="${r.id}">Edit Circuit</button>`:""}${current==="members"?`<button class="secondary" data-edit-member="${r.id}">Edit Member</button><button class="upgrade" data-manage-offices="${r.id}">Manage Offices</button>`:""}<button class="delete" data-del="${r.id}">Delete</button></td>`:""}</tr>`).join("")}</tbody></table>`;document.querySelectorAll("[data-convert-prospect]").forEach(b=>b.onclick=async()=>{
 const row=list.find(x=>String(x.id)===String(b.dataset.convertProspect));
 if(!row)return;
 
@@ -1541,7 +1597,64 @@ setStatus("Planting prospect converted to church plant.");
 alert(e.message);
 }
 });
-document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(confirm("Delete this record? This cannot be undone.")){try{if(current==="users")await api(`/api/users/${b.dataset.del}`,{method:"DELETE"});else await api(`/api/${current}/${b.dataset.del}`,{method:"DELETE"});loadTable();loadDashboard()}catch(e){alert(e.message)}}});document.querySelectorAll("[data-edit-member]").forEach(b=>b.onclick=async()=>{
+document.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{if(confirm("Delete this record? This cannot be undone.")){try{if(current==="users")await api(`/api/users/${b.dataset.del}`,{method:"DELETE"});else await api(`/api/${current}/${b.dataset.del}`,{method:"DELETE"});loadTable();loadDashboard()}catch(e){alert(e.message)}}});
+document.querySelectorAll("[data-edit-circuit]").forEach(b=>b.onclick=async()=>{
+  if(me.role!=="Admin")return alert("Only an Administrator can edit circuits.");
+  const row=list.find(x=>String(x.id)===String(b.dataset.editCircuit));
+  if(!row)return;
+  try{
+    const all=await api("/api/circuits");
+    const circuit=all.find(x=>String(x.id)===String(row.id));
+    if(!circuit)throw new Error("Circuit not found.");
+    current="circuits";
+    await openForm();
+    const form=document.querySelector("#recordForm");
+    if(!form)return;
+    let marker=form.elements["__editing_circuit_id"];
+    if(!marker){
+      marker=document.createElement("input");
+      marker.type="hidden";
+      marker.name="__editing_circuit_id";
+      form.appendChild(marker);
+    }
+    marker.value=String(circuit.id);
+    ["name","status","notes"].forEach(k=>{
+      if(form.elements[k])form.elements[k].value=circuit[k]??"";
+    });
+    const title=document.querySelector("#formTitle");
+    if(title)title.textContent="Edit Circuit — "+circuit.name;
+    const submit=form.querySelector('[type="submit"]');
+    if(submit)submit.textContent="Save Circuit Changes";
+  }catch(err){alert("Unable to load circuit: "+err.message);}
+});
+document.querySelectorAll("[data-edit-church]").forEach(b=>b.onclick=async()=>{
+  const row=list.find(x=>String(x.id)===String(b.dataset.editChurch));
+  if(!row)return;
+  try{
+    const fresh=await api(`/api/churches/${row.id}`);
+    current="churches";
+    await openForm();
+    const form=document.querySelector("#recordForm");
+    if(!form)return;
+    let editMarker=form.elements["__editing_church_id"];
+    if(!editMarker){
+      editMarker=document.createElement("input");
+      editMarker.type="hidden";
+      editMarker.name="__editing_church_id";
+      form.appendChild(editMarker);
+    }
+    editMarker.value=String(fresh.id);
+    Object.keys(fresh).forEach(key=>{
+      if(key==="id")return;
+      const field=form.elements[key];
+      if(field&&fresh[key]!==undefined&&fresh[key]!==null)field.value=fresh[key];
+    });
+    const title=document.querySelector("#formTitle");
+    if(title)title.textContent="Edit Church — "+(fresh.church_name||"Local Church");
+    const submit=form.querySelector('[type="submit"]');
+    if(submit)submit.textContent="Save Church Changes";
+  }catch(err){alert("Unable to load church: "+err.message);}
+});document.querySelectorAll("[data-edit-member]").forEach(b=>b.onclick=async()=>{
   const row=list.find(x=>String(x.id)===String(b.dataset.editMember));
   if(!row)return;
 
@@ -1621,7 +1734,20 @@ document.querySelectorAll("[data-link-user]").forEach(b=>b.onclick=async()=>{
   }catch(e){alert(e.message)}
 });
 document.querySelectorAll("[data-toggle-user]").forEach(b=>b.onclick=async()=>{try{const d=await api(`/api/security/users/${b.dataset.toggleUser}/toggle`,{method:"POST"});setStatus(d.active?"User activated.":"User deactivated.");await loadTable()}catch(e){alert(e.message)}});document.querySelectorAll("[data-upgrade]").forEach(b=>b.onclick=async()=>{const row=list.find(x=>String(x.id)===String(b.dataset.upgrade));if(!row)return;let proposed=(row.church_name||"").trim()+" Circuit";let name=prompt("Enter the new circuit name for this church.\nExample: Enerhen Circuit",proposed);if(name===null)return;name=name.trim();if(!name)return alert("A circuit name is required.");if(!confirm(`Upgrade "${row.church_name}" to circuit headquarters and create "${name}"?`))return;try{const d=await api(`/api/churches/${row.id}/upgrade-to-circuit`,{method:"POST",body:JSON.stringify({circuit_name:name})});alert(`Success. ${row.church_name} is now the headquarters of ${d.circuit_name}.`);await loadTable();await loadDashboard()}catch(e){alert(e.message)}});document.querySelectorAll("[data-review]").forEach(b=>b.onclick=async()=>{const action=b.dataset.status;let note="";if(action==="Returned"){note=prompt("Reason for returning this report (optional):","");if(note===null)return}if(!confirm(action==="Approved"?"Approve this circuit report?":"Return this circuit report for correction?"))return;try{await api(`/api/circuit_reports/${b.dataset.review}/review`,{method:"POST",body:JSON.stringify({status:action,review_note:note})});await loadTable();setStatus(`Report ${action.toLowerCase()}.`)}catch(e){alert(e.message)}})}
-async function loadCircuits(){try{const data=await api("/api/circuits");const names=data.filter(x=>x.status!=="Inactive").map(x=>x.name);circuitOptions=["Diocesan",...names.filter(n=>n!=="Diocesan")];}catch(e){/* keep baseline options if circuits endpoint is unavailable */}}
+async function loadCircuits(){
+  const baseline = ["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"];
+  try {
+    const data = await api("/api/circuits");
+    const names = Array.isArray(data)
+      ? data.filter(x => x && x.status !== "Inactive")
+          .map(x => String(x.name || "").trim()).filter(Boolean)
+      : [];
+    const available = names.length ? names : baseline;
+    circuitOptions = ["Diocesan", ...available.filter(n => n !== "Diocesan")];
+  } catch (e) {
+    circuitOptions = ["Diocesan", ...baseline];
+  }
+}
  
 
 async function loadMemberRegistrations(){
@@ -2153,7 +2279,7 @@ $("#fields").innerHTML=
     let control;
 
     if(type==="select"){
-      let choices=key==="circuit"?circuitOptions:opts;
+      let choices=(current==="churches"&&key==="circuit")?["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"]:(key==="circuit"?circuitOptions:opts);
 
       if(current==="users"&&key==="member_id"){
         control=`<select name="member_id" required>
@@ -2280,8 +2406,25 @@ if(current==="members"){
 if(current==="users")setTimeout(applyUserAssignmentRules,0);$("#formTitle").textContent=current==="members"?"Add Church Member — Member ID is automatic":"Add "+labels[current].toLowerCase().replace(/s$/ ,"");$("#formWrap").hidden=false;$("#formWrap").scrollIntoView({behavior:"smooth",block:"start"})}
 $("#commandRefreshBtn")?.addEventListener("click",loadCommandCentre);$("#healthRefreshBtn")?.addEventListener("click",async()=>{setStatus("Checking system health…");const b=$("#healthRefreshBtn");if(b){b.disabled=true;b.textContent="Checking…"}try{await loadSystemHealth();setStatus("System health check completed.")}finally{if(b){b.disabled=false;b.textContent="Run Check Again"}}});$("#qualityCheckBtn")?.addEventListener("click",loadDataQuality);$("#qualityDetailsBtn")?.addEventListener("click",loadQualityDetails);$("#qualityCleanupBtn")?.addEventListener("click",async()=>{if(me.role!=="Admin")return alert("Only an Administrator can run safe cleanup.");if(!confirm("Run safe cleanup? It only trims whitespace and fills a missing member circuit when the church-to-circuit match is unambiguous. Ambiguous records will not be changed."))return;try{const d=await api("/api/system/data-quality/safe-cleanup",{method:"POST"});alert(`${d.message} ${d.total_updated} field(s)/record updates made.`);await loadDataQuality();await loadQualityDetails();}catch(e){alert(e.message)}});$("#workflowCheckBtn")?.addEventListener("click",loadWorkflowCheck);$("#securityRefreshBtn")?.addEventListener("click",loadSecurityCentre);$("#securityBackupBtn")?.addEventListener("click",async()=>{try{const d=await api("/api/security/backup",{method:"POST"});alert(`Backup created: ${d.filename}`);loadSecurityCentre()}catch(e){alert(e.message)}});$("#runReportBtn")?.addEventListener("click",loadReports);$("#reportPrintBtn")?.addEventListener("click",()=>window.print());$("#addBtn").onclick=openForm;$("#cancelBtn").onclick=()=>$("#formWrap").hidden=true;
 $("#recordForm").onsubmit=async e=>{e.preventDefault();const data={};new FormData(e.target).forEach((v,k)=>{const f=schemas[current].find(x=>x[0]===k);data[k]=f&&["number"].includes(f[2])?(v===""?0:Number(v)):v});if(current==="users"){const diocesanRoles=["Admin","Bishop / Diocesan Executive","Evangelism Minister","Planting Officer","Diocesan Secretary","Finance Officer","Auditor"];if(diocesanRoles.includes(data.role)){data.circuit="";data.church_name="";}else if(data.role==="Circuit Coordinator"){data.church_name="";}}try{
-  const form=e.target;const editingMemberId=form.elements["__editing_member_id"]?.value||"";
-  if(current==="members" && editingMemberId){
+  const form=e.target;const editingChurchId=form.elements["__editing_church_id"]?.value||"";const editingCircuitId=form.elements["__editing_circuit_id"]?.value||"";const editingMemberId=form.elements["__editing_member_id"]?.value||"";
+  if(current==="circuits" && editingCircuitId){
+            if(me.role!=="Admin")throw new Error("Only an Administrator can edit circuits.");
+            delete data.__editing_circuit_id;
+            await api(`/api/circuits/${editingCircuitId}`,{method:"PUT",body:JSON.stringify(data)});
+            form.elements["__editing_circuit_id"].remove();
+            e.target.reset();
+            $("#formWrap").hidden=true;
+            await loadTable();
+            await loadDashboard();
+            setStatus("Circuit details updated successfully.");
+        }else if(current==="churches" && editingChurchId){
+        await api(`/api/churches/${editingChurchId}`,{method:"PUT",body:JSON.stringify(data)});
+        form.elements["__editing_church_id"].remove();
+        e.target.reset();
+        $("#formWrap").hidden=true;
+        await loadTable();
+        setStatus("Church details updated successfully.");
+      }else if(current==="members" && editingMemberId){
     delete data.member_id;
     delete data.created_at;
     await api(`/api/members/${editingMemberId}`,{method:"PUT",body:JSON.stringify(data)});
@@ -2844,7 +2987,7 @@ async function loadPaymentManagement(){
         <td>${money(p.amount||0)}</td>
         <td><span class="status-badge ${esc(status)}">${esc(p.status||"")}</span></td>
         <td>${esc(p.gateway||"")}</td>
-        <td><button type="button" class="secondary payment-details-btn" data-reference="${esc(p.reference||"")}">View</button></td>
+        <td><button type="button" class="secondary payment-details-btn" data-reference="${esc(p.reference||"")}">View</button> ${["Admin","Finance Officer"].includes(me?.role) && status==="pending" ? `<button type="button" class="primary confirm-payment-received-btn" data-reference="${esc(p.reference||"")}">Confirm Funds Received</button>` : ""}</td>
       </tr>`;
     }).join("");
 
@@ -3013,7 +3156,49 @@ async function viewPaymentDetails(reference){
   }
 }
 
-document.addEventListener("click",function(e){
+document.addEventListener("click",async function(e){
+  const receivedBtn=e.target.closest(".confirm-payment-received-btn");
+  if(receivedBtn){
+    e.preventDefault();
+    const reference=receivedBtn.dataset.reference||"";
+    if(!reference)return;
+    const note=prompt("Confirm that the money has appeared in the selected church bank account. Enter the bank statement narration, deposit date, or other confirmation details:");
+    if(note===null)return;
+    if(note.trim().length<8){
+      alert("Please enter at least 8 characters describing how the bank credit was confirmed.");
+      return;
+    }
+    if(!confirm("FINAL CONFIRMATION\n\nYou are about to mark this payment as PAID and create/link its income record. Continue only after checking the actual church bank account.\n\nReference: "+reference+"\nConfirmation: "+note.trim()))return;
+    receivedBtn.disabled=true;
+    try{
+      const result=await api("/api/payment/"+encodeURIComponent(reference)+"/confirm-received",{
+        method:"POST",
+        body:JSON.stringify({confirmation_note:note.trim()})
+      });
+      alert("Funds confirmed and recorded successfully.\nReference: "+reference+"\nAmount: "+money(result.amount)+"\nConfirmed by: "+(result.confirmed_by||"Finance Office"));
+      loadPaymentManagement();
+      if(typeof loadPaymentReconciliation==="function")loadPaymentReconciliation();
+    }catch(err){
+      alert("Payment was not confirmed: "+err.message);
+      receivedBtn.disabled=false;
+    }
+    return;
+  }
+
+  const confirmBtn=e.target.closest(".confirm-bank-transfer-btn");
+  if(confirmBtn){
+    e.preventDefault();
+    const reference=confirmBtn.dataset.reference||"";
+    if(!reference || !confirm("Confirm that this bank transfer has actually been received in the church bank account?")) return;
+    confirmBtn.disabled=true;
+    try{
+      const result=await api("/api/payment/bank-transfer/"+encodeURIComponent(reference)+"/confirm",{method:"POST",body:"{}"});
+      alert("Bank transfer confirmed and recorded. Reference: "+reference+" | Amount: "+money(result.amount));
+      loadPaymentManagement();
+      if(typeof loadPaymentReconciliation==="function")loadPaymentReconciliation();
+    }catch(err){alert("Transfer was not confirmed: "+err.message);confirmBtn.disabled=false;}
+    return;
+  }
   const btn=e.target.closest(".payment-details-btn");
   if(!btn)return;
   e.preventDefault();
@@ -5393,3 +5578,83 @@ document.addEventListener("DOMContentLoaded", function () {
   `;
   document.head.appendChild(s);
 })();
+
+
+/* MCN DESKTOP MENU JAVASCRIPT FIX */
+(function () {
+  function installDesktopMenuFix() {
+    const nav = document.getElementById("nav");
+    const toggle = document.getElementById("menuToggle");
+    const panel = document.getElementById("menuPanel");
+    const wrapper = toggle ? toggle.closest(".nav-dropdown") : null;
+
+    if (!nav || !toggle || !panel || !wrapper) return;
+    if (window.innerWidth <= 700) return;
+
+    toggle.style.setProperty("display", "flex", "important");
+    toggle.style.setProperty("visibility", "visible", "important");
+    toggle.style.setProperty("opacity", "1", "important");
+
+    wrapper.style.setProperty("display", "block", "important");
+    wrapper.style.setProperty("position", "relative", "important");
+    wrapper.style.setProperty("width", "min(360px, 100%)", "important");
+    wrapper.style.setProperty("overflow", "visible", "important");
+
+    panel.style.setProperty("position", "absolute", "important");
+    panel.style.setProperty("top", "calc(100% + 6px)", "important");
+    panel.style.setProperty("left", "0", "important");
+    panel.style.setProperty("right", "auto", "important");
+    panel.style.setProperty("width", "min(360px, calc(100vw - 32px))", "important");
+    panel.style.setProperty("max-height", "70vh", "important");
+    panel.style.setProperty("overflow-y", "auto", "important");
+    panel.style.setProperty("z-index", "10000", "important");
+
+    if (toggle.dataset.desktopMenuFix === "1") return;
+    toggle.dataset.desktopMenuFix = "1";
+
+    /* Replace the original handler's toggle behaviour with one
+       consistent open/close action. */
+    toggle.addEventListener("click", function (event) {
+      if (window.innerWidth <= 700) return;
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      const opening = !panel.classList.contains("open");
+      panel.classList.toggle("open", opening);
+      panel.style.setProperty(
+        "display",
+        opening ? "flex" : "none",
+        "important"
+      );
+
+      if (opening) {
+        panel.style.setProperty("flex-direction", "column", "important");
+      }
+
+      toggle.setAttribute("aria-expanded", String(opening));
+    }, true);
+
+    document.addEventListener("click", function (event) {
+      if (
+        window.innerWidth > 700 &&
+        !wrapper.contains(event.target)
+      ) {
+        panel.classList.remove("open");
+        panel.style.setProperty("display", "none", "important");
+        toggle.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", installDesktopMenuFix);
+  } else {
+    installDesktopMenuFix();
+  }
+
+  window.addEventListener("resize", function () {
+    if (window.innerWidth > 700) installDesktopMenuFix();
+  });
+})();
+/* END MCN DESKTOP MENU JAVASCRIPT FIX */

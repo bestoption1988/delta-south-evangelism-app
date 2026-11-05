@@ -1,5 +1,15 @@
 import time
+import re
 import os, sqlite3, json, io, socket, secrets, shutil, hashlib
+from pathlib import Path
+from dotenv import load_dotenv as _load_dotenv
+_load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
+
+import urllib.request, urllib.error
+
+# Import S3 dependencies at worker startup so uploads do not pay a cold-import penalty.
+import boto3
+from botocore.config import Config as BotoConfig
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, request, jsonify, render_template, send_file, g, Response, session, redirect, url_for
@@ -8,8 +18,40 @@ from openpyxl import load_workbook, Workbook
 import qrcode
 from qrcode.image.svg import SvgPathImage
 from werkzeug.security import generate_password_hash, check_password_hash
+from database_connection import connect_database, database_backend
 
-LEADERSHIP_TITLES = ['Prelate', 'Archbishop', 'Bishop, Delta South Diocese', 'Evangelism Minister', 'Lay President', 'Men Fellowship President', 'Women Fellowship President', 'Youth Fellowship President']
+def database_error_types():
+    """Return database exception classes supported by the selected backend."""
+    errors = [sqlite3.Error, sqlite3.IntegrityError]
+
+    if database_backend() == "postgres":
+        try:
+            import pg8000.dbapi
+            errors.extend([
+                pg8000.dbapi.DatabaseError,
+                pg8000.dbapi.IntegrityError,
+            ])
+        except (ImportError, AttributeError):
+            pass
+
+    return tuple(dict.fromkeys(errors))
+
+
+def database_integrity_error_types():
+    """Return integrity-constraint exception classes for the selected backend."""
+    errors = [sqlite3.IntegrityError]
+
+    if database_backend() == "postgres":
+        try:
+            import pg8000.dbapi
+            errors.append(pg8000.dbapi.IntegrityError)
+        except (ImportError, AttributeError):
+            pass
+
+    return tuple(dict.fromkeys(errors))
+
+
+LEADERSHIP_TITLES = ['Prelate', 'Archbishop', 'Bishop', 'Synod Secretary', 'Minister of Evangelism', 'Lay President', 'Evangelism Coordinator', 'Men Fellowship President', 'Women Fellowship President', 'Youth Fellowship President']
 
 APP_VERSION = "19.2.1"
 APP_STAGE = "Stage 19.2.1 - API /api/me and Table Map Stability"
@@ -83,8 +125,8 @@ def validate_user_assignment(role, circuit, church_name):
             """
             SELECT 1
             FROM churches
-            WHERE circuit COLLATE NOCASE = ?
-              AND church_name COLLATE NOCASE = ?
+            WHERE LOWER(circuit) = LOWER(?)
+              AND LOWER(church_name) = LOWER(?)
             LIMIT 1
             """,
             (circuit, church_name)
@@ -109,9 +151,7 @@ ALL_TABLES = {"churches", "commitments", "income", "expenses", "equipment", "tru
 
 def db():
     if "db" not in g:
-        g.db = sqlite3.connect(DB_PATH)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA foreign_keys=ON")
+        g.db = connect_database(DB_PATH)
     return g.db
 
 
@@ -122,13 +162,96 @@ def close_db(exc):
         conn.close()
 
 
+def table_column_names(conn, table):
+    """Return column names for SQLite or the selected PostgreSQL schema."""
+    if not isinstance(table, str) or not table.replace("_", "").isalnum():
+        raise ValueError("Invalid table name")
+
+    if database_backend() == "postgres":
+        from postgres_adapter import postgres_table_columns, postgres_config
+        schema = postgres_config().get("startup_params", {}).get(
+            "search_path", {}
+        )
+        if isinstance(schema, dict):
+            schema = schema.get("search_path", "public")
+        if not isinstance(schema, str):
+            schema = "public"
+        return set(postgres_table_columns(conn, schema, table))
+
+    return {
+        row[1]
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+
+
 def ensure_column(conn, table, column, definition):
-    cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    """Add a missing column using the selected database backend."""
+    cols = table_column_names(conn, table)
     if column not in cols:
-        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        conn.execute(
+            f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+        )
 
 
 def init_db():
+    # Persistent Member Care presence and typing tables for SQLite.
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS customer_care_presence (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT NOT NULL DEFAULT '',
+            role TEXT NOT NULL DEFAULT '',
+            last_seen TEXT NOT NULL DEFAULT ''
+        )
+    """)
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS customer_care_typing (
+            thread_id TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            username TEXT NOT NULL DEFAULT '',
+            role TEXT NOT NULL DEFAULT '',
+            last_seen TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (thread_id, user_id)
+        )
+    """)
+    db().execute("""
+        CREATE INDEX IF NOT EXISTS idx_customer_care_presence_last_seen
+        ON customer_care_presence (last_seen)
+    """)
+    db().execute("""
+        CREATE INDEX IF NOT EXISTS idx_customer_care_typing_last_seen
+        ON customer_care_typing (last_seen)
+    """)
+
+    # Public Methodist Devotional & Worship Centre catalogue and import progress.
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS devotional_resources (
+            resource_id TEXT PRIMARY KEY,
+            collection TEXT NOT NULL,
+            item_number TEXT DEFAULT '',
+            title TEXT NOT NULL DEFAULT '',
+            content_json TEXT NOT NULL DEFAULT '{}',
+            search_text TEXT NOT NULL DEFAULT '',
+            audio_path TEXT DEFAULT '',
+            author_path TEXT DEFAULT '',
+            published INTEGER NOT NULL DEFAULT 1,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    db().execute("CREATE INDEX IF NOT EXISTS idx_devotional_resources_collection ON devotional_resources(collection, published)")
+    db().execute("""
+        CREATE TABLE IF NOT EXISTS devotional_import_jobs (
+            job_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL DEFAULT 'queued',
+            progress INTEGER NOT NULL DEFAULT 0,
+            message TEXT DEFAULT '',
+            imported_records INTEGER NOT NULL DEFAULT 0,
+            uploaded_assets INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    ensure_column(db(), "devotional_import_jobs", "storage_path", "TEXT DEFAULT ''")
+    ensure_column(db(), "devotional_import_jobs", "package_size", "BIGINT DEFAULT 0")
     db().execute("CREATE TABLE IF NOT EXISTS prayer_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, full_name TEXT NOT NULL, phone TEXT DEFAULT '', email TEXT DEFAULT '', request_text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'New', created_at TEXT DEFAULT CURRENT_TIMESTAMP)")
     db().commit()
 
@@ -158,6 +281,87 @@ def init_db():
                    SELECT 1 FROM leadership_profiles WHERE title=?
                )""",
             (title, position, title)
+        )
+    db().commit()
+
+    # Keep leadership cards in the official diocesan order.
+    for position, title in enumerate(LEADERSHIP_TITLES, 1):
+        db().execute(
+            "UPDATE leadership_profiles SET display_order=? WHERE title=?",
+            (position, title)
+        )
+    bundled_photos = {
+        "Prelate": "uploads/leadership/prelate.jpg",
+        "Archbishop": "uploads/leadership/archbishop.jpg",
+        "Bishop": "uploads/leadership/bishop.jpg",
+        "Synod Secretary": "uploads/leadership/synod-secretary.jpg",
+        "Minister of Evangelism": "uploads/leadership/minister-of-evangelism.jpg",
+        "Lay President": "uploads/leadership/lay-president.jpg",
+        "Evangelism Coordinator": "uploads/leadership/evangelism-coordinator.jpg",
+        "Men Fellowship President": "uploads/leadership/men-fellowship-president.jpg",
+        "Women Fellowship President": "uploads/leadership/women-fellowship-president.jpg",
+        "Youth Fellowship President": "uploads/leadership/youth-fellowship-president.jpg",
+    }
+    for title, photo_path in bundled_photos.items():
+        db().execute(
+            "UPDATE leadership_profiles SET photo_path=? WHERE title=?",
+            (photo_path, title)
+        )
+    db().commit()
+
+    # Populate confirmed leadership details without overwriting
+    # names already entered through the administration interface.
+    public_leadership = {
+        "Prelate": (
+            "His Eminence, Dr. Oliver Ali Aba (JP)",
+            "Prelate of the Methodist Church Nigeria."
+        ),
+        "Archbishop": (
+            "The Most Revd Samuel Nortey",
+            "Archbishop of the Edo-Delta Archdiocese."
+        ),
+        "Bishop": (
+            "The Right Revd Dr. Nosa O. Nosayaba",
+            "Bishop of the Delta South Diocese."
+        ),
+        "Synod Secretary": (
+            "The Very Rev FearGod Chibueze",
+            "Serving as Synod Secretary of the Delta South Diocese."
+        ),
+        "Minister of Evangelism": (
+            "The Revd Christopher Ighoevwogue",
+            "Serving as Minister of Evangelism of the Delta South Diocese."
+        ),
+        "Lay President": (
+            "Sir Engr. Maduabuchi Orji",
+            "Serving as Lay President of the Delta South Diocese."
+        ),
+        "Evangelism Coordinator": (
+            "Sir Engr. Nicolas Akpotowho",
+            "Serving as Evangelism Coordinator of the Delta South Diocese."
+        ),
+        "Men Fellowship President": (
+            "Bro. Stephen Agbai JP",
+            "President of the Men Fellowship."
+        ),
+        "Women Fellowship President": (
+            "Dame Pastor Glory Udauk Nosayaba",
+            "President of the Women Fellowship."
+        ),
+        "Youth Fellowship President": (
+            "To Be Announced",
+            "The Youth Fellowship leadership name will be announced when confirmed."
+        ),
+    }
+
+    for title, (full_name, biography) in public_leadership.items():
+        db().execute(
+            """UPDATE leadership_profiles
+               SET full_name=?, biography=?
+               WHERE title=?
+                 AND (full_name IS NULL OR TRIM(full_name)=''
+                      OR full_name='Profile coming soon')""",
+            (full_name, biography, title)
         )
     db().commit()
 
@@ -330,6 +534,8 @@ def init_db():
     CREATE TABLE IF NOT EXISTS churches(
       id INTEGER PRIMARY KEY AUTOINCREMENT, circuit TEXT NOT NULL, church_name TEXT NOT NULL,
       annual_target REAL DEFAULT 100000, contact_person TEXT DEFAULT '', phone TEXT DEFAULT '',
+      address TEXT DEFAULT '', town TEXT DEFAULT '', state TEXT DEFAULT 'Delta State',
+      maps_url TEXT DEFAULT '',
       notes TEXT DEFAULT '', church_status TEXT DEFAULT 'Local Church',
       is_circuit_headquarters INTEGER DEFAULT 0, upgraded_at TEXT DEFAULT '',
       UNIQUE(circuit, church_name));
@@ -616,6 +822,34 @@ def init_db():
       filename TEXT NOT NULL, size_bytes INTEGER DEFAULT 0, sha256 TEXT DEFAULT '',
       backup_type TEXT DEFAULT 'Manual', status TEXT DEFAULT 'Ready');
     """)
+    # One-time v2 repair: restore original samples even if another announcement
+    # existed during the first seed attempt. Deleted samples will not return.
+    seed_marker_v2 = conn.execute(
+        "SELECT content_value FROM homepage_content WHERE content_key=?",
+        ("sample_announcements_seeded_v2",)
+    ).fetchone()
+    if not seed_marker_v2:
+        sample_announcements = [
+            ("Diocesan Harvest Thanksgiving", "Join the Diocese in thanksgiving and praise.", "2026-10-10", "", 1, 1),
+            ("Evangelism Outreach Programme", "Join us in reaching communities across our circuits.", "2026-10-08", "", 2, 1),
+            ("Workers" + chr(39) + " Meeting", "Ministers, stewards and workers are encouraged to participate.", "2026-10-05", "", 3, 1),
+            ("New Member Registration", "Begin your membership registration online.", "2026-10-01", "", 4, 1),
+        ]
+        for sample in sample_announcements:
+            already_exists = conn.execute(
+                "SELECT 1 FROM homepage_events WHERE title=? LIMIT 1",
+                (sample[0],)
+            ).fetchone()
+            if not already_exists:
+                conn.execute(
+                    "INSERT INTO homepage_events (title,description,event_date,venue,display_order,published) VALUES (?,?,?,?,?,?)",
+                    sample
+                )
+        conn.execute(
+            "INSERT OR IGNORE INTO homepage_content (content_key,content_value) VALUES (?,?)",
+            ("sample_announcements_seeded_v2", "1")
+        )
+        conn.commit()
     # Safe migration for databases created by earlier builds.
     # The app may be upgraded while retaining an existing evangelism.db, so
     # every column introduced by the membership/testimony modules must be
@@ -724,6 +958,10 @@ def init_db():
     }
     for col, definition in mission_contact_migrations.items():
         ensure_column(conn, "mission_contacts", col, definition)
+    ensure_column(conn, "churches", "address", "TEXT DEFAULT ''")
+    ensure_column(conn, "churches", "town", "TEXT DEFAULT ''")
+    ensure_column(conn, "churches", "state", "TEXT DEFAULT 'Delta State'")
+    ensure_column(conn, "churches", "maps_url", "TEXT DEFAULT ''")
     ensure_column(conn, "churches", "church_status", "TEXT DEFAULT 'Local Church'")
     ensure_column(conn, "churches", "is_circuit_headquarters", "INTEGER DEFAULT 0")
     ensure_column(conn, "churches", "upgraded_at", "TEXT DEFAULT ''")
@@ -845,7 +1083,8 @@ def ensure_runtime_schema():
     """)
     migrations = {
       'income': {
-        'church_account_id': 'INTEGER DEFAULT NULL'
+        'church_account_id': 'INTEGER DEFAULT NULL',
+        'member_id': 'INTEGER DEFAULT NULL'
       },
       'expenses': {
         'church_name': "TEXT DEFAULT ''"
@@ -873,7 +1112,12 @@ def ensure_runtime_schema():
         'category': "TEXT DEFAULT 'General Assistance'",
         'priority': "TEXT DEFAULT 'Normal'",
         'resolution_note': "TEXT DEFAULT ''",
-        'resolved_at': "TEXT DEFAULT ''"
+        'resolved_at': "TEXT DEFAULT ''",
+        'guest_token_hash': "TEXT DEFAULT ''",
+        'guest_circuit': "TEXT DEFAULT ''",
+        'guest_church': "TEXT DEFAULT ''",
+        'care_mode': "TEXT DEFAULT 'member'",
+        'address': "TEXT DEFAULT ''"
       }
     }
     for table, cols in migrations.items():
@@ -942,7 +1186,7 @@ def login_required(fn):
         u = current_user()
         if not u or not u["active"]:
             return jsonify({"error": "Authentication required"}), 401
-        if u["must_change_password"] and request.endpoint not in {"member_change_password", "api_change_password", "logout"}:
+        if u["must_change_password"] and request.endpoint not in {"member_change_password", "api_change_password", "api_me", "logout"}:
             return jsonify({"error": "Password change required", "code": "PASSWORD_CHANGE_REQUIRED"}), 403
         return fn(*args, **kwargs)
     return wrapper
@@ -1665,7 +1909,7 @@ def page_login_required(fn):
 
 @app.before_request
 def protect_app():
-    public = {"public_home", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public"}
+    public = {"public_home", "privacy_policy", "account_deletion", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "media_document_view", "media_document_download", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai", "fellowship_directory", "fellowship_public_home", "devotional_centre_home", "devotional_yearly_lectionary", "devotional_centre_collection", "devotional_centre_item", "devotional_holy_bible", "devotional_holy_bible_books", "devotional_holy_bible_chapter", "devotional_bible_reader"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if is_setup_needed():
@@ -2031,6 +2275,112 @@ def member_dashboard():
 
 
 
+
+_LEADERSHIP_BUCKET = "leadership-photos"
+
+
+def _leadership_storage_credentials():
+    import os
+    base = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+    key = (os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
+    if not base or not key:
+        raise RuntimeError(
+            "Supabase Storage is not configured. Check SUPABASE_URL "
+            "and SUPABASE_SECRET_KEY in the hosting environment."
+        )
+    return base, key
+
+
+def _leadership_storage_upload(upload):
+    import requests
+    from urllib.parse import quote
+    import mimetypes
+    import secrets
+
+    allowed = {
+        "png": "image/png",
+        "jpg": "image/jpeg",
+        "jpeg": "image/jpeg",
+        "webp": "image/webp",
+    }
+    ext = (upload.filename or "").rsplit(".", 1)[-1].lower()
+    if ext not in allowed:
+        raise ValueError("Use PNG, JPG, JPEG or WEBP.")
+
+    base, key = _leadership_storage_credentials()
+    object_path = "profiles/" + secrets.token_hex(16) + "." + ext
+    url = (
+        f"{base}/storage/v1/object/{_LEADERSHIP_BUCKET}/"
+        f"{quote(object_path, safe='/')}"
+    )
+    response = requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
+            "Content-Type": allowed[ext],
+            "x-upsert": "false",
+        },
+        data=upload.stream,
+        timeout=60,
+    )
+    if response.status_code not in (200, 201):
+        app.logger.error(
+            "Leadership photo upload failed: HTTP %s",
+            response.status_code,
+        )
+        if response.status_code in (400, 404):
+            raise ValueError(
+                "Supabase could not accept the photo. Confirm that the "
+                "leadership-photos bucket exists and is public."
+            )
+        raise RuntimeError("Supabase photo upload failed.")
+
+    return (
+        f"{base}/storage/v1/object/public/{_LEADERSHIP_BUCKET}/"
+        f"{quote(object_path, safe='/')}"
+    )
+
+
+def _leadership_storage_delete(photo_url):
+    """Delete only objects belonging to this app's dedicated photo bucket."""
+    import os
+    from urllib.parse import urlparse, unquote
+    import requests
+
+    if not photo_url or not isinstance(photo_url, str):
+        return False
+
+    try:
+        base, key = _leadership_storage_credentials()
+        photo = urlparse(photo_url)
+        expected = urlparse(base)
+
+        # Never delete arbitrary URLs or files from other Supabase buckets.
+        prefix = f"/storage/v1/object/public/{_LEADERSHIP_BUCKET}/"
+        if (
+            photo.scheme != "https"
+            or photo.netloc != expected.netloc
+            or not photo.path.startswith(prefix)
+        ):
+            return False
+
+        object_path = unquote(photo.path[len(prefix):])
+        if not object_path.startswith("profiles/") or ".." in object_path.split("/"):
+            return False
+
+        response = requests.delete(
+            f"{base}/storage/v1/object/{_LEADERSHIP_BUCKET}/"
+            f"{__import__('urllib.parse', fromlist=['quote']).quote(object_path, safe='/')}",
+            headers={"Authorization": f"Bearer {key}", "apikey": key},
+            timeout=30,
+        )
+        return response.status_code in (200, 204)
+    except Exception:
+        app.logger.exception("Could not delete leadership photo from storage")
+        return False
+
+
 @app.route("/admin/leadership", methods=["GET", "POST"])
 @page_login_required
 def admin_leadership():
@@ -2040,16 +2390,56 @@ def admin_leadership():
 
     message = ""
     error = ""
+
     if request.method == "POST":
+        uploaded_photo_url = None
+        old_photo_url = None
+        profile_commit_succeeded = False
         try:
             action = request.form.get("action", "save")
-            if action == "delete":
+            pid = request.form.get("id", type=int)
+
+            if action == "delete_permanently":
+                if not pid:
+                    raise ValueError("Select a valid leadership profile.")
+
+                row = db().execute(
+                    "SELECT photo_path FROM leadership_profiles WHERE id=?",
+                    (pid,),
+                ).fetchone()
+                if not row:
+                    raise ValueError("The leadership profile was not found.")
+
+                old_photo_url = row["photo_path"] or ""
+                db().execute(
+                    "DELETE FROM leadership_profiles WHERE id=?",
+                    (pid,),
+                )
+                db().commit()
+
+                photo_removed = True
+                if old_photo_url.startswith("https://"):
+                    photo_removed = _leadership_storage_delete(old_photo_url)
+
+                if old_photo_url.startswith("https://") and not photo_removed:
+                    message = (
+                        "Profile deleted from the database, but its photo "
+                        "could not be removed from Supabase Storage. "
+                        "Check the server logs."
+                    )
+                else:
+                    message = "Leadership profile permanently deleted."
+
+            elif action == "delete":
+                if not pid:
+                    raise ValueError("Select a valid leadership profile.")
                 db().execute(
                     "UPDATE leadership_profiles SET active=0 WHERE id=?",
-                    (request.form.get("id", type=int),)
+                    (pid,),
                 )
                 db().commit()
                 message = "Profile hidden."
+
             elif action == "logo":
                 f = request.files.get("logo")
                 if not f or not f.filename:
@@ -2061,65 +2451,121 @@ def admin_leadership():
                 os.makedirs(folder, exist_ok=True)
                 f.save(os.path.join(folder, "mcn-logo.png"))
                 message = "Logo uploaded."
+
             else:
                 title = request.form.get("title", "").strip()
                 name = request.form.get("full_name", "").strip()
                 bio = request.form.get("biography", "").strip()
                 order = request.form.get("display_order", type=int) or 1
                 active = int(request.form.get("active") == "1")
-                if title not in LEADERSHIP_TITLES:
-                    raise ValueError("Choose a valid leadership position.")
+
+                if not title:
+                    raise ValueError("Enter or select a leadership position.")
+                if len(title) > 160:
+                    raise ValueError("Leadership position must not exceed 160 characters.")
                 if len(name) > 160 or len(bio) > 2500:
                     raise ValueError("Name or biography is too long.")
 
-                photo_path = None
                 f = request.files.get("photo")
                 if f and f.filename:
-                    ext = f.filename.rsplit(".", 1)[-1].lower()
-                    if ext not in {"png", "jpg", "jpeg", "webp"}:
-                        raise ValueError("Use PNG, JPG, JPEG or WEBP.")
-                    folder = os.path.join(ROOT, "static", "uploads", "leadership")
-                    os.makedirs(folder, exist_ok=True)
-                    filename = secrets.token_hex(8) + "." + ext
-                    f.save(os.path.join(folder, filename))
-                    photo_path = "uploads/leadership/" + filename
+                    uploaded_photo_url = _leadership_storage_upload(f)
 
-                pid = request.form.get("id", type=int)
                 if pid:
-                    db().execute(
-                        """UPDATE leadership_profiles SET title=?,full_name=?,
-                           biography=?,display_order=?,active=?,updated_at=CURRENT_TIMESTAMP,
-                           updated_by=? WHERE id=?""",
-                        (title,name,bio,order,active,user["id"],pid)
-                    )
-                    if photo_path:
+                    existing = db().execute(
+                        "SELECT photo_path FROM leadership_profiles WHERE id=?",
+                        (pid,),
+                    ).fetchone()
+                    if not existing:
+                        raise ValueError("The leadership profile was not found.")
+
+                    old_photo_url = existing["photo_path"] or ""
+                    if uploaded_photo_url:
                         db().execute(
-                            "UPDATE leadership_profiles SET photo_path=? WHERE id=?",
-                            (photo_path,pid)
+                            """UPDATE leadership_profiles
+                               SET title=?, full_name=?, biography=?, photo_path=?,
+                                   display_order=?, active=?,
+                                   updated_at=CURRENT_TIMESTAMP, updated_by=?
+                               WHERE id=?""",
+                            (
+                                title, name, bio, uploaded_photo_url,
+                                order, active, user["id"], pid,
+                            ),
                         )
+                    else:
+                        db().execute(
+                            """UPDATE leadership_profiles
+                               SET title=?, full_name=?, biography=?,
+                                   display_order=?, active=?,
+                                   updated_at=CURRENT_TIMESTAMP, updated_by=?
+                               WHERE id=?""",
+                            (title, name, bio, order, active, user["id"], pid),
+                        )
+                    db().commit()
+                    profile_commit_succeeded = True
                     message = "Profile updated."
                 else:
                     db().execute(
                         """INSERT INTO leadership_profiles
-                           (title,full_name,biography,photo_path,display_order,active,updated_by)
-                           VALUES (?,?,?,?,?,?,?)""",
-                        (title,name,bio,photo_path or "",order,active,user["id"])
+                           (title, full_name, biography, photo_path,
+                            display_order, active, updated_by)
+                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                        (
+                            title, name, bio, uploaded_photo_url or "",
+                            order, active, user["id"],
+                        ),
                     )
+                    db().commit()
+                    profile_commit_succeeded = True
                     message = "Profile added."
-                db().commit()
-        except ValueError as e:
-            error = str(e)
+
+                # Clean up the old image only after the database commit succeeds.
+                if (
+                    uploaded_photo_url
+                    and old_photo_url
+                    and old_photo_url != uploaded_photo_url
+                    and old_photo_url.startswith("https://")
+                ):
+                    _leadership_storage_delete(old_photo_url)
+
+        except ValueError as exc:
+            try:
+                db().rollback()
+            except Exception:
+                pass
+
+            if uploaded_photo_url and not profile_commit_succeeded:
+                if not _leadership_storage_delete(uploaded_photo_url):
+                    app.logger.warning(
+                        "Could not clean up an uploaded leadership photo "
+                        "after a failed save."
+                    )
+            error = str(exc)
         except Exception:
-            db().rollback()
+            try:
+                db().rollback()
+            except Exception:
+                pass
+
+            if uploaded_photo_url and not profile_commit_succeeded:
+                if not _leadership_storage_delete(uploaded_photo_url):
+                    app.logger.warning(
+                        "Could not clean up an uploaded leadership photo "
+                        "after a failed save."
+                    )
+
             app.logger.exception("Leadership update failed")
-            error = "Unable to save changes."
+            error = "Unable to save changes. Check the server logs and Supabase Storage configuration."
 
     profiles = db().execute(
-        "SELECT * FROM leadership_profiles ORDER BY display_order,title"
+        "SELECT * FROM leadership_profiles ORDER BY display_order, title"
     ).fetchall()
+
     return render_template(
-        "leadership_admin.html", profiles=profiles,
-        titles=LEADERSHIP_TITLES, message=message, error=error
+        "leadership_admin.html",
+        profiles=profiles,
+        titles=LEADERSHIP_TITLES,
+        message=message,
+        error=error,
     )
 
 
@@ -2185,6 +2631,21 @@ def admin_homepage_media():
                     )
                 db().commit()
                 message = "Content added successfully."
+            elif kind == "edit_event":
+                event_id = request.form.get("id", type=int)
+                title = request.form.get("title", "").strip()
+                description = request.form.get("description", "").strip()
+                date = request.form.get("event_date", "").strip()
+                venue = request.form.get("venue", "").strip()
+                if (not event_id or not title or len(title) > 250
+                        or len(description) > 3000 or len(venue) > 300):
+                    raise ValueError("Enter a valid announcement title, description and venue.")
+                db().execute(
+                    "UPDATE homepage_events SET title=?,description=?,event_date=?,venue=? WHERE id=?",
+                    (title, description, date, venue, event_id)
+                )
+                db().commit()
+                message = "Announcement updated successfully."
             elif kind in ("toggle_sermon", "toggle_event"):
                 table = "homepage_sermons" if kind == "toggle_sermon" else "homepage_events"
                 db().execute(
@@ -2216,12 +2677,24 @@ def admin_homepage_media():
         "SELECT * FROM homepage_sermons ORDER BY display_order,id DESC"
     ).fetchall()
     events = db().execute(
-        "SELECT * FROM homepage_events ORDER BY event_date,id DESC"
+        "SELECT * FROM homepage_events ORDER BY event_date DESC,id DESC"
     ).fetchall()
     return render_template(
         "homepage_media_admin.html", sermons=sermons, events=events,
         message=message, error=error
     )
+
+
+@app.get("/privacy-policy")
+def privacy_policy():
+    """Public privacy notice for the MCN Delta South app and its web services."""
+    return render_template("privacy_policy.html")
+
+
+@app.get("/account-deletion")
+def account_deletion():
+    """Public account/data deletion request instructions."""
+    return render_template("account_deletion.html")
 
 
 @app.route("/prayer-request", methods=["GET", "POST"])
@@ -2275,36 +2748,276 @@ def public_giving_page():
 
 @app.get("/live")
 def live_worship_page():
-    """Public diocesan live worship player."""
+    """Public diocesan live worship player with published news ticker."""
     stream_hls_url = os.environ.get("STREAM_HLS_URL", "").strip()
+    latest_news = []
+    try:
+        latest_news = db().execute(
+            """SELECT title, description, event_date, venue
+               FROM homepage_events
+               WHERE published=1
+               ORDER BY event_date DESC, id DESC
+               LIMIT 12"""
+        ).fetchall()
+    except Exception:
+        app.logger.exception("Could not load published homepage events for live ticker")
+
     return render_template(
         "live_stream.html",
-        stream_hls_url=stream_hls_url
+        stream_hls_url=stream_hls_url,
+        latest_news=latest_news
     )
+
+
+def _daily_scripture_and_hymn():
+    # Load the supplied verse/hymn collection using Nigeria's calendar date.
+    source = Path(ROOT) / "data" / "scripture_hymns.json"
+    try:
+        with source.open("r", encoding="utf-8") as handle:
+            collection = json.load(handle)
+        verses = collection.get("verses") or []
+        hymns = collection.get("hymns") or []
+        try:
+            from zoneinfo import ZoneInfo
+            today = datetime.now(ZoneInfo("Africa/Lagos")).date()
+        except Exception:
+            today = datetime.now().date()
+        # Stable daily selection: all visitors see the same Scripture.
+        day_key = today.isoformat().encode("utf-8")
+        day_digest = hashlib.sha256(day_key).digest()
+
+        verse_index = (
+            int.from_bytes(day_digest[:8], "big") % len(verses)
+            if verses else 0
+        )
+        verse = verses[verse_index] if verses else {}
+
+        # Match the hymn to the main themes in the selected Scripture.
+        theme_keywords = {
+            "salvation": [
+                "salvation", "redeem", "redeemer", "saviour", "savior",
+                "saved", "eternal life", "cross", "blood of jesus",
+                "forgive", "forgiveness", "grace", "perish"
+            ],
+            "love": [
+                "love", "loved", "loving", "beloved", "compassion",
+                "kindness", "charity", "merciful", "mercy"
+            ],
+            "praise": [
+                "praise", "thanksgiving", "thankful", "thanks",
+                "worship", "glory", "hallelujah", "bless the lord",
+                "sing unto", "rejoice"
+            ],
+            "prayer": [
+                "pray", "prayer", "supplication", "intercede",
+                "hear my cry", "call upon"
+            ],
+            "evangelism": [
+                "preach", "proclaim", "gospel", "witness", "mission",
+                "spread the word", "all nations", "make disciples",
+                "tell the world"
+            ],
+            "holy_spirit": [
+                "holy spirit", "holy ghost", "comforter", "pentecost",
+                "anoint", "sanctify", "spirit of god"
+            ],
+            "faith": [
+                "faith", "believe", "believes", "believing", "trust",
+                "faithful", "depend upon"
+            ],
+            "hope": [
+                "hope", "resurrection", "heaven", "everlasting",
+                "eternal", "comfort", "promise"
+            ],
+            "guidance": [
+                "guide", "guidance", "way", "truth", "light",
+                "path", "shepherd", "word of god"
+            ],
+            "peace": [
+                "peace", "rest", "calm", "fear not", "still my soul",
+                "quietness"
+            ],
+            "repentance": [
+                "repent", "repentance", "confess", "cleanse",
+                "pardon", "forgive", "cleansing"
+            ],
+            "holiness": [
+                "holy", "holiness", "righteous", "purity", "pure",
+                "obedience", "sanctification"
+            ],
+            "service": [
+                "serve", "servant", "service", "labour", "work for god",
+                "disciples", "follow me"
+            ],
+            "provision": [
+                "provide", "provision", "provider", "supplies",
+                "supply", "needs", "daily bread", "bread",
+                "sustain", "sustains", "sustenance", "bountiful",
+                "abundance", "feed", "feeding", "care for",
+                "my shepherd", "want", "riches", "storehouse"
+            ],
+            "healing": [
+                "heal", "healing", "healer", "restore health",
+                "sick", "disease", "affliction", "wounded",
+                "broken heart", "physician"
+            ],
+            "protection": [
+                "protect", "protection", "defend", "deliver",
+                "deliverance", "refuge", "fortress", "shield",
+                "shelter", "safe", "safety", "keep me",
+                "guardian", "preserve"
+            ],
+            "strength": [
+                "strength", "strong", "mighty", "power",
+                "weary", "weak", "uphold", "renew my strength",
+                "courage", "victory"
+            ],
+            "wisdom": [
+                "wisdom", "understanding", "knowledge",
+                "teach me", "instruction", "discernment",
+                "counsel", "judgment"
+            ],
+            "creation": [
+                "creator", "creation", "created", "earth", "heavens",
+                "nature", "almighty god"
+            ],
+        }
+
+        scripture_text = (
+            str(verse.get("reference", "")) + " " +
+            str(verse.get("text", ""))
+        ).lower()
+
+        theme_scores = {}
+        for theme, keywords in theme_keywords.items():
+            score = sum(
+                1 for keyword in keywords
+                if keyword in scripture_text
+            )
+            if score:
+                theme_scores[theme] = score
+
+        # Use the strongest Scripture themes; if no keywords match,
+        # use the Scripture reference/text as a general matching basis.
+        if theme_scores:
+            highest_score = max(theme_scores.values())
+            selected_themes = {
+                theme for theme, score in theme_scores.items()
+                if score == highest_score
+            }
+        else:
+            selected_themes = set()
+
+        scored_hymns = []
+        for index, hymn_item in enumerate(hymns):
+            title = str(hymn_item.get("title", "")).lower()
+            lyrics = str(hymn_item.get("lyrics", "")).lower()
+            score = 0
+
+            for theme in selected_themes:
+                for keyword in theme_keywords[theme]:
+                    if keyword in title:
+                        score += 3
+                    elif keyword in lyrics:
+                        score += 1
+
+            if score:
+                scored_hymns.append((index, score))
+
+        # Select randomly but deterministically among the best matches.
+        if scored_hymns:
+            best_score = max(score for _, score in scored_hymns)
+            best_hymns = [
+                index for index, score in scored_hymns
+                if score == best_score
+            ]
+        else:
+            # Safe fallback if no hymn matches the detected themes.
+            best_hymns = list(range(len(hymns)))
+
+        if best_hymns:
+            hymn_choice = int.from_bytes(day_digest[8:16], "big")
+            hymn_index = best_hymns[hymn_choice % len(best_hymns)]
+            hymn = hymns[hymn_index]
+        else:
+            hymn = {}
+
+        # Reuse the tune already stored with the matching Devotional Centre hymn.
+        # The daily hymn JSON remains the source of the displayed lyrics.
+        if hymn:
+            try:
+                hymn_title = str(hymn.get("title") or "").strip()
+                hymn_number_match = re.search(r"(\d+)", hymn_title)
+                hymn_number = hymn_number_match.group(1) if hymn_number_match else ""
+                hymn_row = db().execute(
+                    """SELECT audio_path,content_json FROM devotional_resources
+                       WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+                         AND collection='english_hymns'
+                         AND (LOWER(title)=LOWER(?) OR item_number=?)
+                       ORDER BY CASE WHEN LOWER(title)=LOWER(?) THEN 0 ELSE 1 END
+                       LIMIT 1""",
+                    (hymn_title, hymn_number, hymn_title)
+                ).fetchone()
+                if hymn_row:
+                    hymn_resource = dict(hymn_row)
+                    hymn_payload = json.loads(hymn_resource.get("content_json") or "{}")
+                    hymn["audio_url"] = _dc_signed(
+                        hymn_resource.get("audio_path") or hymn_payload.get("musicFilePath")
+                    )
+                    hymn["audio_tune_name"] = (
+                        hymn_payload.get("musicTitle")
+                        or hymn_payload.get("tuneName")
+                        or hymn_payload.get("musicName")
+                        or hymn_payload.get("tune")
+                        or "Main tune"
+                    )
+                    hymn["other_tunes"] = []
+                    for tune in hymn_payload.get("otherTunes") or []:
+                        if isinstance(tune, dict) and tune.get("musicFilePath"):
+                            tune_copy = dict(tune)
+                            tune_copy["audio_url"] = _dc_signed(tune_copy.get("musicFilePath"))
+                            if tune_copy["audio_url"]:
+                                hymn["other_tunes"].append(tune_copy)
+            except Exception:
+                app.logger.exception("Could not attach the Devotional Centre hymn tune to the daily hymn")
+        return {"date": today.isoformat(), "verse": verse, "hymn": hymn}
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        app.logger.exception("Daily Scripture and Hymn collection could not be loaded")
+        return {"date": datetime.now().date().isoformat(), "verse": {}, "hymn": {}}
 
 
 @app.get("/")
 def public_home():
     """Public diocesan homepage; no login required."""
     profiles = db().execute(
-        "SELECT * FROM leadership_profiles WHERE active=1 ORDER BY display_order,title"
+        "SELECT * FROM leadership_profiles WHERE LOWER(CAST(active AS TEXT)) IN ('1','true','t') ORDER BY display_order,title"
     ).fetchall()
     rows = db().execute(
         "SELECT content_key, content_value FROM homepage_content"
     ).fetchall()
     homepage_content = {row["content_key"]: row["content_value"] for row in rows}
     sermons = db().execute(
-        "SELECT * FROM homepage_sermons WHERE published=1 ORDER BY display_order,id DESC"
+        "SELECT * FROM homepage_sermons WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t') ORDER BY display_order,id DESC"
     ).fetchall()
     events = db().execute(
-        "SELECT * FROM homepage_events WHERE published=1 ORDER BY event_date,id DESC"
+        "SELECT * FROM homepage_events WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t') ORDER BY event_date DESC,id DESC"
     ).fetchall()
     churches = db().execute(
-        "SELECT * FROM churches ORDER BY circuit,church_name"
+        """SELECT * FROM churches
+           ORDER BY CASE lower(trim(circuit))
+             WHEN 'effurun' THEN 1
+             WHEN 'warri' THEN 2
+             WHEN 'sapele' THEN 3
+             WHEN 'steel town' THEN 4
+             ELSE 99
+           END, church_name"""
     ).fetchall()
+
+    daily_devotion = _daily_scripture_and_hymn()
 
     # Published media comes from the persistent Supabase catalogue.
     homepage_media_items = []
+    homepage_gallery_items = []
     try:
         media_rows = _ml_supabase_request(
             "GET",
@@ -2326,6 +3039,141 @@ def public_home():
     except Exception:
         app.logger.exception("Homepage Supabase media preview could not be loaded")
 
+    # Keep published videos available for the public homepage, independent
+    # of how many newer images or documents are in the media catalogue.
+    homepage_video_items = []
+    try:
+        video_rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
+                "published": "eq.true",
+                "media_type": "eq.video",
+                "order": "created_at.desc",
+                "limit": "3",
+            },
+        )
+        homepage_video_items = []
+        for video_row in video_rows:
+            video_item = dict(video_row)
+            try:
+                video_item["signed_url"] = _ml_signed(video_item["storage_path"])
+            except Exception:
+                video_item["signed_url"] = ""
+                app.logger.warning("Could not prepare a published homepage video URL.")
+            homepage_video_items.append(video_item)
+    except Exception:
+        app.logger.exception("Homepage published videos could not be loaded")
+
+    # The public photo gallery includes the ten latest published images in the catalogue.
+    try:
+        gallery_rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
+                "published": "eq.true",
+                "order": "created_at.desc",
+                "limit": "10",
+            },
+        )
+        homepage_gallery_items = []
+        for gallery_row in gallery_rows:
+            if not str(gallery_row.get("mime_type") or "").lower().startswith("image/"):
+                continue
+            gallery_item = dict(gallery_row)
+            try:
+                gallery_item["signed_url"] = _ml_signed(gallery_item["storage_path"])
+            except Exception:
+                gallery_item["signed_url"] = ""
+                app.logger.warning("Could not prepare a published homepage gallery image URL.")
+            homepage_gallery_items.append(gallery_item)
+    except Exception:
+        app.logger.exception("Homepage photo gallery could not be loaded")
+
+
+    # Birthday celebrations use Nigeria's local calendar date.
+    birthday_celebration_members = []
+    try:
+        try:
+            from zoneinfo import ZoneInfo
+            birthday_today = datetime.now(ZoneInfo("Africa/Lagos")).date()
+        except Exception:
+            from datetime import timedelta
+            birthday_today = (
+                datetime.utcnow() + timedelta(hours=1)
+            ).date()
+
+        birthday_rows = db().execute("""
+            SELECT full_name, birthday, passport_photo, circuit, church_name
+            FROM members
+            WHERE birthday IS NOT NULL
+              AND TRIM(birthday) <> ''
+              AND (
+                  death IS NULL
+                  OR LOWER(TRIM(death)) NOT IN ('yes', 'true', '1', 'deceased')
+              )
+            ORDER BY full_name
+        """).fetchall()
+
+        for birthday_row in birthday_rows:
+            birthday_value = str(birthday_row["birthday"] or "").strip()
+            parsed_birthday = None
+
+            # Accept common date formats used by membership records.
+            for birthday_format in (
+                "%Y-%m-%d",
+                "%d/%m/%Y",
+                "%d-%m-%Y",
+                "%m/%d/%Y",
+                "%d/%m",
+                "%d-%m",
+            ):
+                try:
+                    parsed_birthday = datetime.strptime(
+                        birthday_value, birthday_format
+                    ).date()
+                    break
+                except ValueError:
+                    continue
+
+            if not parsed_birthday:
+                continue
+
+            if (
+                parsed_birthday.month != birthday_today.month
+                or parsed_birthday.day != birthday_today.day
+            ):
+                continue
+
+            member_item = {
+                "full_name": birthday_row["full_name"] or "Church Member",
+                "circuit": birthday_row["circuit"] or "",
+                "church_name": birthday_row["church_name"] or "",
+                "photo_url": "",
+            }
+
+            photo_path = str(birthday_row["passport_photo"] or "").strip()
+
+            if photo_path:
+                try:
+                    if photo_path.startswith(("https://", "http://")):
+                        member_item["photo_url"] = photo_path
+                    else:
+                        member_item["photo_url"] = (
+                            _member_photo_storage_signed_url(photo_path)
+                        )
+                except Exception:
+                    app.logger.warning(
+                        "Could not prepare a birthday photo for a member."
+                    )
+
+            birthday_celebration_members.append(member_item)
+
+    except Exception:
+        # A birthday lookup must never prevent the public homepage from loading.
+        app.logger.exception("Birthday celebration lookup failed")
+        birthday_celebration_members = []
+
     return render_template(
         "public_home.html", leadership_profiles=profiles,
         leadership_titles=LEADERSHIP_TITLES,
@@ -2333,7 +3181,11 @@ def public_home():
         homepage_sermons=sermons,
         homepage_events=events,
         homepage_churches=churches,
-        homepage_media_items=homepage_media_items
+        homepage_media_items=homepage_media_items,
+        homepage_video_items=homepage_video_items,
+        homepage_gallery_items=homepage_gallery_items,
+        daily_devotion=daily_devotion,
+        birthday_celebration_members=birthday_celebration_members
     )
 
 
@@ -2355,6 +3207,8 @@ def home():
 
 def role_allows_table(u, table, method):
     role = u["role"]
+    if table == "circuits" and method != "GET":
+        return role == "Admin"
     if role == "Admin": return True
     if role in {"Bishop / Diocesan Executive", "Auditor"}: return method == "GET"
     if role == "Evangelism Minister":
@@ -2528,31 +3382,15 @@ def add_customer_care_timeline(thread_id, action, details="", user=None,
 def customer_care_scope(u):
     """Return the Customer Care SQL scope allowed for the current user."""
     role = str(u["role"] or "").strip()
-
     if role == "Member":
         return "t.user_id=?", [u["id"]]
-
     if role == "Local Church Evangelism Officer":
-        return "m.circuit=? AND m.church_name=?", [
-            u["circuit"], u["church_name"]
-        ]
-
+        return ("((m.circuit=? AND m.church_name=?) OR (COALESCE(t.guest_token_hash,'')<>'' AND t.guest_circuit=? AND t.guest_church=?))",
+                [u["circuit"],u["church_name"],u["circuit"],u["church_name"]])
     if role == "Circuit Coordinator":
-        return "m.circuit=?", [u["circuit"]]
-
-    # Full Member Care access for diocesan/admin/customer-care officers.
-    if role in {
-        "Admin",
-        "Officer",
-        "Bishop / Diocesan Executive",
-        "Evangelism Minister",
-        "Planting Officer",
-        "Diocesan Secretary",
-        "Finance Officer",
-        "Auditor"
-    }:
+        return ("(m.circuit=? OR (COALESCE(t.guest_token_hash,'')<>'' AND t.guest_circuit=?))",[u["circuit"],u["circuit"]])
+    if role in {"Admin","Officer","Bishop / Diocesan Executive","Evangelism Minister","Planting Officer","Diocesan Secretary","Finance Officer","Auditor"}:
         return "1=1", []
-
     return "1=0", []
 
 
@@ -2586,6 +3424,109 @@ def ensure_member_care_attachment_schema():
     finally:
         conn.close()
 
+
+
+def _public_guest_thread(thread_id):
+    auth=request.headers.get("Authorization","")
+    token=auth[7:].strip() if auth.startswith("Bearer ") else ""
+    if not token or len(token)>256: return None
+    digest=hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return db().execute("SELECT * FROM customer_care_threads WHERE thread_id=? AND guest_token_hash=?",(thread_id,digest)).fetchone()
+
+@app.get("/api/public/member-care/options")
+def public_member_care_options():
+    return jsonify({"churches":rows("SELECT DISTINCT circuit,church_name FROM churches WHERE COALESCE(circuit,'')<>'' AND COALESCE(church_name,'')<>'' ORDER BY circuit,church_name")})
+
+@app.post("/api/public/member-care")
+def public_member_care_create():
+    d=request.get_json(silent=True) or {}
+    name=str(d.get("customer_name") or "").strip()[:120]; phone=str(d.get("phone") or "").strip()[:50]
+    address=str(d.get("address") or "").strip()[:300]
+    email=str(d.get("email") or "").strip()[:180]; subject=str(d.get("subject") or "Public Member Care request").strip()[:180]
+    msg=str(d.get("message") or "").strip(); circuit=str(d.get("circuit") or "").strip()[:120]
+    church=str(d.get("church_name") or "").strip()[:180]
+    if str(d.get("website") or "").strip(): return jsonify({"error":"Unable to process request."}),400
+    if not name or not msg or not circuit or not church: return jsonify({"error":"Name, message, circuit and church are required."}),400
+    if len(msg)>4000: return jsonify({"error":"Message must be under 4,000 characters."}),400
+    if not db().execute("SELECT 1 FROM churches WHERE circuit=? AND church_name=? LIMIT 1",(circuit,church)).fetchone():
+        return jsonify({"error":"Choose a valid circuit and church."}),400
+    token=secrets.token_urlsafe(32); digest=hashlib.sha256(token.encode("utf-8")).hexdigest()
+    now=datetime.now().isoformat(timespec="seconds"); tid="MC-"+datetime.now().strftime("%Y%m%d%H%M%S%f")
+    cur=db().execute("INSERT INTO customer_care_threads (thread_id,customer_name,phone,email,address,subject,status,assigned_to,created_at,updated_at,user_id,member_id,category,priority,guest_token_hash,guest_circuit,guest_church,care_mode) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+      (tid,name,phone,email,address,subject,"Open","",now,now,None,"","General Assistance","Normal",digest,circuit,church,"guest"))
+    db().execute("INSERT INTO customer_care_messages(thread_id,sender_name,sender_role,message,created_at) VALUES(?,?,?,?,?)",(tid,name,"Guest",msg,now))
+    db().commit()
+    return jsonify({"ok":True,"id":cur.lastrowid,"thread_id":tid,"token":token,"status":"Open"}),201
+
+@app.get("/api/public/member-care/<thread_id>")
+def public_member_care_detail(thread_id):
+    t=_public_guest_thread(thread_id)
+    if not t: return jsonify({"error":"Private conversation verification failed."}),401
+    msgs=rows("SELECT id,sender_name,sender_role,message,created_at FROM customer_care_messages WHERE thread_id=? ORDER BY id ASC",(thread_id,))
+    return jsonify({"thread":{"id":t["id"],"thread_id":t["thread_id"],"customer_name":t["customer_name"],"subject":t["subject"],"status":t["status"]},"messages":msgs})
+
+@app.post("/api/public/member-care/<thread_id>/message")
+def public_member_care_message(thread_id):
+    t=_public_guest_thread(thread_id)
+    if not t: return jsonify({"error":"Private conversation verification failed."}),401
+    d=request.get_json(silent=True) or {}; msg=str(d.get("message") or "").strip()
+    if not msg: return jsonify({"error":"Message is required."}),400
+    if len(msg)>4000: return jsonify({"error":"Message must be under 4,000 characters."}),400
+    now=datetime.now().isoformat(timespec="seconds")
+    db().execute("INSERT INTO customer_care_messages(thread_id,sender_name,sender_role,message,created_at) VALUES(?,?,?,?,?)",(thread_id,t["customer_name"],"Guest",msg,now))
+    db().execute("UPDATE customer_care_threads SET updated_at=?,status='Open' WHERE id=?",(now,t["id"]))
+    db().commit(); return jsonify({"ok":True})
+
+@app.post("/api/public/member-care/ai")
+def public_member_care_ai():
+    d=request.get_json(silent=True) or {}; msg=str(d.get("message") or "").strip()
+    if not msg: return jsonify({"error":"Please enter a message."}),400
+    key=os.environ.get("OPENAI_API_KEY","").strip()
+    if os.environ.get("AI_PROVIDER","openai").strip().lower()!="openai" or not key:
+        return jsonify({"error":"AI is not configured yet. Choose an officer or configure OPENAI_API_KEY on staging."}),503
+    history=d.get("history") if isinstance(d.get("history"),list) else []; safe=[]
+    for x in history[-8:]:
+        if isinstance(x,dict) and x.get("role") in ("user","assistant") and str(x.get("content") or "").strip():
+            safe.append({"role":x["role"],"content":str(x["content"])[:3000]})
+    payload={"model":os.environ.get("OPENAI_MODEL","gpt-4o-mini"),"messages":[{"role":"system","content":"You are the public Member Care AI assistant for Methodist Church Nigeria, Delta South Diocese. Be respectful and concise. Never claim to access private records, approve registrations or confirm payments. Never request passwords, PINs or bank details. Direct personal-record requests to a church officer."}]+safe+[{"role":"user","content":msg[:3000]}]}
+    endpoint=os.environ.get("OPENAI_BASE_URL","https://api.openai.com/v1/chat/completions").strip()
+    if not endpoint.startswith("https://"): return jsonify({"error":"AI endpoint must use HTTPS."}),503
+    req=urllib.request.Request(endpoint,data=json.dumps(payload).encode(),headers={"Authorization":"Bearer "+key,"Content-Type":"application/json"},method="POST")
+    try:
+        with urllib.request.urlopen(req,timeout=22) as response: result=json.loads(response.read().decode())
+        answer=str(result.get("choices",[{}])[0].get("message",{}).get("content") or "").strip()
+        return jsonify({"reply":answer}) if answer else (jsonify({"error":"AI returned no answer."}),502)
+    except urllib.error.HTTPError as exc:
+        # Log the HTTP status and a short provider message, never credentials.
+        try:
+            body = exc.read(2000).decode("utf-8", errors="replace")
+            try:
+                obj = json.loads(body).get("error", {})
+                if not isinstance(obj, dict):
+                    obj = {"message": str(obj)}
+                message = str(obj.get("message", ""))[:300]
+                code = str(obj.get("code", ""))[:100]
+                error_type = str(obj.get("type", ""))[:100]
+            except (ValueError, AttributeError):
+                message, code, error_type = "Non-JSON provider error", "", ""
+
+            app.logger.warning(
+                "Public Member Care AI HTTP failure: status=%s code=%s type=%s message=%s",
+                exc.code, code, error_type, message
+            )
+        except Exception:
+            app.logger.warning(
+                "Public Member Care AI HTTP failure: status=%s; details unavailable",
+                exc.code
+            )
+        return jsonify({"error":"AI service unavailable. Please contact an officer."}),502
+
+    except (urllib.error.URLError, TimeoutError, ValueError, KeyError, IndexError) as exc:
+        app.logger.warning(
+            "Public Member Care AI request failed: %s",
+            type(exc).__name__
+        )
+        return jsonify({"error":"AI service unavailable. Please contact an officer."}),502
 
 @app.get("/api/customer-care")
 @login_required
@@ -2656,9 +3597,12 @@ def api_customer_care_create():
         return jsonify({"error": "Message is required"}), 400
 
     member_id = ""
-
-    if u["role"] == "Member":
-        member_id = str(u["member_id"] or "")
+    if u["role"] == "Member" and u["member_id"]:
+        member_row = db().execute(
+            "SELECT member_id FROM members WHERE id=?",
+            (u["member_id"],)
+        ).fetchone()
+        member_id = str(member_row["member_id"] or "") if member_row else ""
 
     now = datetime.now().isoformat(timespec="seconds")
     thread_id = "MC-" + datetime.now().strftime("%Y%m%d%H%M%S%f")
@@ -2735,6 +3679,80 @@ def api_customer_care_create():
         "status": "Open"
     }), 201
 
+
+
+
+@app.post("/api/customer-care/presence")
+@login_required
+def api_customer_care_presence_update():
+    """Refresh the current authenticated user's Member Care presence."""
+    u = current_user()
+    conn = db()
+    now = datetime.now().isoformat(timespec="seconds")
+
+    conn.execute("""
+        INSERT INTO customer_care_presence
+            (user_id, username, role, last_seen)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            username=excluded.username,
+            role=excluded.role,
+            last_seen=excluded.last_seen
+    """, (u["id"], u["username"], u["role"], now))
+
+    conn.commit()
+    return jsonify({"ok": True, "last_seen": now})
+
+
+@app.get("/api/customer-care/presence")
+@login_required
+def api_customer_care_presence_list():
+    """List online participants related to conversations visible to the user."""
+    u = current_user()
+    conn = db()
+    scope, params = customer_care_scope(u)
+
+    # Apply the same conversation scope used by the existing Member Care API.
+    visible_threads = conn.execute(f"""
+        SELECT t.user_id, t.assigned_user_id
+        FROM customer_care_threads t
+        LEFT JOIN users m ON t.user_id = m.id
+        WHERE {scope}
+    """, params).fetchall()
+
+    relevant_ids = {int(u["id"])}
+
+    for thread in visible_threads:
+        owner_id = thread["user_id"]
+        assigned_id = thread["assigned_user_id"]
+
+        if owner_id is not None:
+            relevant_ids.add(int(owner_id))
+        if assigned_id is not None:
+            relevant_ids.add(int(assigned_id))
+
+    cutoff = (
+        datetime.now() - timedelta(seconds=60)
+    ).isoformat(timespec="seconds")
+
+    # Parameterized query: never interpolate user IDs into SQL.
+    placeholders = ",".join("?" for _ in relevant_ids)
+
+    online = conn.execute(
+        f"""
+        SELECT user_id, username, role, last_seen
+        FROM customer_care_presence
+        WHERE last_seen >= ?
+          AND user_id IN ({placeholders})
+        ORDER BY username
+        """,
+        [cutoff] + sorted(relevant_ids)
+    ).fetchall()
+
+    return jsonify({
+        "ok": True,
+        "online": [dict(row) for row in online]
+    })
 
 
 @app.get("/api/customer-care/unread-count")
@@ -2819,8 +3837,9 @@ def api_customer_care_detail(rid):
 def api_customer_care_typing_status(rid):
     u = current_user()
     scope, params = customer_care_scope(u)
+    conn = db()
 
-    thread = db().execute(f"""
+    thread = conn.execute(f"""
         SELECT t.*
         FROM customer_care_threads t
         LEFT JOIN users m ON t.user_id = m.id
@@ -2833,26 +3852,33 @@ def api_customer_care_typing_status(rid):
             "error": "Conversation not found"
         }), 404
 
-    status = MEMBER_CARE_TYPING.get(thread["thread_id"])
+    now = datetime.now().isoformat(timespec="seconds")
+    cutoff = (datetime.now() - timedelta(seconds=5)).isoformat(
+        timespec="seconds"
+    )
+    thread_id = thread["thread_id"]
 
-    # Typing status expires after 4 seconds.
-    if status:
-        if time.time() - float(status.get("time", 0)) > 4:
-            MEMBER_CARE_TYPING.pop(
-                thread["thread_id"],
-                None
-            )
-            status = None
+    # Remove expired typing indicators.
+    conn.execute(
+        "DELETE FROM customer_care_typing WHERE last_seen < ?",
+        (cutoff,)
+    )
 
-    # Never report the current user's own typing status.
-    if status and status.get("user_id") == u["id"]:
-        status = None
+    status = conn.execute("""
+        SELECT user_id, username, role
+        FROM customer_care_typing
+        WHERE thread_id=? AND user_id<>? AND last_seen>=?
+        ORDER BY last_seen DESC
+        LIMIT 1
+    """, (thread_id, u["id"], cutoff)).fetchone()
+
+    conn.commit()
 
     return jsonify({
         "ok": True,
         "typing": bool(status),
-        "username": status.get("username") if status else "",
-        "role": status.get("role") if status else ""
+        "username": status["username"] if status else "",
+        "role": status["role"] if status else ""
     })
 
 
@@ -2861,8 +3887,9 @@ def api_customer_care_typing_status(rid):
 def api_customer_care_typing(rid):
     u = current_user()
     scope, params = customer_care_scope(u)
+    conn = db()
 
-    thread = db().execute(f"""
+    thread = conn.execute(f"""
         SELECT t.*
         FROM customer_care_threads t
         LEFT JOIN users m ON t.user_id = m.id
@@ -2876,24 +3903,35 @@ def api_customer_care_typing(rid):
         }), 404
 
     data = request.get_json(silent=True) or {}
-    typing = bool(data.get("typing", False))
-
-    key = thread["thread_id"]
+    typing = data.get("typing", False) is True
+    thread_id = thread["thread_id"]
 
     if typing:
-        MEMBER_CARE_TYPING[key] = {
-            "user_id": u["id"],
-            "username": u["username"],
-            "role": u["role"],
-            "time": time.time()
-        }
+        now = datetime.now().isoformat(timespec="seconds")
+        conn.execute("""
+            INSERT INTO customer_care_typing
+                (thread_id, user_id, username, role, last_seen)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(thread_id, user_id) DO UPDATE SET
+                username=excluded.username,
+                role=excluded.role,
+                last_seen=excluded.last_seen
+        """, (
+            thread_id,
+            u["id"],
+            u["username"],
+            u["role"],
+            now
+        ))
     else:
-        current = MEMBER_CARE_TYPING.get(key)
+        conn.execute("""
+            DELETE FROM customer_care_typing
+            WHERE thread_id=? AND user_id=?
+        """, (thread_id, u["id"]))
 
-        if current and current.get("user_id") == u["id"]:
-            MEMBER_CARE_TYPING.pop(key, None)
-
+    conn.commit()
     return jsonify({"ok": True})
+
 
 @app.post("/api/customer-care/<int:rid>/read")
 @login_required
@@ -3001,7 +4039,10 @@ def api_customer_care_message(rid):
 @app.post("/api/customer-care/<int:rid>/attachment")
 @login_required
 def api_customer_care_attachment(rid):
-    ensure_member_care_attachment_schema()
+    # Schema migration uses a direct SQLite connection.
+    # PostgreSQL already has the required attachment columns.
+    if database_backend() == "sqlite":
+        ensure_member_care_attachment_schema()
 
     u = current_user()
     scope, params = customer_care_scope(u)
@@ -3177,7 +4218,7 @@ def api_customer_care_officers():
             FROM users
             WHERE COALESCE(active, 1)=1
               AND role != 'Member'
-            ORDER BY username COLLATE NOCASE
+            ORDER BY LOWER(username)
         """).fetchall()
 
         officers = [
@@ -4084,7 +5125,49 @@ def api_conference_status(rid):
 @login_required
 def api_me():
     u = current_user()
-    return jsonify(dict(u))
+
+    # Never expose password hashes or other internal credential fields.
+    safe_fields = (
+        "id",
+        "username",
+        "role",
+        "circuit",
+        "church_name",
+        "active",
+        "must_change_password",
+        "created_at",
+        "member_id",
+    )
+    return jsonify({key: u[key] for key in safe_fields if key in u.keys()})
+
+
+
+@app.post("/api/change-password")
+@login_required
+def api_change_password():
+    """Authenticated password update for native clients and forced first-login changes."""
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    current = str(data.get("current_password") or "")
+    new = str(data.get("new_password") or "")
+    confirm = str(data.get("confirm_password") or "")
+    if not current or not new or not confirm:
+        return jsonify({"error": "Current password, new password and confirmation are required."}), 400
+    if not check_password_hash(user["password"], current):
+        return jsonify({"error": "Current password is incorrect."}), 400
+    if len(new) < 8:
+        return jsonify({"error": "New password must be at least 8 characters."}), 400
+    if new != confirm:
+        return jsonify({"error": "New passwords do not match."}), 400
+    db().execute(
+        "UPDATE users SET password=?,must_change_password=0 WHERE id=?",
+        (generate_password_hash(new), user["id"])
+    )
+    db().commit()
+    audit("PASSWORD_CHANGE", "users", user["id"], "Password changed through native client")
+    return jsonify({"success": True, "message": "Password changed successfully."})
+
+
 
 
 def get_connection_url():
@@ -4688,7 +5771,8 @@ def command_centre():
 @app.get("/api/public/churches")
 def public_churches():
     return jsonify(rows(
-        "SELECT circuit, church_name FROM churches "
+        "SELECT circuit, church_name, address, town, state, maps_url, "
+        "contact_person, phone FROM churches "
         "ORDER BY circuit, church_name"
     ))
 
@@ -4724,86 +5808,192 @@ def generate_member_id(data):
     return f"{prefix}-{n:04d}"
 
 
+
+def _member_photo_storage_credentials():
+    import os
+    base = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+    key = (os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
+    if not base or not key:
+        raise RuntimeError("Missing Supabase Storage server credentials.")
+    return base, key
+
+
+def _member_photo_storage_request(method, object_path, **kwargs):
+    import requests
+    from urllib.parse import quote
+
+    base, key = _member_photo_storage_credentials()
+    url = (
+        f"{base}/storage/v1/object/member-photos/"
+        f"{quote(object_path, safe='/')}"
+    )
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "apikey": key,
+    }
+    headers.update(kwargs.pop("headers", {}))
+    return requests.request(
+        method, url, headers=headers, timeout=60, **kwargs
+    )
+
+
+def _member_photo_storage_delete(object_path):
+    try:
+        response = _member_photo_storage_request("DELETE", object_path)
+        return response.status_code in (200, 204)
+    except Exception:
+        return False
+
+
+def _member_photo_storage_signed_url(object_path):
+    import requests
+    from urllib.parse import quote
+
+    base, key = _member_photo_storage_credentials()
+    url = (
+        f"{base}/storage/v1/object/sign/member-photos/"
+        f"{quote(object_path, safe='/')}"
+    )
+    response = requests.post(
+        url,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "apikey": key,
+            "Content-Type": "application/json",
+        },
+        json={"expiresIn": 3600},
+        timeout=30,
+    )
+    response.raise_for_status()
+    result = response.json()
+    signed = result.get("signedURL") or result.get("signedUrl")
+    if not signed:
+        raise RuntimeError("Supabase did not return a signed photo URL.")
+    if signed.startswith("http://") or signed.startswith("https://"):
+        return signed
+    if signed.startswith("/storage/v1/"):
+        return base + signed
+    if signed.startswith("/"):
+        return base + "/storage/v1" + signed
+    return base + "/storage/v1/" + signed
+
+
 @app.post("/api/public/member-registration/<int:rid>/photo")
 def upload_member_registration_photo(rid):
-    conn = db()
+    import requests
 
+    conn = db()
     registration = conn.execute(
-        "SELECT registration_id, status FROM member_registrations WHERE id=?",
-        (rid,)
+        "SELECT registration_id, status, passport_photo "
+        "FROM member_registrations WHERE id=?",
+        (rid,),
     ).fetchone()
 
     if not registration:
         return jsonify({"error": "Registration not found."}), 404
-
     if registration["status"] != "Pending":
         return jsonify({
             "error": "Photo can only be uploaded for a pending registration."
         }), 400
 
     photo = request.files.get("photo")
-
     if not photo or not photo.filename:
         return jsonify({"error": "Please select a photo."}), 400
 
     allowed_types = {
         "image/jpeg": ".jpg",
         "image/png": ".png",
-        "image/webp": ".webp"
+        "image/webp": ".webp",
     }
-
-    extension = allowed_types.get((photo.mimetype or "").lower())
-
+    content_type = (photo.mimetype or "").lower()
+    extension = allowed_types.get(content_type)
     if not extension:
         return jsonify({
             "error": "Only JPEG, PNG and WebP images are allowed."
         }), 400
 
+    photo_bytes = photo.stream.read(5 * 1024 * 1024 + 1)
+    if not photo_bytes:
+        return jsonify({"error": "The selected photo is empty."}), 400
+    if len(photo_bytes) > 5 * 1024 * 1024:
+        return jsonify({"error": "Photo size must not exceed 5 MB."}), 413
+
+    import os
+    from datetime import datetime
+
     stamp = datetime.now().strftime("%Y%m%d%H%M%S%f")
     safe_name = f"registration_{rid}_{stamp}{extension}"
-    destination = os.path.join(MEMBER_PHOTO_DIR, safe_name)
+    object_path = f"registrations/{safe_name}"
+    uploaded = False
 
     try:
-        photo.save(destination)
-
-        old = conn.execute(
-            "SELECT passport_photo FROM member_registrations WHERE id=?",
-            (rid,)
-        ).fetchone()
-
-        if old and old["passport_photo"]:
-            old_path = os.path.join(
-                MEMBER_PHOTO_DIR,
-                os.path.basename(old["passport_photo"])
+        response = _member_photo_storage_request(
+            "POST",
+            object_path,
+            data=photo_bytes,
+            headers={
+                "Content-Type": content_type,
+                "x-upsert": "false",
+            },
+        )
+        if response.status_code not in (200, 201):
+            app.logger.error(
+                "Member photo upload failed: HTTP %s",
+                response.status_code,
             )
-            if os.path.isfile(old_path):
-                os.remove(old_path)
+            return jsonify({
+                "error": "Unable to store the photo. Please try again."
+            }), 502
+        uploaded = True
 
         conn.execute(
             "UPDATE member_registrations SET passport_photo=? WHERE id=?",
-            (safe_name, rid)
+            (object_path, rid),
         )
         conn.commit()
 
-    except (OSError, sqlite3.Error):
-        conn.rollback()
-        if os.path.isfile(destination):
-            os.remove(destination)
-        return jsonify({"error": "Unable to save the registration photo."}), 500
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        if uploaded:
+            _member_photo_storage_delete(object_path)
+        app.logger.exception("Unable to save member registration photo")
+        return jsonify({
+            "error": "Unable to save the registration photo."
+        }), 500
+
+    # Remove an older remote photo only after the database update succeeds.
+    old_photo = registration["passport_photo"] or ""
+    if old_photo.startswith("registrations/") and old_photo != object_path:
+        _member_photo_storage_delete(old_photo)
+
+    # Clean up any legacy local photo after successful replacement.
+    old_name = os.path.basename(old_photo)
+    if old_name and old_name != safe_name:
+        old_local = os.path.join(MEMBER_PHOTO_DIR, old_name)
+        try:
+            if os.path.isfile(old_local):
+                os.remove(old_local)
+        except OSError:
+            app.logger.warning("Could not remove an old local member photo")
 
     return jsonify({
         "ok": True,
         "registration_id": registration["registration_id"],
-        "photo_uploaded": True
+        "photo_uploaded": True,
     }), 201
-
 
 
 @app.get("/api/member-registration-photo/<path:filename>")
 @login_required
 def view_member_registration_photo(filename):
-    u = current_user()
+    import os
+    import requests
+    from flask import Response
 
+    u = current_user()
     safe_name = os.path.basename(filename)
     if safe_name != filename or not safe_name:
         return jsonify({"error": "Invalid photo filename."}), 400
@@ -4816,7 +6006,7 @@ def view_member_registration_photo(filename):
         "Diocesan Secretary",
         "Circuit Coordinator",
         "Local Church Evangelism Officer",
-        "Auditor"
+        "Auditor",
     }
 
     if u["role"] == "Member":
@@ -4827,7 +6017,7 @@ def view_member_registration_photo(filename):
 
         member = db().execute(
             "SELECT passport_photo FROM members WHERE id=?",
-            (u["member_id"],)
+            (u["member_id"],),
         ).fetchone()
 
         if not member:
@@ -4838,22 +6028,46 @@ def view_member_registration_photo(filename):
             return jsonify({
                 "error": "You are not authorized to view this photo."
             }), 403
-
     elif u["role"] not in allowed_roles:
         return jsonify({
             "error": "You are not authorized to view member photos."
         }), 403
 
-    photo_path = os.path.join(MEMBER_PHOTO_DIR, safe_name)
+    # Preserve compatibility with photos uploaded before this migration.
+    local_path = os.path.join(MEMBER_PHOTO_DIR, safe_name)
+    if os.path.isfile(local_path):
+        return send_file(local_path, conditional=True, max_age=0)
 
-    if not os.path.isfile(photo_path):
-        return jsonify({"error": "Photo not found."}), 404
+    object_path = f"registrations/{safe_name}"
+    try:
+        signed_url = _member_photo_storage_signed_url(object_path)
+        response = requests.get(signed_url, timeout=30)
+        if response.status_code == 404:
+            return jsonify({"error": "Photo not found."}), 404
+        response.raise_for_status()
 
-    return send_file(
-        photo_path,
-        conditional=True,
-        max_age=0
-    )
+        mimetype = response.headers.get(
+            "Content-Type", "application/octet-stream"
+        ).split(";")[0]
+        if mimetype not in ("image/jpeg", "image/png", "image/webp"):
+            return jsonify({"error": "Invalid stored photo type."}), 502
+
+        return Response(
+            response.content,
+            mimetype=mimetype,
+            headers={"Cache-Control": "private, no-store"},
+        )
+    except requests.HTTPError as exc:
+        status = getattr(exc.response, "status_code", 0)
+        if status == 404:
+            return jsonify({"error": "Photo not found."}), 404
+        app.logger.exception("Unable to retrieve member photo from storage")
+        return jsonify({"error": "Unable to retrieve the photo."}), 502
+    except Exception:
+        app.logger.exception("Unable to retrieve member photo from storage")
+        return jsonify({"error": "Unable to retrieve the photo."}), 502
+
+
 
 
 @app.get("/api/membership-statistics")
@@ -5170,7 +6384,7 @@ def review_member_registration(rid):
                 "created_at"
             ]
 
-            conn.execute("""
+            member_cur = conn.execute("""
                 INSERT INTO members(
                     member_id,
                     role_position,
@@ -5219,6 +6433,12 @@ def review_member_registration(rid):
                 now
             ))
 
+            approved_member_db_id = member_cur.lastrowid
+            if approved_member_db_id is None:
+                raise RuntimeError(
+                    "Member was inserted but its numeric database ID was not returned."
+                )
+
             cur = conn.execute("""
                 INSERT INTO users(
                     username,
@@ -5239,7 +6459,7 @@ def review_member_registration(rid):
                 circuit,
                 church_name,
                 now,
-                approved_member_id
+                approved_member_db_id
             ))
 
             approved_user_id = cur.lastrowid
@@ -5299,13 +6519,13 @@ def review_member_registration(rid):
             })
         )
 
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Could not complete registration approval: " + str(e)
         }), 400
 
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Database error while reviewing registration: " + str(e)
@@ -5464,12 +6684,12 @@ def public_member_registration():
             )
         )
         db().commit()
-    except sqlite3.IntegrityError:
+    except database_integrity_error_types():
         db().rollback()
         return jsonify({
             "error": "Could not create the registration. Please try again."
         }), 400
-    except sqlite3.Error:
+    except database_error_types():
         db().rollback()
         return jsonify({
             "error": "Database error while submitting registration."
@@ -5488,6 +6708,8 @@ def public_member_registration():
 @login_required
 def create_row(table):
     u = current_user()
+    if table == "circuits" and u["role"] != "Admin":
+        return jsonify({"error":"Only an Administrator can post circuits."}), 403
     if table == "member_registrations":
         return jsonify({"error":"Member registrations must use the registration review workflow."}),403
     if table not in TABLES or not role_allows_table(u, table, "POST"):
@@ -5594,10 +6816,10 @@ def create_row(table):
     try:
         cur = db().execute(sql, [data.get(c) for c in cols])
         db().commit()
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         db().rollback()
         return jsonify({"error":"Could not save record: " + str(e)}),400
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         db().rollback()
         return jsonify({"error":"Database error while saving: " + str(e)}),500
     # A logging failure must never turn a successful registration into a
@@ -5744,10 +6966,10 @@ def convert_planting_prospect(rid):
             "planting_year": planting_year
         }), 201
 
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         conn.rollback()
         return jsonify({"error": "Could not convert prospect: " + str(e)}), 400
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({"error": "Database error during conversion: " + str(e)}), 500
 
@@ -5781,7 +7003,7 @@ def upgrade_church_to_circuit(rid):
         conn.commit()
         audit("UPGRADE_TO_CIRCUIT", "churches", rid, json.dumps({"church_name": church["church_name"], "new_circuit": circuit_name}, ensure_ascii=False))
         return jsonify({"ok": True, "circuit_name": circuit_name, "church_id": rid})
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         conn.rollback()
         return jsonify({"error": "Could not create the new circuit: " + str(e)}), 400
 
@@ -5840,6 +7062,8 @@ def get_row(table, rid):
 @login_required
 def update_row(table, rid):
     u = current_user()
+    if table == "circuits" and u["role"] != "Admin":
+        return jsonify({"error":"Only an Administrator can put circuits."}), 403
     if table == "member_registrations":
         return jsonify({"error":"Member registrations must use the registration review workflow."}),403
     if table not in TABLES or not role_allows_table(u, table, "PUT"):
@@ -5867,10 +7091,10 @@ def update_row(table, rid):
             audit("UPDATE", table, rid, json.dumps({k:data.get(k) for k in cols}, ensure_ascii=False))
         except Exception:
             pass
-    except sqlite3.IntegrityError as e:
+    except database_integrity_error_types() as e:
         db().rollback()
         return jsonify({"error":"Could not update record: " + str(e)}),400
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         db().rollback()
         return jsonify({"error":"Database error while updating: " + str(e)}),500
     updated = db().execute(f"SELECT * FROM {table} WHERE id=?", (rid,)).fetchone()
@@ -5880,6 +7104,8 @@ def update_row(table, rid):
 @login_required
 def delete_row(table,rid):
     u = current_user()
+    if table == "circuits" and u["role"] != "Admin":
+        return jsonify({"error":"Only an Administrator can delete circuits."}), 403
     if table == "member_registrations":
         return jsonify({"error":"Member registrations must use the registration review workflow."}),403
     if table not in TABLES or not role_allows_table(u, table, "DELETE"):
@@ -5890,10 +7116,69 @@ def delete_row(table,rid):
         return jsonify({"error":"You can only delete records for your assigned circuit."}),403
     if u["role"] == "Local Church Evangelism Officer" and "church_name" in existing.keys() and u["church_name"] and existing["church_name"] != u["church_name"]:
         return jsonify({"error":"You can only delete records for your assigned church."}),403
+    # Guard against accidental loss of church/circuit records with dependencies.
+    if table == "churches":
+        church_name = existing["church_name"]
+        linked = []
+        for dependent_table in ("members", "income", "expenses", "church_accounts", "commitments",
+                                "testimonies", "appreciations", "mission_teams", "mission_contacts",
+                                "outreach", "church_plants", "planting_prospects", "equipment",
+                                "trust_fund", "mission_budgets", "procurement_requests", "sponsors"):
+            if dependent_table not in TABLES or "church_name" not in TABLES[dependent_table]:
+                continue
+            try:
+                count = db().execute(
+                    f"SELECT COUNT(*) FROM {dependent_table} WHERE church_name=?", (church_name,)
+                ).fetchone()[0]
+                if count:
+                    linked.append(f"{dependent_table}: {count}")
+            except database_error_types():
+                db().rollback()
+                return jsonify({
+                    "error": "Could not verify church dependencies. Deletion was cancelled."
+                }), 500
+        if linked:
+            return jsonify({
+                "error": "This church has linked records and cannot be deleted. Reassign or archive related records first.",
+                "dependencies": linked
+            }), 409
+    if table == "circuits":
+        circuit_name = existing["name"]
+        linked = []
+
+        # Protect a circuit whose headquarters reference exists,
+        # even if the church's circuit-name field is inconsistent.
+        headquarters_id = (
+            existing["headquarters_church_id"]
+            if "headquarters_church_id" in existing.keys()
+            else None
+        )
+        if headquarters_id:
+            linked.append("headquarters_church_id: 1")
+
+        for dependent_table, columns in TABLES.items():
+            if dependent_table in {"circuits"} or "circuit" not in columns:
+                continue
+            try:
+                count = db().execute(
+                    f"SELECT COUNT(*) FROM {dependent_table} WHERE circuit=?",
+                    (circuit_name,)
+                ).fetchone()[0]
+            except database_error_types():
+                db().rollback()
+                return jsonify({
+                    "error": "Could not verify circuit dependencies. Deletion was cancelled."
+                }), 500
+            if count:
+                linked.append(f"{dependent_table}: {count}")
+
+        if linked:
+            return jsonify({
+                "error": "This circuit has linked records. Reassign or archive related records before deleting it.",
+                "dependencies": linked
+            }), 409
     db().execute(f"DELETE FROM {table} WHERE id=?",(rid,)); db().commit(); audit("DELETE",table,rid,"")
     return jsonify({"ok":True})
-
-
 
 @app.get("/api/account-requests")
 @login_required
@@ -6058,7 +7343,7 @@ def approve_account_request(rid):
             "message": "Account approved successfully."
         }), 201
 
-    except sqlite3.IntegrityError:
+    except database_integrity_error_types():
         db().rollback()
         return jsonify({
             "error": "Unable to create the account because the username already exists."
@@ -6244,7 +7529,7 @@ def create_user():
         }))
         return jsonify({"id": cur.lastrowid, "ok": True}), 201
 
-    except sqlite3.IntegrityError:
+    except database_integrity_error_types():
         conn.rollback()
         return jsonify({"error": "That username or membership link already exists."}), 400
 
@@ -6331,12 +7616,35 @@ def update_user(uid):
 @login_required
 def delete_user(uid):
     u = current_user()
-    if u["role"] != "Admin": return jsonify({"error":"Administrator access required."}),403
-    if uid == u["id"]: return jsonify({"error":"You cannot delete your own account."}),400
-    target = db().execute("SELECT id,username FROM users WHERE id=?",(uid,)).fetchone()
-    if not target: return jsonify({"error":"User not found"}),404
-    db().execute("DELETE FROM users WHERE id=?",(uid,)); db().commit(); audit("DELETE","users",uid,"User removed")
-    return jsonify({"ok":True})
+    if u["role"] != "Admin":
+        return jsonify({"error": "Administrator access required."}), 403
+    if uid == u["id"]:
+        return jsonify({"error": "You cannot delete your own account."}), 400
+
+    conn = db()
+    target = conn.execute(
+        "SELECT id, username FROM users WHERE id=?", (uid,)
+    ).fetchone()
+    if not target:
+        return jsonify({"error": "User not found"}), 404
+
+    try:
+        conn.execute("BEGIN")
+        # Remove dependent reset tokens before deleting the user.
+        conn.execute(
+            "DELETE FROM password_reset_tokens WHERE user_id=?", (uid,)
+        )
+        conn.execute("DELETE FROM users WHERE id=?", (uid,))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Failed to delete user %s", uid)
+        return jsonify({
+            "error": "The user could not be deleted. No changes were committed."
+        }), 500
+
+    audit("DELETE", "users", uid, "User removed")
+    return jsonify({"ok": True})
 
 
 @app.get("/api/audit")
@@ -6476,6 +7784,12 @@ def security_allowed(roles={"Admin"}):
     return u and u["role"] in roles
 
 def make_backup(kind="Manual"):
+    if database_backend() != "sqlite":
+        raise RuntimeError(
+            "SQLite file backups are disabled for PostgreSQL. "
+            "Use a PostgreSQL-compatible backup process."
+        )
+
     u=current_user()
     os.makedirs(BACKUP_DIR, exist_ok=True)
     stamp=datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -6508,9 +7822,34 @@ def backup():
 @app.post("/api/security/backup")
 @login_required
 def create_security_backup():
-    if not security_allowed(): return jsonify({"error":"Administrator access required."}),403
-    path,filename,digest=make_backup("Manual")
-    return jsonify({"success":True,"filename":filename,"sha256":digest,"size_bytes":os.path.getsize(path)})
+    if not security_allowed():
+        return jsonify({"error": "Administrator access required."}), 403
+
+    if database_backend() != "sqlite":
+        return jsonify({
+            "success": False,
+            "backup_managed_by": "NaijaCloud",
+            "error": (
+                "This application uses PostgreSQL. Database backups are managed "
+                "through the NaijaCloud dashboard. Open your database's Backups "
+                "section and use Back up now to create a backup."
+            )
+        }), 409
+
+    try:
+        path, filename, digest = make_backup("Manual")
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "sha256": digest,
+            "size_bytes": os.path.getsize(path)
+        })
+    except Exception:
+        app.logger.exception("Manual SQLite backup failed")
+        return jsonify({
+            "success": False,
+            "error": "The backup could not be created. Check the server logs."
+        }), 500
 
 @app.get("/api/security/backups")
 @login_required
@@ -6523,7 +7862,21 @@ def backup_history():
 def security_status():
     u=current_user()
     if u["role"] not in {"Admin","Auditor"}: return jsonify({"error":"Administrator or Auditor access required."}),403
-    integrity=db().execute("PRAGMA integrity_check").fetchone()[0]
+    if database_backend() == "sqlite":
+        integrity = db().execute(
+            "PRAGMA integrity_check"
+        ).fetchone()[0]
+    else:
+        try:
+            from postgres_adapter import postgres_health_check
+            health = postgres_health_check(db())
+            integrity = (
+                "ok" if health.get("database")
+                else "error: PostgreSQL health check failed"
+            )
+        except Exception as exc:
+            integrity = f"error: {exc}"
+
     users=db().execute("SELECT COUNT(*) FROM users").fetchone()[0]
     inactive=db().execute("SELECT COUNT(*) FROM users WHERE active=0").fetchone()[0]
     forced=db().execute("SELECT COUNT(*) FROM users WHERE must_change_password=1").fetchone()[0]
@@ -6549,6 +7902,15 @@ def toggle_user(uid):
 @login_required
 def restore_backup(bid):
     if not security_allowed(): return jsonify({"error":"Administrator access required."}),403
+
+    if database_backend() != "sqlite":
+        return jsonify({
+            "error": (
+                "SQLite backup restoration is disabled for PostgreSQL. "
+                "Use a verified PostgreSQL-compatible recovery procedure."
+            )
+        }), 409
+
     rec=db().execute("SELECT * FROM backup_history WHERE id=?",(bid,)).fetchone()
     if not rec: return jsonify({"error":"Backup not found."}),404
     path=os.path.join(BACKUP_DIR,rec["filename"])
@@ -6580,7 +7942,23 @@ def system_health():
         return jsonify({"error":"Administrator or Auditor access required."}),403
     conn = db()
     required_tables = sorted(ALL_TABLES | {"circuits", "users", "audit_log", "backup_history"})
-    existing = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    if database_backend() == "postgres":
+        from postgres_adapter import postgres_table_exists, postgres_config
+        pg_config = postgres_config()
+        pg_schema = pg_config.get("startup_params", {}).get("search_path", "public")
+        if isinstance(pg_schema, dict):
+            pg_schema = pg_schema.get("search_path", "public")
+        existing = {
+            table for table in required_tables
+            if postgres_table_exists(conn, pg_schema, table)
+        }
+    else:
+        existing = {
+            r[0] for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+
     table_checks = [{"table": t, "ok": t in existing} for t in required_tables]
     missing_tables = [x["table"] for x in table_checks if not x["ok"]]
     schema_issues=[]
@@ -6602,14 +7980,22 @@ def system_health():
     for table, cols in expected.items():
         if table not in existing:
             continue
-        have={r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        have = table_column_names(conn, table)
         for col in cols:
             if col not in have:
                 schema_issues.append(f"{table}.{col}")
-    try:
-        integrity=conn.execute("PRAGMA integrity_check").fetchone()[0]
-    except Exception as exc:
-        integrity=f"error: {exc}"
+    if database_backend() == "postgres":
+        try:
+            from postgres_adapter import postgres_health_check
+            pg_health = postgres_health_check(conn)
+            integrity = "ok" if pg_health.get("database") else "error: PostgreSQL health check failed"
+        except Exception as exc:
+            integrity = f"error: {exc}"
+    else:
+        try:
+            integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        except Exception as exc:
+            integrity = f"error: {exc}"
     counts={}
     for table in ["members","churches","circuits","church_plants","outreach","mission_contacts","report_periods","circuit_reports","action_points","meetings","diocesan_reviews","notifications","audit_log","backup_history"]:
         if table in existing:
@@ -6690,7 +8076,7 @@ def system_data_quality_safe_cleanup():
         "action_points":["action_item","responsible_person","priority","status","completion_notes"],
     }
     for table, cols in text_fields.items():
-        existing={r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        existing=set(table_column_names(conn, table))
         for col in cols:
             if col in existing:
                 cur=conn.execute(f"UPDATE {table} SET {col}=TRIM({col}) WHERE {col} IS NOT NULL AND {col}<>TRIM({col})")
@@ -6724,7 +8110,12 @@ def system_workflow_check():
         ("Reporting / accountability","circuit_reports","SELECT COUNT(*) FROM circuit_reports"),
         ("Security audit trail","audit_log","SELECT COUNT(*) FROM audit_log"),
         ("Backup history","backup_history","SELECT COUNT(*) FROM backup_history")]
-    existing={r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+    existing = {
+        table for table in {
+            item[1] for item in required
+        }
+        if table_column_names(conn, table)
+    }
     for label,table,sql in required:
         if table not in existing:
             results.append({"workflow":label,"status":"Missing","detail":f"Table {table} is missing"})
@@ -6743,7 +8134,7 @@ def system_info():
         "application":"Methodist Church Nigeria, Delta South Diocese: Department of Evangelism Mission System",
         "version":APP_VERSION,
         "stage":APP_STAGE,
-        "database":"SQLite",
+        "database":database_backend().upper(),
         "python":"Flask application",
         "circuits":["Effurun Circuit","Warri Circuit","Sapele Circuit","Steel Town Circuit"],
         "local_church_target":17,
@@ -6760,31 +8151,89 @@ def deployment_check():
         return jsonify({"error":"Administrator or Auditor access required."}),403
     conn=db(); checks=[]
     def add(name, ok, detail): checks.append({"name":name,"ok":bool(ok),"detail":detail})
-    add("Database file", os.path.isfile(DB_PATH), DB_PATH)
-    add("Database writable", os.access(DB_PATH, os.W_OK), "Application can write to the active database." if os.path.isfile(DB_PATH) else "Database file not found yet.")
+    if database_backend() == "sqlite":
+        add("Database file", os.path.isfile(DB_PATH), DB_PATH)
+        add(
+            "Database writable",
+            os.path.isfile(DB_PATH) and os.access(DB_PATH, os.W_OK),
+            "Application can write to the active SQLite database."
+            if os.path.isfile(DB_PATH)
+            else "Database file not found yet."
+        )
+    else:
+        try:
+            from postgres_adapter import postgres_health_check
+            health = postgres_health_check(conn)
+            connected = bool(health and health.get("database"))
+            detail = (
+                f"Connected to PostgreSQL database: {health['database']}."
+                if connected
+                else "PostgreSQL health check did not confirm a database connection."
+            )
+        except Exception as exc:
+            connected = False
+            detail = f"PostgreSQL connection check failed: {exc}"
+        add("PostgreSQL connection", connected, detail)
+
     add("Backup folder", os.path.isdir(BACKUP_DIR), BACKUP_DIR)
-    latest=conn.execute("SELECT created_at,created_by,filename,size_bytes,sha256,status FROM backup_history ORDER BY id DESC LIMIT 1").fetchone()
-    backup_ok=False
-    backup_detail="No verified backup has been recorded."
+
+    latest = conn.execute(
+        "SELECT created_at,created_by,filename,size_bytes,sha256,status "
+        "FROM backup_history ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+
+    backup_ok = False
+    backup_detail = "No verified backup has been recorded."
+
     if latest:
-        path=os.path.join(BACKUP_DIR,latest["filename"])
-        if os.path.isfile(path):
-            try:
-                digest=hashlib.sha256(open(path,"rb").read()).hexdigest()
-                backup_ok=(digest==latest["sha256"] and latest["status"]=="Ready")
-                backup_detail=f"{latest['filename']} · {'verified' if backup_ok else 'hash/status mismatch'}"
-            except Exception as exc:
-                backup_detail=f"Backup verification error: {exc}"
+        if database_backend() == "sqlite":
+            backup_path = os.path.join(BACKUP_DIR, latest["filename"])
+            if os.path.isfile(backup_path):
+                try:
+                    with open(backup_path, "rb") as backup_file:
+                        digest = hashlib.sha256(backup_file.read()).hexdigest()
+                    backup_ok = (
+                        digest == latest["sha256"]
+                        and latest["status"] == "Ready"
+                    )
+                    backup_detail = (
+                        f"{latest['filename']} · "
+                        f"{'verified' if backup_ok else 'hash/status mismatch'}"
+                    )
+                except Exception as exc:
+                    backup_detail = f"Backup verification error: {exc}"
+            else:
+                backup_detail = "Latest backup record exists but the file is missing."
         else:
-            backup_detail="Latest backup record exists but the file is missing."
+            backup_detail = (
+                "A backup-history record exists. PostgreSQL backup verification "
+                "must be performed using a PostgreSQL-compatible backup process."
+            )
+
     add("Latest backup verified", backup_ok, backup_detail)
     role_count=conn.execute("SELECT COUNT(DISTINCT role) FROM users WHERE active=1").fetchone()[0]
     add("Active user access", role_count>0, f"{role_count} active role type(s) in use.")
     church_count=conn.execute("SELECT COUNT(*) FROM churches").fetchone()[0]
     circuit_count=conn.execute("SELECT COUNT(*) FROM circuits").fetchone()[0]
     add("Diocesan baseline", church_count==17 and circuit_count==4, f"{church_count} local-church records · {circuit_count} circuit records.")
-    integrity=conn.execute("PRAGMA integrity_check").fetchone()[0]
-    add("SQLite integrity", integrity=="ok", integrity)
+    if database_backend() == "sqlite":
+        integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+        add("SQLite integrity", integrity == "ok", integrity)
+    else:
+        try:
+            from postgres_adapter import postgres_health_check
+            health = postgres_health_check(conn)
+            integrity_ok = bool(health and health.get("database"))
+            add(
+                "PostgreSQL database health",
+                integrity_ok,
+                "PostgreSQL health check passed."
+                if integrity_ok
+                else "PostgreSQL health check did not confirm database health."
+            )
+        except Exception as exc:
+            add("PostgreSQL database health", False, str(exc))
+
     return jsonify({"ok":all(x["ok"] for x in checks),"checks":checks,"version":APP_VERSION,"stage":APP_STAGE,"generated_at":datetime.now().isoformat(timespec="seconds")})
 
 @app.get("/manifest.json")
@@ -6794,62 +8243,599 @@ def manifest():
 
 
 def build_table_map():
-    """Build and refresh the table/column map after the database schema is initialized."""
+    """Build the table/column map for the selected database backend."""
     global TABLES
 
     conn = db()
     names = set(ALL_TABLES)
-    names.update({"circuits", "users", "audit_log", "backup_history"})
+    names.update({
+        "circuits", "users", "audit_log", "backup_history",
+        "church_media_library", "conference_presence",
+        "payment_settings", "payment_transactions",
+    })
 
     table_map = {}
 
     for name in sorted(names):
         try:
-            cols = [
-                row[1]
-                for row in conn.execute(
-                    f"PRAGMA table_info({name})"
-                ).fetchall()
-            ]
-
+            cols = sorted(
+                table_column_names(conn, name),
+                key=lambda column: column
+            )
             if cols:
                 table_map[name] = cols
-
-        except sqlite3.Error:
-            continue
+        except Exception as exc:
+            # An absent optional table should not prevent application startup.
+            # Do not silently hide unexpected PostgreSQL failures.
+            if database_backend() == "postgres":
+                message = str(exc).lower()
+                if any(term in message for term in (
+                    "does not exist", "undefined table",
+                    "undefinedcolumn"
+                )):
+                    continue
+                raise
+            if isinstance(exc, sqlite3.Error):
+                continue
+            raise
 
     TABLES = table_map
     return TABLES
 
+def validate_postgres_startup_schema():
+    """Validate the existing PostgreSQL schema without running SQLite migrations."""
+    required_tables = set(ALL_TABLES)
+    required_tables.update({
+        "circuits",
+        "users",
+        "audit_log",
+        "backup_history",
+    })
+
+    conn = db()
+    missing_tables = []
+
+    for table in sorted(required_tables):
+        columns = table_column_names(conn, table)
+        if not columns:
+            missing_tables.append(table)
+
+    if missing_tables:
+        raise RuntimeError(
+            "PostgreSQL startup blocked: required tables are missing from "
+            f"the configured schema: {', '.join(missing_tables)}. "
+            "No tables were created or modified."
+        )
+
+    return build_table_map()
+
+
+# Fellowship Management routes — integrated additively.
+from fellowship_management import register_fellowship_routes
+register_fellowship_routes(app, db_getter=db, user_getter=current_user)
+
 with app.app_context():
-    init_db()
-    ensure_runtime_schema()
-    ensure_member_passport_photo_schema()
-    ensure_member_care_attachment_schema()
-    ensure_member_care_case_assignment_schema()
-    ensure_member_care_timeline_schema()
+    if database_backend() == "postgres":
+        TABLES = validate_postgres_startup_schema()
+
+        # Additive schema for the public Devotional & Worship Centre.
+        # The main PostgreSQL validator intentionally avoids SQLite migrations;
+        # create these feature tables explicitly so public/admin routes work
+        # on Naijacloud without touching existing church records.
+        _devotional_conn = db()
+        _devotional_conn.execute("""
+            CREATE TABLE IF NOT EXISTS devotional_resources (
+                resource_id TEXT PRIMARY KEY,
+                collection TEXT NOT NULL,
+                item_number TEXT DEFAULT '',
+                title TEXT NOT NULL DEFAULT '',
+                content_json TEXT NOT NULL DEFAULT '{}',
+                search_text TEXT NOT NULL DEFAULT '',
+                audio_path TEXT DEFAULT '',
+                author_path TEXT DEFAULT '',
+                published INTEGER NOT NULL DEFAULT 1,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        _devotional_conn.execute("""
+            CREATE INDEX IF NOT EXISTS idx_devotional_resources_collection
+            ON devotional_resources(collection, published)
+        """)
+        _devotional_conn.execute("""
+            CREATE TABLE IF NOT EXISTS devotional_import_jobs (
+                job_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'queued',
+                progress INTEGER NOT NULL DEFAULT 0,
+                message TEXT DEFAULT '',
+                imported_records INTEGER NOT NULL DEFAULT 0,
+                uploaded_assets INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # Additive compatibility migrations for databases created by earlier
+        # releases. Keep storage_path available on both devotional tables so
+        # queued imports and older resource metadata queries cannot fail.
+        _devotional_conn.execute(
+            "ALTER TABLE devotional_resources ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''"
+        )
+        _devotional_conn.execute(
+            "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''"
+        )
+        _devotional_conn.execute(
+            "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS package_size BIGINT DEFAULT 0"
+        )
+        _devotional_conn.commit()
+    else:
+        init_db()
+        ensure_runtime_schema()
+        ensure_member_passport_photo_schema()
+        ensure_member_care_attachment_schema()
+        ensure_member_care_case_assignment_schema()
+        ensure_member_care_timeline_schema()
+    # Additive payment configuration migration for both SQLite and PostgreSQL.
+    _payment_conn = db()
+    if not table_column_names(_payment_conn, "payment_settings"):
+        if database_backend() == "postgres":
+            _payment_conn.execute("""
+                CREATE TABLE IF NOT EXISTS payment_settings(
+                    id BIGSERIAL PRIMARY KEY,
+                    provider TEXT NOT NULL DEFAULT 'Monnify',
+                    enabled INTEGER DEFAULT 0,
+                    public_key TEXT,
+                    secret_key TEXT,
+                    contract_code TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+    for _column, _definition in {
+        "mode": "TEXT DEFAULT 'test'",
+        "secret_encrypted": "TEXT DEFAULT ''",
+        "webhook_secret_encrypted": "TEXT DEFAULT ''",
+        "merchant_id": "TEXT DEFAULT ''",
+        "bank_name": "TEXT DEFAULT ''",
+        "account_name": "TEXT DEFAULT ''",
+        "account_number": "TEXT DEFAULT ''",
+        "account_instructions": "TEXT DEFAULT ''",
+        "is_default": "INTEGER DEFAULT 0"
+    }.items():
+        ensure_column(_payment_conn, "payment_settings", _column, _definition)
+    _payment_conn.commit()
     TABLES = build_table_map()
+def _payment_fernet():
+    """Derive an encryption key from the persistent Flask session secret."""
+    import base64
+    import hashlib
+    from cryptography.fernet import Fernet
+    import os
+    encryption_material = os.environ.get("PAYMENT_SETTINGS_ENCRYPTION_KEY", "").strip() or str(app.secret_key)
+    digest = hashlib.sha256(("mcn-payment-settings:" + encryption_material).encode("utf-8")).digest()
+    return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def _payment_secret(provider, field="secret_key"):
+    """Read a provider credential without ever returning it to the browser."""
+    import os
+    env_names = {
+        ("flutterwave", "secret_key"): "FLW_SECRET_KEY",
+        ("flutterwave", "webhook_secret"): "FLW_SECRET_HASH",
+        ("paystack", "secret_key"): "PAYSTACK_SECRET_KEY",
+        ("paystack", "webhook_secret"): "PAYSTACK_SECRET_KEY",
+    }
+    env_name = env_names.get((str(provider).lower(), field))
+    row = db().execute(
+        "SELECT secret_encrypted,webhook_secret_encrypted FROM payment_settings WHERE LOWER(provider)=? ORDER BY id DESC LIMIT 1",
+        (str(provider).lower(),)
+    ).fetchone()
+    if row and field == "webhook_secret" and str(provider).lower() == "paystack":
+        # Paystack signs webhooks with the API secret key itself.
+        encrypted = row["secret_encrypted"]
+    else:
+        encrypted = (row["webhook_secret_encrypted"] if field == "webhook_secret" else row["secret_encrypted"]) if row else ""
+    if encrypted:
+        try:
+            return _payment_fernet().decrypt(str(encrypted).encode("ascii")).decode("utf-8")
+        except Exception:
+            app.logger.error("Unable to decrypt saved payment credential for %s.", provider)
+    return os.environ.get(env_name, "").strip() if env_name else ""
+
+
+def _payment_provider_config(provider):
+    return db().execute(
+        "SELECT * FROM payment_settings WHERE LOWER(provider)=? ORDER BY id DESC LIMIT 1",
+        (str(provider).lower(),)
+    ).fetchone()
+
+
 @app.post("/api/payment/settings")
 @login_required
 def api_payment_settings_save():
-    if current_user()["role"]!="Admin": return jsonify({"error":"Only Admin can change payment settings"}),403
-    d=request.get_json() or {}
-    provider=d.get("provider","Monnify")
-    enabled=1 if d.get("enabled") else 0
-    db().execute("DELETE FROM payment_settings")
-    db().execute("INSERT INTO payment_settings(provider,enabled,public_key,contract_code) VALUES(?,?,?,?)",(provider,enabled,d.get("public_key",""),d.get("contract_code","")))
-    db().commit()
-    return jsonify({"ok":True,"message":"Payment settings saved."})
+    import re
+    user = current_user()
+    if not user or user["role"] != "Admin":
+        return jsonify({"error":"Only Admin can change payment settings"}),403
+    d = request.get_json(silent=True) or {}
+    provider = str(d.get("provider") or "").strip().lower()
+    allowed = {"flutterwave", "paystack", "monnify", "direct_bank_transfer"}
+    if provider not in allowed:
+        return jsonify({"error":"Select a supported payment provider."}),400
+    mode = str(d.get("mode") or "test").strip().lower()
+    if mode not in {"test", "live"}:
+        return jsonify({"error":"Payment mode must be Test or Live."}),400
+    enabled = 1 if d.get("enabled") else 0
+    is_default = 1 if d.get("is_default") else 0
+    if is_default and not enabled:
+        return jsonify({"error":"Activate a provider before making it the default."}),400
+    public_key = str(d.get("public_key") or "").strip()[:500]
+    contract_code = str(d.get("contract_code") or "").strip()[:120]
+    merchant_id = str(d.get("merchant_id") or "").strip()[:120]
+    bank_name = str(d.get("bank_name") or "").strip()[:120]
+    account_name = str(d.get("account_name") or "").strip()[:160]
+    account_number = str(d.get("account_number") or "").strip()[:40]
+    instructions = str(d.get("account_instructions") or "").strip()[:2000]
+    secret = str(d.get("secret_key") or "").strip()
+    webhook_secret = str(d.get("webhook_secret") or "").strip()
+    if provider == "direct_bank_transfer":
+        if enabled and not (bank_name and account_name and account_number):
+            return jsonify({"error":"Enter bank name, account name and account number before enabling direct transfer."}),400
+        if account_number and not re.fullmatch(r"[0-9 -]{6,30}", account_number):
+            return jsonify({"error":"Enter a valid bank account number."}),400
+    elif enabled and provider in {"flutterwave", "paystack"}:
+        existing_secret = _payment_secret(provider)
+        if not (secret or existing_secret):
+            return jsonify({"error":"Enter the provider secret key before activating this provider."}),400
+    elif enabled and provider == "monnify":
+        return jsonify({"error":"Monnify checkout is not yet connected. Keep it disabled until its API integration is enabled."}),409
+
+    conn = db()
+    try:
+        old = _payment_provider_config(provider)
+        encrypted_secret = old["secret_encrypted"] if old and "secret_encrypted" in old.keys() else ""
+        encrypted_webhook = old["webhook_secret_encrypted"] if old and "webhook_secret_encrypted" in old.keys() else ""
+        if secret:
+            encrypted_secret = _payment_fernet().encrypt(secret.encode("utf-8")).decode("ascii")
+        if webhook_secret:
+            encrypted_webhook = _payment_fernet().encrypt(webhook_secret.encode("utf-8")).decode("ascii")
+        if is_default:
+            conn.execute("UPDATE payment_settings SET is_default=0")
+        if old:
+            conn.execute("""
+                UPDATE payment_settings SET enabled=?,public_key=?,contract_code=?,
+                    mode=?,secret_encrypted=?,webhook_secret_encrypted=?,merchant_id=?,
+                    bank_name=?,account_name=?,account_number=?,account_instructions=?,
+                    is_default=?,updated_at=CURRENT_TIMESTAMP WHERE id=?
+            """, (enabled,public_key,contract_code,mode,encrypted_secret,encrypted_webhook,
+                  merchant_id,bank_name,account_name,account_number,instructions,is_default,old["id"]))
+        else:
+            conn.execute("""
+                INSERT INTO payment_settings
+                (provider,enabled,public_key,contract_code,mode,secret_encrypted,
+                 webhook_secret_encrypted,merchant_id,bank_name,account_name,
+                 account_number,account_instructions,is_default)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (provider,enabled,public_key,contract_code,mode,encrypted_secret,
+                  encrypted_webhook,merchant_id,bank_name,account_name,account_number,
+                  instructions,is_default))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Payment provider settings could not be saved.")
+        return jsonify({"error":"Payment settings could not be saved. No existing settings were deleted."}),500
+    return jsonify({"ok":True,"message":"Payment provider settings saved securely."})
+
 
 @app.get("/api/payment/settings")
 @login_required
 def api_payment_settings():
-    if current_user()["role"]!="Admin": return jsonify({"error":"Only Admin can view payment settings"}),403
-    r=db().execute("SELECT provider,enabled,public_key,contract_code FROM payment_settings ORDER BY id DESC LIMIT 1").fetchone()
-    return jsonify(dict(r) if r else {"provider":"Monnify","enabled":0,"public_key":"","contract_code":""})
+    user = current_user()
+    if not user or user["role"] != "Admin":
+        return jsonify({"error":"Only Admin can view payment settings"}),403
+    rows = db().execute("""
+        SELECT provider,enabled,public_key,contract_code,mode,merchant_id,
+               bank_name,account_name,account_number,account_instructions,is_default,
+               secret_encrypted,webhook_secret_encrypted
+        FROM payment_settings ORDER BY provider
+    """).fetchall()
+    providers = {}
+    for row in rows:
+        item = dict(row)
+        key = str(item["provider"]).lower()
+        item["secret_configured"] = bool(item.get("secret_encrypted")) or bool(_payment_secret(key))
+        item["webhook_secret_configured"] = bool(item.get("webhook_secret_encrypted")) or bool(_payment_secret(key,"webhook_secret"))
+        item.pop("secret_encrypted",None)
+        item.pop("webhook_secret_encrypted",None)
+        item["secret_key"] = ""
+        item["webhook_secret"] = ""
+        providers[key] = item
+    for key in ("flutterwave","paystack","monnify","direct_bank_transfer"):
+        providers.setdefault(key,{"provider":key,"enabled":0,"mode":"test","public_key":"",
+            "contract_code":"","merchant_id":"","bank_name":"","account_name":"",
+            "account_number":"","account_instructions":"","is_default":0,
+            "secret_configured":bool(_payment_secret(key)),
+            "webhook_secret_configured":bool(_payment_secret(key,"webhook_secret")),
+            "secret_key":"","webhook_secret":""})
+    return jsonify({"providers":providers,"default_provider":next((k for k,v in providers.items() if v.get("is_default") and v.get("enabled")), "")})
+
+
+@app.post("/api/payment/settings/test")
+@login_required
+def api_payment_settings_test():
+    import requests
+    user = current_user()
+    if not user or user["role"] != "Admin":
+        return jsonify({"error":"Only Admin can test payment connections."}),403
+    d=request.get_json(silent=True) or {}
+    provider=str(d.get("provider") or "").lower()
+    secret=str(d.get("secret_key") or "").strip() or _payment_secret(provider)
+    if provider=="flutterwave":
+        if not secret: return jsonify({"ok":False,"message":"Flutterwave secret key is not configured."}),400
+        url="https://api.flutterwave.com/v3/balances"
+    elif provider=="paystack":
+        if not secret: return jsonify({"ok":False,"message":"Paystack secret key is not configured."}),400
+        url="https://api.paystack.co/bank"
+    elif provider=="direct_bank_transfer":
+        cfg=_payment_provider_config(provider)
+        ready=bool(cfg and cfg["enabled"] and cfg["bank_name"] and cfg["account_name"] and cfg["account_number"])
+        return jsonify({"ok":ready,"message":"Bank transfer details are complete." if ready else "Complete the bank account details first."})
+    else:
+        return jsonify({"ok":False,"message":"This provider's live connection test is not yet supported."}),409
+    try:
+        response=requests.get(url,headers={"Authorization":"Bearer "+secret,"Accept":"application/json"},timeout=15)
+        payload=response.json() if response.content else {}
+        ok=response.status_code==200 and isinstance(payload,dict) and bool(payload.get("status"))
+        return jsonify({"ok":ok,"http_status":response.status_code,
+            "message":("Connection authenticated successfully." if ok else str(payload.get("message") or "Provider rejected the credentials.")[:220])})
+    except requests.RequestException:
+        app.logger.warning("Payment provider connection test failed for %s.",provider)
+        return jsonify({"ok":False,"message":"Could not reach the provider. Check network access and credentials."}),502
+
+
+@app.get("/api/payment/public-config")
+def api_payment_public_config():
+    rows=db().execute("""
+        SELECT provider,enabled,bank_name,account_name,account_number,account_instructions,is_default
+        FROM payment_settings WHERE enabled=1
+    """).fetchall()
+    active=[dict(r) for r in rows]
+    default=next((r for r in active if r.get("is_default")),None)
+    return jsonify({"default_provider":(default or {}).get("provider","Flutterwave"),
+        "direct_bank_transfer":next((r for r in active if r.get("provider")=="direct_bank_transfer"),None)})
 
 
 
+
+
+
+@app.post("/api/payment/bank-transfer/<reference>/confirm")
+@login_required
+def api_confirm_bank_transfer(reference):
+    import json
+    from datetime import date, datetime
+    from decimal import Decimal, InvalidOperation
+    user=current_user()
+    if not user or user["role"] not in {"Admin","Finance Officer","Evangelism Minister"}:
+        return jsonify({"error":"Only authorized finance officers can confirm bank transfers."}),403
+    reference=str(reference or "").strip()
+    if not reference or len(reference)>120:
+        return jsonify({"error":"A valid payment reference is required."}),400
+    conn=db()
+    try:
+        if database_backend()=="postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))",(reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+        payment=conn.execute("SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",(reference,)).fetchone()
+        if not payment or str(payment["gateway"] or "").lower()!="direct bank transfer":
+            conn.rollback()
+            return jsonify({"error":"Direct bank transfer record not found."}),404
+        try:
+            amount=Decimal(str(payment["amount"]))
+            if not amount.is_finite() or amount<=0 or amount>=Decimal("1000000000") or amount!=amount.quantize(Decimal("0.01")):
+                raise InvalidOperation()
+        except (TypeError,ValueError,InvalidOperation):
+            conn.rollback()
+            return jsonify({"error":"Stored payment amount is invalid."}),409
+        existing=conn.execute("SELECT id,amount,church_account_id,member_id FROM income WHERE reference=? LIMIT 1",(reference,)).fetchone()
+        if existing:
+            if Decimal(str(existing["amount"]))!=amount or existing["church_account_id"]!=payment["church_account_id"] or existing["member_id"]!=payment["member_id"]:
+                conn.rollback()
+                return jsonify({"error":"Existing income does not match this transfer."}),409
+            income_id=existing["id"]
+        else:
+            conn.execute("""
+                INSERT INTO income
+                (date,donor_name,source,fund,amount,method,reference,received_by,notes,member_id,church_account_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """,(date.today().isoformat(),payment["donor_name"] or "Online Donor","Online Payment",
+                 payment["purpose"] or "General Evangelism",float(amount),"Bank Transfer",reference,
+                 user["username"],"Bank transfer manually confirmed by finance office.",
+                 payment["member_id"],payment["church_account_id"]))
+            income=conn.execute("SELECT id FROM income WHERE reference=? LIMIT 1",(reference,)).fetchone()
+            if not income: raise RuntimeError("Income record was not created.")
+            income_id=income["id"]
+        conn.execute("""
+            UPDATE payment_transactions SET status='Paid',gateway_response=?,
+                paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP) WHERE reference=?
+        """,(json.dumps({"confirmed_by":user["username"],"confirmed_at":datetime.now().isoformat(timespec="seconds")})[:12000],reference))
+        details=json.dumps({"reference":reference,"amount":str(amount),"action":"Manual bank transfer confirmation"})
+        conn.execute("""
+            INSERT INTO audit_log(happened_at,action,table_name,record_id,details,user_id,username)
+            VALUES(?,?,?,?,?,?,?)
+        """,(datetime.now().isoformat(timespec="seconds"),"BANK_TRANSFER_CONFIRMED","income",income_id,details,user["id"],user["username"]))
+        conn.commit()
+        return jsonify({"ok":True,"paid":True,"reference":reference,"income_id":income_id,"amount":float(amount)}),200
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Manual bank transfer confirmation failed.")
+        return jsonify({"error":"Bank transfer could not be confirmed."}),500
+
+
+@app.post("/api/payment/<reference>/confirm-received")
+@login_required
+def api_confirm_payment_received(reference):
+    """Manually confirm a pending payment only after funds are visible in the church bank account."""
+    import json
+    from datetime import datetime, date
+    from decimal import Decimal, InvalidOperation
+
+    user = current_user()
+    if not user or user["role"] not in {"Admin", "Finance Officer"}:
+        return jsonify({"error": "Only Admin or Finance Officer can confirm received funds."}), 403
+
+    reference = str(reference or "").strip()
+    data = request.get_json(silent=True) or {}
+    confirmation_note = str(data.get("confirmation_note") or "").strip()
+
+    if not reference or len(reference) > 120:
+        return jsonify({"error": "A valid payment reference is required."}), 400
+    if len(confirmation_note) < 8 or len(confirmation_note) > 1000:
+        return jsonify({"error": "Enter a brief bank-credit confirmation note (8–1000 characters)."}), 400
+
+    conn = db()
+    try:
+        if database_backend() == "postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+
+        payment = conn.execute(
+            "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+
+        if not payment:
+            conn.rollback()
+            return jsonify({"error": "Payment transaction not found."}), 404
+
+        if str(payment["status"] or "").strip().lower() != "pending":
+            conn.rollback()
+            return jsonify({
+                "error": "Only pending payments can be manually confirmed.",
+                "status": payment["status"]
+            }), 409
+
+        try:
+            amount = Decimal(str(payment["amount"]))
+            if (
+                not amount.is_finite() or amount <= 0
+                or amount >= Decimal("1000000000")
+                or amount != amount.quantize(Decimal("0.01"))
+            ):
+                raise InvalidOperation()
+        except (TypeError, ValueError, InvalidOperation):
+            conn.rollback()
+            return jsonify({"error": "Stored payment amount is invalid."}), 409
+
+        existing = conn.execute(
+            "SELECT id, amount, member_id, church_account_id FROM income WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+
+        if existing:
+            try:
+                existing_amount = Decimal(str(existing["amount"]))
+                matches = (
+                    existing_amount == amount
+                    and existing["member_id"] == payment["member_id"]
+                    and existing["church_account_id"] == payment["church_account_id"]
+                )
+            except (TypeError, ValueError, InvalidOperation):
+                matches = False
+
+            if not matches:
+                conn.rollback()
+                return jsonify({
+                    "error": "An income record already uses this reference but its amount or church account does not match. Please investigate; no changes were made."
+                }), 409
+            income_id = existing["id"]
+        else:
+            now = datetime.now().isoformat(timespec="seconds")
+            conn.execute("""
+                INSERT INTO income
+                (date, donor_name, source, fund, amount, method, reference,
+                 received_by, notes, member_id, church_account_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                date.today().isoformat(),
+                payment["donor_name"] or "Online Donor",
+                "Online Payment",
+                payment["purpose"] or "General Evangelism",
+                float(amount),
+                "Bank Credit - Manual Confirmation",
+                reference,
+                user["username"] or user["role"],
+                "Funds confirmed in church bank account by authorized officer. " + confirmation_note,
+                payment["member_id"],
+                payment["church_account_id"]
+            ))
+            income = conn.execute(
+                "SELECT id FROM income WHERE reference=? LIMIT 1", (reference,)
+            ).fetchone()
+            if not income:
+                raise RuntimeError("Income record was not created.")
+            income_id = income["id"]
+
+        confirmed_at = datetime.now().isoformat(timespec="seconds")
+        previous_response = str(payment["gateway_response"] or "")
+        confirmation_payload = json.dumps({
+            "manual_bank_credit_confirmation": True,
+            "confirmed_by": user["username"] or user["role"],
+            "confirmed_by_role": user["role"],
+            "confirmed_at": confirmed_at,
+            "confirmation_note": confirmation_note,
+            "previous_gateway_response": previous_response[:6000]
+        }, ensure_ascii=False)[:12000]
+
+        conn.execute("""
+            UPDATE payment_transactions
+            SET status='Paid', paid_at=?, gateway_response=?
+            WHERE reference=? AND LOWER(status)='pending'
+        """, (confirmed_at, confirmation_payload, reference))
+
+        details = json.dumps({
+            "reference": reference,
+            "income_id": income_id,
+            "amount": str(amount),
+            "church_name": payment["church_name"],
+            "church_account_id": payment["church_account_id"],
+            "gateway": payment["gateway"],
+            "action": "Manual confirmation of funds received in church bank account",
+            "confirmation_note": confirmation_note
+        }, ensure_ascii=False)
+
+        conn.execute("""
+            INSERT INTO audit_log
+            (happened_at, action, table_name, record_id, details, user_id, username)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            confirmed_at,
+            "PAYMENT_FUNDS_MANUALLY_CONFIRMED",
+            "income",
+            income_id,
+            details,
+            user["id"],
+            user["username"] or user["role"]
+        ))
+
+        conn.commit()
+        return jsonify({
+            "ok": True,
+            "paid": True,
+            "reference": reference,
+            "income_id": income_id,
+            "amount": float(amount),
+            "confirmed_by": user["username"] or user["role"],
+            "message": "Funds marked as received and linked to the church income record."
+        }), 200
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Manual payment receipt confirmation failed.")
+        return jsonify({"error": "Payment could not be confirmed. No partial changes were committed."}), 500
 
 
 @app.get("/api/payment-history/<reference>")
@@ -6915,132 +8901,175 @@ def api_payment_details(reference):
 @app.post("/api/payment-reconciliation/<reference>/reconcile")
 @login_required
 def api_payment_reconciliation_reconcile(reference):
-    u=current_user()
+    import json
+    from decimal import Decimal, InvalidOperation
+    from datetime import date, datetime
 
-    allowed={
-        "Admin",
-        "Finance Officer",
-        "Evangelism Minister",
-    }
+    u = current_user()
+    allowed = {"Admin", "Finance Officer", "Evangelism Minister"}
+    if not u or u["role"] not in allowed:
+        return jsonify({"error": "Only authorized finance officers can reconcile payments."}), 403
 
-    if u["role"] not in allowed:
-        return jsonify({"error":"Only authorized finance officers can reconcile payments."}),403
-
-    reference=str(reference or "").strip()
-
+    reference = str(reference or "").strip()
     if not reference:
-        return jsonify({"error":"Payment reference is required."}),400
+        return jsonify({"error": "Payment reference is required."}), 400
 
-    payment=db().execute(
-        "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
-        (reference,)
-    ).fetchone()
+    conn = db()
+    try:
+        if database_backend() == "postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
 
-    if not payment:
-        return jsonify({"error":"Payment transaction not found."}),404
+        payment = conn.execute(
+            "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
 
-    if str(payment["status"] or "").lower()!="paid":
-        return jsonify({
-            "error":"Only successful paid transactions can be reconciled.",
-            "status":payment["status"]
-        }),409
+        if not payment:
+            conn.rollback()
+            return jsonify({"error": "Payment transaction not found."}), 404
 
-    existing=db().execute(
-        "SELECT * FROM income WHERE reference=? LIMIT 1",
-        (reference,)
-    ).fetchone()
+        if str(payment["status"] or "").lower() != "paid":
+            conn.rollback()
+            return jsonify({
+                "error": "Only successful paid transactions can be reconciled.",
+                "status": payment["status"]
+            }), 409
 
-    if existing:
-        return jsonify({
-            "ok":True,
-            "already_reconciled":True,
-            "message":"This payment is already linked to an income record.",
-            "income_id":existing["id"],
-            "reference":reference
-        }),200
+        try:
+            amount_decimal = Decimal(str(payment["amount"]))
+            if (
+                not amount_decimal.is_finite()
+                or amount_decimal <= 0
+                or amount_decimal >= Decimal("1000000000")
+                or amount_decimal != amount_decimal.quantize(Decimal("0.01"))
+            ):
+                raise InvalidOperation()
+        except (TypeError, ValueError, InvalidOperation):
+            conn.rollback()
+            return jsonify({"error": "Payment amount is invalid."}), 409
 
-    amount=float(payment["amount"] or 0)
+        amount = float(amount_decimal)
 
-    if amount<=0:
-        return jsonify({"error":"Payment amount is invalid."}),409
+        existing = conn.execute(
+            """
+            SELECT id, amount, member_id, church_account_id
+            FROM income
+            WHERE reference=?
+            LIMIT 1
+            """,
+            (reference,)
+        ).fetchone()
 
-    donor_name=payment["donor_name"] or "Online Donor"
-    purpose=payment["purpose"] or "General Evangelism"
+        if existing:
+            try:
+                existing_amount = Decimal(str(existing["amount"]))
+                amount_matches = (
+                    existing_amount.is_finite()
+                    and existing_amount == amount_decimal
+                )
+            except (TypeError, ValueError, InvalidOperation):
+                amount_matches = False
 
-    db().execute(
-        """
-        INSERT INTO income
-        (
-            date,
-            donor_name,
-            source,
-            fund,
+            member_matches = (
+                existing["member_id"] == payment["member_id"]
+            )
+            account_matches = (
+                existing["church_account_id"] == payment["church_account_id"]
+            )
+
+            if not (amount_matches and member_matches and account_matches):
+                conn.rollback()
+                return jsonify({
+                    "error": (
+                        "An income record already uses this reference, "
+                        "but its amount or account details do not match "
+                        "the payment. Please investigate before proceeding."
+                    ),
+                    "reference": reference
+                }), 409
+
+            conn.rollback()
+            return jsonify({
+                "ok": True,
+                "already_reconciled": True,
+                "message": "This payment is already linked to a matching income record.",
+                "income_id": existing["id"],
+                "reference": reference
+            }), 200
+
+        gateway = str(payment["gateway"] or "").strip()
+        method = str(payment["payment_method"] or gateway or "Online Payment")
+
+        conn.execute("""
+            INSERT INTO income
+            (date, donor_name, source, fund, amount, method, reference,
+             received_by, notes, member_id, church_account_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            date.today().isoformat(),
+            payment["donor_name"] or "Online Donor",
+            "Online Payment",
+            payment["purpose"] or "General Evangelism",
             amount,
             method,
             reference,
-            received_by,
-            notes,
-            member_id,
-            church_account_id
-        )
-        VALUES(
-            date('now'),
-            ?,?,?,?,?,?,?,?,?,?
-        )
-        """,
-        (
-            donor_name,
-            "Online Payment",
-            purpose,
-            amount,
-            payment["payment_method"] or "Paystack",
-            reference,
-            u["username"] if "username" in u.keys() else u["role"],
+            u["username"] or u["role"] or "Finance Officer",
             "Manually reconciled online payment",
             payment["member_id"],
             payment["church_account_id"]
-        )
-    )
+        ))
 
-    db().commit()
+        new_income = conn.execute(
+            "SELECT id FROM income WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
 
-    new_income=db().execute(
-        "SELECT id FROM income WHERE reference=? LIMIT 1",
-        (reference,)
-    ).fetchone()
+        if not new_income:
+            raise RuntimeError("Income record was not created.")
 
-    audit_details = {
-        "payment_reference": reference,
-        "income_id": new_income["id"] if new_income else None,
-        "amount": amount,
-        "action": "Manual payment reconciliation"
-    }
+        details = json.dumps({
+            "payment_reference": reference,
+            "income_id": new_income["id"],
+            "amount": amount,
+            "gateway": gateway,
+            "action": "Manual payment reconciliation"
+        }, ensure_ascii=False)
 
-    db().execute(
-        """
-        INSERT INTO audit_log
-        (happened_at, action, table_name, record_id, details, user_id, username)
-        VALUES(datetime('now'),?,?,?,?,?,?)
-        """,
-        (
+        conn.execute("""
+            INSERT INTO audit_log
+            (happened_at, action, table_name, record_id, details, user_id, username)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            datetime.now().isoformat(timespec="seconds"),
             "MANUAL_RECONCILIATION",
             "income",
-            new_income["id"] if new_income else None,
-            str(audit_details),
-            u.get("id"),
-            u.get("username") or u.get("role")
-        )
-    )
-    db().commit()
+            new_income["id"],
+            details,
+            u["id"],
+            u["username"] or u["role"]
+        ))
 
-    return jsonify({
-        "ok":True,
-        "already_reconciled":False,
-        "message":"Payment successfully reconciled into income.",
-        "income_id":new_income["id"] if new_income else None,
-        "reference":reference,
-        "amount":amount
-    }),201
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "already_reconciled": False,
+            "message": "Payment successfully reconciled into income.",
+            "income_id": new_income["id"],
+            "reference": reference,
+            "amount": amount
+        }), 201
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Manual payment reconciliation failed.")
+        return jsonify({"error": "Reconciliation failed. No partial changes were committed."}), 500
+
 
 @app.get("/api/payment-reconciliation/<reference>")
 @login_required
@@ -7982,9 +10011,395 @@ def api_payment_history():
         }
     })
 
+
+
+def _flutterwave_verify_transaction(reference, transaction_id):
+    import os
+    import json
+    import requests
+    from datetime import date, datetime
+    from decimal import Decimal, InvalidOperation
+
+    secret = _payment_secret("flutterwave")
+    if not secret:
+        return {"error": "Flutterwave secret key is not configured."}, 503
+
+    reference = str(reference or "").strip()
+    transaction_id = str(transaction_id or "").strip()
+
+    if (
+        not reference
+        or len(reference) > 120
+        or not transaction_id.isascii()
+        or not transaction_id.isdigit()
+        or len(transaction_id) > 30
+        or int(transaction_id) <= 0
+    ):
+        return {"error": "A valid payment reference and transaction ID are required."}, 400
+
+    # Check the local transaction before contacting Flutterwave.
+    conn = db()
+    preliminary_row = conn.execute(
+        "SELECT gateway FROM payment_transactions WHERE reference=? LIMIT 1",
+        (reference,)
+    ).fetchone()
+
+    if not preliminary_row:
+        return {"error": "Payment transaction not found."}, 404
+
+    if str(preliminary_row["gateway"] or "").lower() != "flutterwave":
+        return {"error": "This is not a Flutterwave transaction."}, 400
+
+    try:
+        response = requests.get(
+            "https://api.flutterwave.com/v3/transactions/" + transaction_id + "/verify",
+            headers={"Authorization": "Bearer " + secret},
+            timeout=30
+        )
+        result = response.json()
+    except Exception:
+        app.logger.exception("Flutterwave API verification request failed.")
+        return {"error": "Unable to verify payment with Flutterwave."}, 502
+
+    if (
+        response.status_code != 200
+        or not isinstance(result, dict)
+        or result.get("status") != "success"
+    ):
+        return {"error": "Flutterwave verification failed."}, 502
+
+    data = result.get("data")
+    if not isinstance(data, dict):
+        return {"error": "Flutterwave returned an invalid verification record."}, 502
+
+    if str(data.get("id") or "") != transaction_id:
+        return {"error": "Flutterwave transaction ID mismatch."}, 409
+
+    if str(data.get("tx_ref") or "") != reference:
+        return {"error": "Payment reference mismatch."}, 409
+
+    if str(data.get("currency") or "").upper() != "NGN":
+        return {"error": "Payment currency mismatch."}, 409
+
+    if str(data.get("status") or "").lower() != "successful":
+        return {
+            "ok": True,
+            "paid": False,
+            "reference": reference,
+            "status": data.get("status") or "pending"
+        }, 200
+
+    try:
+        paid_amount = Decimal(str(data.get("amount")))
+        if (
+            not paid_amount.is_finite()
+            or paid_amount <= Decimal("0")
+            or paid_amount >= Decimal("1000000000")
+            or paid_amount != paid_amount.quantize(Decimal("0.01"))
+        ):
+            raise InvalidOperation()
+    except (TypeError, ValueError, InvalidOperation):
+        return {"error": "Invalid payment amount."}, 409
+
+    try:
+        if database_backend() == "postgres":
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(?))",
+                (reference,)
+            )
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+
+        row = conn.execute(
+            "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+
+        if not row:
+            conn.rollback()
+            return {"error": "Payment transaction not found."}, 404
+
+        if str(row["gateway"] or "").lower() != "flutterwave":
+            conn.rollback()
+            return {"error": "This is not a Flutterwave transaction."}, 400
+
+        if str(row["currency"] or "").upper() != "NGN":
+            conn.rollback()
+            return {"error": "Stored payment currency is not NGN."}, 409
+
+        try:
+            expected_amount = Decimal(str(row["amount"]))
+            if (
+                not expected_amount.is_finite()
+                or expected_amount <= Decimal("0")
+                or expected_amount >= Decimal("1000000000")
+                or expected_amount != expected_amount.quantize(Decimal("0.01"))
+                or paid_amount != expected_amount
+            ):
+                raise InvalidOperation()
+        except (TypeError, ValueError, InvalidOperation):
+            conn.rollback()
+            return {"error": "Payment amount mismatch."}, 409
+
+        stored_gateway_id = str(row["gateway_transaction_id"] or "").strip()
+        if stored_gateway_id and stored_gateway_id != transaction_id:
+            conn.rollback()
+            return {"error": "A different gateway transaction is already recorded."}, 409
+
+        existing = conn.execute(
+            """
+            SELECT id, amount, member_id, church_account_id
+            FROM income
+            WHERE reference=?
+            LIMIT 1
+            """,
+            (reference,)
+        ).fetchone()
+
+        if existing:
+            try:
+                existing_amount = Decimal(str(existing["amount"]))
+                amount_matches = (
+                    existing_amount.is_finite()
+                    and existing_amount == paid_amount
+                )
+            except (TypeError, ValueError, InvalidOperation):
+                amount_matches = False
+
+            member_matches = (
+                existing["member_id"] == row["member_id"]
+            )
+            account_matches = (
+                existing["church_account_id"] == row["church_account_id"]
+            )
+
+            if not (amount_matches and member_matches and account_matches):
+                conn.rollback()
+                return {
+                    "error": (
+                        "An income record already uses this payment reference, "
+                        "but its amount or account details do not match. "
+                        "Please investigate before proceeding."
+                    ),
+                    "reference": reference
+                }, 409
+
+        income_id = existing["id"] if existing else None
+
+        if not existing:
+            conn.execute("""
+                INSERT INTO income
+                (date, donor_name, source, fund, amount, method, reference,
+                 received_by, notes, member_id, church_account_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                date.today().isoformat(),
+                row["donor_name"] or "Online Donor",
+                "Online Payment",
+                row["purpose"] or "General Evangelism",
+                float(paid_amount),
+                "Flutterwave",
+                reference,
+                "Flutterwave",
+                "Verified Flutterwave payment",
+                row["member_id"],
+                row["church_account_id"]
+            ))
+
+            income = conn.execute(
+                "SELECT id FROM income WHERE reference=? LIMIT 1",
+                (reference,)
+            ).fetchone()
+
+            if not income:
+                raise RuntimeError("Flutterwave income record was not created.")
+
+            income_id = income["id"]
+
+            audit_details = json.dumps({
+                "gateway": "Flutterwave",
+                "reference": reference,
+                "amount": str(paid_amount),
+                "transaction_id": transaction_id,
+                "action": "Automatic verified payment reconciliation"
+            }, ensure_ascii=False)
+
+            conn.execute("""
+                INSERT INTO audit_log
+                (happened_at, action, table_name, record_id, details, user_id, username)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                datetime.now().isoformat(timespec="seconds"),
+                "FLUTTERWAVE_AUTO_RECONCILIATION",
+                "income",
+                income_id,
+                audit_details,
+                None,
+                "system"
+            ))
+
+        # Always update payment status, even if income was already recorded.
+        conn.execute("""
+            UPDATE payment_transactions
+            SET status='Paid',
+                gateway_transaction_id=?,
+                gateway_response=?,
+                paid_at=COALESCE(NULLIF(paid_at, ''), ?)
+            WHERE reference=?
+        """, (
+            transaction_id,
+            json.dumps(result),
+            datetime.now().isoformat(timespec="seconds"),
+            reference
+        ))
+
+        conn.commit()
+
+        return {
+            "ok": True,
+            "paid": True,
+            "already_reconciled": bool(existing),
+            "income_id": income_id,
+            "reference": reference,
+            "status": "Paid",
+            "amount": float(paid_amount)
+        }, 200
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Flutterwave verification or reconciliation failed.")
+        return {
+            "error": "Payment verification could not be recorded. Please retry."
+        }, 500
+
+
+@app.get("/payment/complete")
+def payment_complete_page():
+    """Verify Flutterwave return and show a Diocese-branded thank-you page."""
+    reference = str(request.args.get("tx_ref") or request.args.get("reference") or "").strip()
+    transaction_id = str(request.args.get("transaction_id") or "").strip()
+    gateway_status = str(request.args.get("status") or "").strip().lower()
+    payment = None
+    result = {"paid": False}
+    if reference:
+        payment = db().execute(
+            "SELECT reference, amount, currency, purpose, donor_name, member_id, status, church_name FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+    if payment and gateway_status == "successful" and transaction_id:
+        result, http_status = _flutterwave_verify_transaction(reference, transaction_id)
+        if http_status != 200:
+            app.logger.error(
+                "Payment return verification failed for reference %s (HTTP %s): %s",
+                reference, http_status, result.get("error", "unknown verification error")
+            )
+    elif payment and str(payment["status"] or "").lower() == "paid":
+        result = {"paid": True, "status": "Paid"}
+    is_member = bool(payment and payment["member_id"])
+    return render_template(
+        "payment_result.html",
+        paid=bool(result.get("paid")),
+        reference=reference,
+        donor_name=(payment["donor_name"] if payment else ""),
+        amount=(payment["amount"] if payment else None),
+        purpose=(payment["purpose"] if payment else ""),
+        church_name=(payment["church_name"] if payment else ""),
+        is_member=is_member,
+        error=(result.get("error") or ""),
+        gateway_status=gateway_status
+    )
+
+
+@app.post("/api/flutterwave/webhook")
+def api_flutterwave_webhook():
+    import os
+    import hmac
+    import hashlib
+    import base64
+    import re
+
+    expected = _payment_secret("flutterwave", "webhook_secret")
+    if not expected:
+        app.logger.error("Flutterwave webhook rejected: FLW_SECRET_HASH is not configured.")
+        return jsonify({"error": "Webhook authentication is not configured."}), 503
+
+    # Support the v3 verif-hash header and the newer HMAC-SHA256
+    # flutterwave-signature header. The raw body is retained for HMAC validation.
+    raw_body = request.get_data(cache=True)
+    supplied_v3 = request.headers.get("verif-hash", "").strip()
+    supplied_v4 = request.headers.get("flutterwave-signature", "").strip()
+    expected_v4 = base64.b64encode(
+        hmac.new(expected.encode("utf-8"), raw_body, hashlib.sha256).digest()
+    ).decode("ascii")
+
+    valid_v3 = bool(supplied_v3) and hmac.compare_digest(supplied_v3, expected)
+    valid_v4 = bool(supplied_v4) and hmac.compare_digest(supplied_v4, expected_v4)
+    if not (valid_v3 or valid_v4):
+        app.logger.warning("Flutterwave webhook rejected: signature validation failed.")
+        return jsonify({"error": "Unauthorized webhook."}), 401
+
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"error": "Invalid webhook payload."}), 400
+
+    data = payload.get("data")
+    if not isinstance(data, dict):
+        return jsonify({"error": "Webhook transaction data is missing."}), 400
+
+    reference = str(data.get("tx_ref") or "").strip()
+    transaction_id = data.get("id")
+    if not reference or len(reference) > 120:
+        return jsonify({"error": "Invalid payment reference."}), 400
+
+    if (
+        isinstance(transaction_id, bool)
+        or not re.fullmatch(r"[1-9][0-9]*", str(transaction_id or ""))
+        or len(str(transaction_id)) > 30
+    ):
+        return jsonify({"error": "Invalid Flutterwave transaction ID."}), 400
+
+    # The shared verifier checks the final gateway status, exact amount,
+    # currency, reference and transaction ID, and posts income idempotently.
+    result, status = _flutterwave_verify_transaction(reference, int(transaction_id))
+    return jsonify(result), status
+
+
+@app.post("/api/paystack/webhook")
+def api_paystack_webhook():
+    import hmac
+    import hashlib
+    secret = _payment_secret("paystack")
+    if not secret:
+        return jsonify({"error":"Paystack webhook authentication is not configured."}),503
+    raw_body = request.get_data(cache=True)
+    supplied = request.headers.get("x-paystack-signature","").strip()
+    expected = hmac.new(secret.encode("utf-8"),raw_body,hashlib.sha512).hexdigest()
+    if not supplied or not hmac.compare_digest(supplied,expected):
+        app.logger.warning("Paystack webhook rejected: signature validation failed.")
+        return jsonify({"error":"Unauthorized webhook."}),401
+    payload=request.get_json(silent=True)
+    if not isinstance(payload,dict) or payload.get("event") not in {"charge.success"}:
+        return jsonify({"ok":True,"ignored":True}),200
+    data=payload.get("data")
+    if not isinstance(data,dict):
+        return jsonify({"error":"Invalid Paystack webhook payload."}),400
+    reference=str(data.get("reference") or "").strip()
+    if not reference or len(reference)>120:
+        return jsonify({"error":"Invalid payment reference."}),400
+    # Always verify with Paystack's API before recording any income.
+    with app.test_request_context("/api/payment/verify/"+reference,method="GET"):
+        result,status=api_payment_verify(reference)
+    if status >= 500:
+        return jsonify({"error":"Payment verification could not be completed. Paystack may retry."}),503
+    return jsonify({"ok":status==200,"verification_status":status}),200 if status in (200,409) else 400
+
+
 @app.get("/api/payment/verify/<reference>")
 def api_payment_verify(reference):
-    import os, requests
+    import os, requests, json
     reference = str(reference or "").strip()
     if not reference:
         return jsonify({"error":"Payment reference is required."}),400
@@ -7997,207 +10412,615 @@ def api_payment_verify(reference):
     if not row:
         return jsonify({"error":"Payment transaction not found."}),404
 
-    secret = os.environ.get("PAYSTACK_SECRET_KEY","").strip()
+    gateway = str(row["gateway"] or "").strip().lower()
+
+    if gateway == "flutterwave":
+        transaction_id = request.args.get("transaction_id", "")
+        result, status = _flutterwave_verify_transaction(reference, transaction_id)
+        return jsonify(result), status
+
+    if gateway != "paystack":
+        return jsonify({
+            "error": "This historical transaction belongs to another payment gateway.",
+            "gateway": row["gateway"],
+            "reference": reference
+        }), 409
+
+    secret = _payment_secret("paystack")
     if not secret:
-        return jsonify({"error":"Paystack secret key is not configured on the server."}),503
+        return jsonify({"error": "Paystack secret key is not configured on the server."}), 503
 
     try:
         r = requests.get(
             "https://api.paystack.co/transaction/verify/" + reference,
             headers={
-                "Authorization":"Bearer " + secret,
-                "Content-Type":"application/json"
+                "Authorization": "Bearer " + secret,
+                "Content-Type": "application/json"
             },
             timeout=30
         )
         result = r.json()
-    except Exception as e:
-        return jsonify({"error":"Paystack verification failed.","detail":str(e)}),502
+    except Exception:
+        app.logger.exception("Paystack API verification request failed.")
+        return jsonify({"error": "Paystack verification failed."}), 502
 
-    if not result.get("status"):
+    if (
+        r.status_code != 200
+        or not isinstance(result, dict)
+        or not result.get("status")
+        or not isinstance(result.get("data"), dict)
+    ):
         return jsonify({
-            "error": result.get("message","Paystack verification failed."),
+            "error": (
+                result.get("message", "Paystack verification failed.")
+                if isinstance(result, dict)
+                else "Paystack returned an invalid verification response."
+            ),
             "reference": reference
-        }),502
+        }), 502
 
-    data = result.get("data") or {}
-    gateway_status = str(data.get("status") or "").lower()
-    amount = float(data.get("amount") or 0) / 100
-    expected_amount = float(row["amount"] or 0)
+    data = result["data"]
+    gateway_status = str(data.get("status") or "").strip().lower()
+    returned_reference = str(data.get("reference") or "").strip()
+    currency = str(data.get("currency") or "").strip().upper()
+    transaction_id = str(data.get("id") or "").strip()
 
-    if gateway_status == "success" and abs(amount - expected_amount) > 0.01:
-        return jsonify({
-            "error":"Payment amount mismatch.",
-            "reference":reference,
-            "expected_amount":expected_amount,
-            "paid_amount":amount
-        }),409
+    if returned_reference != reference:
+        return jsonify({"error": "Paystack payment reference mismatch."}), 409
+    if currency != "NGN" or str(row["currency"] or "").upper() != "NGN":
+        return jsonify({"error": "Paystack payment currency mismatch."}), 409
 
     if gateway_status != "success":
-        db().execute(
-            "UPDATE payment_transactions SET status=?,gateway_response=? WHERE reference=?",
-            (gateway_status.title() or "Pending", str(result), reference)
-        )
-        db().commit()
+        conn = db()
+        if database_backend() == "postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+        current = conn.execute(
+            "SELECT status FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+        if current and str(current["status"] or "").lower() != "paid":
+            safe_status = {
+                "failed": "Failed",
+                "abandoned": "Abandoned",
+                "ongoing": "Pending",
+                "pending": "Pending"
+            }.get(gateway_status, "Pending")
+            conn.execute(
+                "UPDATE payment_transactions SET status=?,gateway_response=? WHERE reference=?",
+                (safe_status, json.dumps(result)[:12000], reference)
+            )
+        conn.commit()
         return jsonify({
-            "ok":True,
-            "paid":False,
-            "reference":reference,
-            "status":gateway_status or "pending"
-        })
+            "ok": True,
+            "paid": False,
+            "reference": reference,
+            "status": gateway_status or "pending"
+        }), 200
 
-    existing = db().execute(
-        "SELECT id FROM income WHERE reference=? LIMIT 1",
-        (reference,)
-    ).fetchone()
+    from decimal import Decimal, InvalidOperation
+    from datetime import date, datetime
+    import json
 
-    if not existing:
-        db().execute(
-            """INSERT INTO income
-            (date,donor_name,source,fund,amount,method,reference,received_by,notes,church_account_id)
-            VALUES(date('now'),?,?,?,?,?,?,?,?,?)""",
-            (
-                row["donor_name"] or "",
+    try:
+        amount_minor = Decimal(str(data.get("amount")))
+        expected_amount = Decimal(str(row["amount"]))
+        if (
+            not amount_minor.is_finite()
+            or amount_minor <= 0
+            or amount_minor != amount_minor.to_integral_value()
+            or not expected_amount.is_finite()
+            or expected_amount <= 0
+            or amount_minor / Decimal("100") != expected_amount
+        ):
+            raise InvalidOperation()
+    except (TypeError, ValueError, InvalidOperation):
+        return jsonify({"error": "Paystack payment amount mismatch."}), 409
+
+    if not transaction_id or not transaction_id.isascii() or not transaction_id.isdigit():
+        return jsonify({"error": "Paystack transaction ID is invalid."}), 409
+
+    conn = db()
+    try:
+        if database_backend() == "postgres":
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext(?))", (reference,))
+        else:
+            conn.execute("BEGIN IMMEDIATE")
+
+        payment = conn.execute(
+            "SELECT * FROM payment_transactions WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+        if not payment or str(payment["gateway"] or "").lower() != "paystack":
+            conn.rollback()
+            return jsonify({"error": "Paystack payment record not found."}), 404
+
+        if str(payment["currency"] or "").upper() != "NGN":
+            conn.rollback()
+            return jsonify({"error": "Stored payment currency is not NGN."}), 409
+
+        try:
+            current_expected = Decimal(str(payment["amount"]))
+            if current_expected != amount_minor / Decimal("100"):
+                raise InvalidOperation()
+        except (TypeError, ValueError, InvalidOperation):
+            conn.rollback()
+            return jsonify({"error": "Paystack payment amount mismatch."}), 409
+
+        stored_id = str(payment["gateway_transaction_id"] or "").strip()
+        if stored_id and stored_id != transaction_id:
+            conn.rollback()
+            return jsonify({"error": "A different Paystack transaction is already recorded."}), 409
+
+        existing = conn.execute(
+            "SELECT id,amount,member_id,church_account_id FROM income WHERE reference=? LIMIT 1",
+            (reference,)
+        ).fetchone()
+
+        if existing:
+            try:
+                same_amount = Decimal(str(existing["amount"])) == current_expected
+            except (TypeError, ValueError, InvalidOperation):
+                same_amount = False
+            if not (
+                same_amount
+                and existing["member_id"] == payment["member_id"]
+                and existing["church_account_id"] == payment["church_account_id"]
+            ):
+                conn.rollback()
+                return jsonify({
+                    "error": "An income record already uses this reference but its amount or account details do not match."
+                }), 409
+            income_id = existing["id"]
+        else:
+            conn.execute("""
+                INSERT INTO income
+                (date,donor_name,source,fund,amount,method,reference,
+                 received_by,notes,member_id,church_account_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                date.today().isoformat(),
+                payment["donor_name"] or "Online Donor",
                 "Online Payment",
-                row["purpose"] or "General Evangelism",
-                amount,
+                payment["purpose"] or "General Evangelism",
+                float(current_expected),
                 "Paystack",
                 reference,
                 "Paystack",
                 "Verified Paystack payment",
-                row["church_account_id"]
-            )
-        )
+                payment["member_id"],
+                payment["church_account_id"]
+            ))
+            income = conn.execute(
+                "SELECT id FROM income WHERE reference=? LIMIT 1",
+                (reference,)
+            ).fetchone()
+            if not income:
+                raise RuntimeError("Paystack income record was not created.")
+            income_id = income["id"]
 
-    db().execute(
-        """UPDATE payment_transactions
-           SET status='Paid',
-               gateway_transaction_id=?,
-               gateway_response=?,
-               paid_at=CURRENT_TIMESTAMP
-           WHERE reference=?""",
-        (
-            str(data.get("id") or ""),
-            str(result),
-            reference
-        )
-    )
-    db().commit()
+            audit_details = json.dumps({
+                "gateway": "Paystack",
+                "reference": reference,
+                "amount": str(current_expected),
+                "transaction_id": transaction_id,
+                "action": "Automatic verified payment reconciliation"
+            }, ensure_ascii=False)
+            conn.execute("""
+                INSERT INTO audit_log
+                (happened_at,action,table_name,record_id,details,user_id,username)
+                VALUES (?,?,?,?,?,?,?)
+            """, (
+                datetime.now().isoformat(timespec="seconds"),
+                "PAYSTACK_AUTO_RECONCILIATION",
+                "income",
+                income_id,
+                audit_details,
+                None,
+                "system"
+            ))
+
+        conn.execute("""
+            UPDATE payment_transactions
+            SET status='Paid',gateway_transaction_id=?,gateway_response=?,
+                paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP)
+            WHERE reference=?
+        """, (transaction_id, json.dumps(result)[:12000], reference))
+        conn.commit()
+
+        return jsonify({
+            "ok": True,
+            "paid": True,
+            "already_reconciled": bool(existing),
+            "income_id": income_id,
+            "reference": reference,
+            "status": "Paid",
+            "amount": float(current_expected)
+        }), 200
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Paystack verification or reconciliation failed.")
+        return jsonify({"error": "Paystack payment verification could not be recorded. Please retry."}), 500
+
+
+@app.get("/api/payment/diagnostics")
+@login_required
+def api_payment_diagnostics():
+    """Admin-only, secret-safe checks for the configured payment environment."""
+    import os
+
+    user = current_user()
+    if not user or user["role"] != "Admin":
+        return jsonify({"error": "Only Admin can view payment diagnostics."}), 403
+
+    flutterwave_secret = _payment_secret("flutterwave")
+    webhook_hash = _payment_secret("flutterwave", "webhook_secret")
+    paystack_secret = _payment_secret("paystack")
+
+    flutterwave_connection = {
+        "tested": False,
+        "reachable": False,
+        "http_status": None,
+        "message": "Not tested because FLW_SECRET_KEY is not configured."
+    }
+
+    if flutterwave_secret:
+        try:
+            import requests
+            gateway_response = requests.get(
+                "https://api.flutterwave.com/v3/balances",
+                headers={
+                    "Authorization": "Bearer " + flutterwave_secret,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
+                timeout=15
+            )
+            try:
+                gateway_data = gateway_response.json()
+            except ValueError:
+                gateway_data = {}
+
+            gateway_message = (
+                gateway_data.get("message", "")
+                if isinstance(gateway_data, dict) else ""
+            )
+            gateway_status = (
+                gateway_data.get("status", "")
+                if isinstance(gateway_data, dict) else ""
+            )
+            if gateway_response.status_code == 200 and gateway_status == "success":
+                safe_message = "Flutterwave authenticated successfully."
+            elif gateway_response.status_code == 401:
+                safe_message = "Flutterwave rejected authentication. Check that FLW_SECRET_KEY is the correct secret key for the selected Test or Live mode."
+            elif gateway_response.status_code == 403:
+                safe_message = "Flutterwave authenticated the request but denied access to this account resource."
+            else:
+                safe_message = str(gateway_message)[:240] or (
+                    "Flutterwave returned an unexpected response. Check the HTTP status and gateway dashboard."
+                )
+
+            flutterwave_connection = {
+                "tested": True,
+                "reachable": True,
+                "http_status": gateway_response.status_code,
+                "authenticated": bool(
+                    gateway_response.status_code == 200 and gateway_status == "success"
+                ),
+                "message": safe_message
+            }
+        except requests.RequestException as exc:
+            app.logger.warning(
+                "Flutterwave diagnostics connection test failed: %s",
+                type(exc).__name__
+            )
+            flutterwave_connection = {
+                "tested": True,
+                "reachable": False,
+                "http_status": None,
+                "authenticated": False,
+                "message": "The application could not reach Flutterwave. Check outbound network access and try again."
+            }
 
     return jsonify({
-        "ok":True,
-        "paid":True,
-        "reference":reference,
-        "status":"Paid",
-        "amount":amount
-    }),200
+        "ok": bool(flutterwave_secret),
+        "database_backend": database_backend(),
+        "providers": {
+            "flutterwave": {
+                "secret_key_configured": bool(flutterwave_secret),
+                "webhook_hash_configured": bool(webhook_hash),
+                "connection_test": flutterwave_connection
+            },
+            "paystack": {
+                "secret_key_configured": bool(paystack_secret)
+            }
+        },
+        "note": "Only configuration status and authentication status are returned. Wallet balances and secret values are never exposed."
+    })
 
 @app.post("/api/payment/initiate")
 def api_payment_initiate():
-    import os,uuid,requests
+    import os
+    import uuid
+    import json
+    import re
+    import requests
+    from urllib.parse import urlparse
+    from decimal import Decimal, InvalidOperation
 
-    d=request.get_json() or {}
-    email=(d.get("donor_email") or "").strip()
-    amount=float(d.get("amount",0))
-    account_id=d.get("church_account_id")
+    d = request.get_json(silent=True) or {}
 
-    if amount<=0 or not email:
-        return jsonify({"error":"Valid amount and email are required."}),400
+    email = str(d.get("donor_email") or "").strip()
+    name = str(d.get("donor_name") or "").strip()
+    phone = str(d.get("donor_phone") or "").strip()
+    purpose = str(d.get("purpose") or "General Evangelism").strip()
 
-    if not account_id:
-        return jsonify({"error":"A church account must be selected."}),400
+    if (
+        len(email) > 254
+        or not re.fullmatch(
+            r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+",
+            email
+        )
+    ):
+        return jsonify({"error": "A valid email address is required."}), 400
 
-    account=db().execute(
-        "SELECT * FROM church_accounts WHERE id=? AND active=1",
-        (account_id,)
-    ).fetchone()
-
-    if not account:
-        return jsonify({"error":"Selected church account was not found or is inactive."}),404
-
-    ref="DSD-"+uuid.uuid4().hex[:12].upper()
-
-    callback_url = request.url_root.rstrip("/") + "/?payment=return"
-
-    payload={
-        "email":email,
-        "amount":str(round(amount*100)),
-        "currency":"NGN",
-        "reference":ref,
-        "callback_url":callback_url,
-        "metadata":{
-            "purpose":d.get("purpose"),
-            "account_level":account["account_level"],
-            "circuit":account["circuit"],
-            "church_name":account["church_name"],
-            "church_account_id":account["id"],
-            "account_name":account["account_name"],
-            "bank_name":account["bank_name"],
-            "account_number":account["account_number"],
-            "donor_name":d.get("donor_name"),
-            "donor_phone":d.get("donor_phone")
-        }
-    }
-
-    secret=os.environ.get("PAYSTACK_SECRET_KEY","").strip()
-    if not secret:
-        return jsonify({"error":"Paystack secret key is not configured on the server."}),503
+    if len(name) > 160 or len(phone) > 40 or len(purpose) > 250:
+        return jsonify({"error": "Payment details are too long."}), 400
 
     try:
-        r=requests.post(
-            "https://api.paystack.co/transaction/initialize",
-            json=payload,
-            headers={
-                "Authorization":"Bearer "+secret,
-                "Content-Type":"application/json"
-            },
-            timeout=30
-        )
-        result=r.json()
-    except Exception as e:
-        return jsonify({"error":"Paystack connection failed.","detail":str(e)}),502
-
-    if not result.get("status"):
+        decimal_amount = Decimal(str(d.get("amount", "")))
+        if (
+            not decimal_amount.is_finite()
+            or decimal_amount < Decimal("100")
+            or decimal_amount >= Decimal("1000000000")
+            or decimal_amount != decimal_amount.quantize(Decimal("0.01"))
+        ):
+            raise InvalidOperation()
+        amount = float(decimal_amount)
+    except (InvalidOperation, ValueError, TypeError):
         return jsonify({
-            "error":result.get("message","Paystack initialization failed.")
-        }),502
+            "error": "Enter a valid NGN amount of at least ₦100, with no more than two decimal places."
+        }), 400
 
-    data=result["data"]
+    raw_account_id = d.get("church_account_id")
+    if (
+        isinstance(raw_account_id, bool)
+        or not re.fullmatch(r"[1-9][0-9]*", str(raw_account_id or ""))
+    ):
+        return jsonify({"error": "A valid church account must be selected."}), 400
 
-    db().execute(
-        """INSERT INTO payment_transactions(
-            reference,gateway,status,amount,currency,purpose,
-            account_level,circuit,church_name,church_account_id,
-            donor_name,donor_email,donor_phone,payment_method,
-            gateway_transaction_id,gateway_response
-        ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-        (
-            ref,
-            "Paystack",
-            "Pending",
-            amount,
-            "NGN",
-            d.get("purpose"),
-            account["account_level"],
-            account["circuit"],
-            account["church_name"],
-            account["id"],
-            d.get("donor_name"),
-            email,
-            d.get("donor_phone"),
-            d.get("payment_method") or "Paystack",
-            str(data.get("access_code","")),
-            str(result)
+    account_id = int(raw_account_id)
+
+    # The donor chooses the payment route. Direct bank transfer is a
+    # Diocese-managed flow and must never be sent to a gateway checkout.
+    requested_method = str(d.get("payment_method") or "online").strip().lower()
+    direct_requested = requested_method in {
+        "direct bank transfer", "bank transfer", "direct_bank_transfer", "transfer"
+    }
+    if direct_requested:
+        provider = "direct_bank_transfer"
+    else:
+        default_row = db().execute(
+            "SELECT provider FROM payment_settings WHERE enabled=1 AND is_default=1 AND LOWER(provider) IN ('flutterwave','paystack') ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        configured_provider = str(default_row["provider"]).lower() if default_row else ""
+        if not configured_provider:
+            online_row = db().execute(
+                "SELECT provider FROM payment_settings WHERE enabled=1 AND LOWER(provider) IN ('flutterwave','paystack') ORDER BY CASE LOWER(provider) WHEN 'flutterwave' THEN 1 ELSE 2 END, id ASC LIMIT 1"
+            ).fetchone()
+            configured_provider = str(online_row["provider"]).lower() if online_row else ""
+        provider = configured_provider or ("flutterwave" if os.environ.get("FLW_SECRET_KEY") else "")
+    if not provider:
+        return jsonify({"error":"No online payment provider is active. Please contact the Diocese finance office."}),503
+    gateway_name = {"flutterwave":"Flutterwave","paystack":"Paystack","direct_bank_transfer":"Direct Bank Transfer"}.get(provider,"")
+    secret = _payment_secret(provider) if provider != "direct_bank_transfer" else ""
+    if provider != "direct_bank_transfer" and not secret:
+        return jsonify({"error":gateway_name+" secret key is not configured. Please check Payment Settings."}),503
+
+    user = current_user()
+    member_id = user["member_id"] if user and user["member_id"] else None
+
+    reference = "DSD-" + uuid.uuid4().hex[:12].upper()
+    return_path = "/member-dashboard" if member_id else "/giving"
+    redirect_url = request.url_root.rstrip("/") + return_path
+
+    conn = db()
+
+    try:
+        account = conn.execute(
+            "SELECT * FROM church_accounts WHERE id=? AND active=1",
+            (account_id,)
+        ).fetchone()
+
+        if not account:
+            return jsonify({
+                "error": "Selected church account is unavailable."
+            }), 404
+
+        conn.execute(
+            """
+            INSERT INTO payment_transactions
+            (
+                reference, gateway, status, amount, currency, purpose,
+                account_level, circuit, church_name, church_account_id,
+                member_id, donor_name, donor_email, donor_phone,
+                payment_method, gateway_transaction_id, gateway_response
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                reference, gateway_name, "Pending", amount, "NGN",
+                purpose, account["account_level"], account["circuit"],
+                account["church_name"], account["id"], member_id,
+                name, email, phone, ("Bank Transfer" if provider == "direct_bank_transfer" else gateway_name), "",
+                ("Awaiting donor bank transfer" if provider == "direct_bank_transfer" else "Checkout initialization pending")
+            )
         )
-    )
-    db().commit()
+        conn.commit()
 
-    return jsonify({
-        "reference":ref,
-        "status":"Pending",
-        "authorization_url":data.get("authorization_url"),
-        "access_code":data.get("access_code")
-    }),201
+        if provider == "direct_bank_transfer":
+            # Use the bank details of the church/giving account selected by
+            # the donor. No Flutterwave/Paystack request is made for transfers.
+            if not account["bank_name"] or not account["account_name"] or not account["account_number"]:
+                return jsonify({"error":"The selected church giving account does not yet have complete bank details. Please contact the Diocese finance office."}),503
+            return jsonify({
+                "reference":reference,"status":"Pending","bank_transfer":{
+                    "bank_name":account["bank_name"],"account_name":account["account_name"],
+                    "account_number":account["account_number"],
+                    "instructions":"Transfer the exact amount to this account. Use the payment reference as your narration. After transferring, keep your receipt. The payment will remain pending until the Finance Office confirms receipt."
+                }
+            }),201
+
+        try:
+            if provider == "paystack":
+                checkout_payload = {
+                    "email": email,
+                    "amount": int(decimal_amount * Decimal("100")),
+                    "reference": reference,
+                    "currency": "NGN",
+                    "callback_url": redirect_url + "?payment=return"
+                }
+                response = requests.post(
+                    "https://api.paystack.co/transaction/initialize",
+                    json=checkout_payload,
+                    headers={"Authorization":"Bearer "+secret,"Content-Type":"application/json"},
+                    timeout=30
+                )
+                result = response.json()
+                payment_link = ((result.get("data") or {}).get("authorization_url") if isinstance(result,dict) else None)
+            else:
+                # Flutterwave Inline keeps the donor on the Diocese app.
+                # The browser receives only the public key; the secret stays server-side.
+                flutterwave_config = _payment_provider_config("flutterwave")
+                public_key = (
+                    str(flutterwave_config["public_key"] or "").strip()
+                    if flutterwave_config else ""
+                ) or os.environ.get("FLW_PUBLIC_KEY", "").strip()
+                if not public_key:
+                    return jsonify({"error":"Flutterwave public key is not configured. Add it in Admin → Payment Settings."}),503
+                conn.execute(
+                    "UPDATE payment_transactions SET gateway_response=? WHERE reference=?",
+                    ("Flutterwave Inline checkout prepared", reference)
+                )
+                conn.commit()
+                return jsonify({
+                    "reference":reference,
+                    "status":"Pending",
+                    "checkout":{
+                        "provider":"flutterwave",
+                        "public_key":public_key,
+                        "tx_ref":reference,
+                        "amount":amount,
+                        "currency":"NGN",
+                        "customer":{"email":email,"name":name,"phone_number":phone},
+                        "payment_options":"card,banktransfer,ussd,account,opay",
+                        "customizations":{"title":"MCN Delta South Diocese","description":purpose}
+                    }
+                }),201
+        except Exception:
+            app.logger.exception("%s checkout outcome uncertain: %s", gateway_name, reference)
+            return jsonify({
+                "error":"Checkout initialization could not be confirmed. Contact the finance office before trying again.",
+                "reference":reference,"status":"Pending"
+            }),502
+
+        valid_link = False
+        if isinstance(payment_link, str):
+            parsed = urlparse(payment_link)
+            valid_link = (
+                parsed.scheme == "https"
+                and (
+                    (provider == "flutterwave" and parsed.hostname in {"checkout.flutterwave.com","checkout-v2.dev-flutterwave.com"})
+                    or (provider == "paystack" and parsed.hostname in {"checkout.paystack.com","paystack.com"})
+                )
+                and not parsed.username
+                and not parsed.password
+            )
+
+        if (
+            response.status_code not in (200, 201)
+            or not isinstance(result, dict)
+            or (result.get("status") != "success" if provider == "flutterwave" else result.get("status") is not True)
+            or not valid_link
+        ):
+            conn.execute(
+                """
+                UPDATE payment_transactions
+                SET status='Failed', gateway_response=?
+                WHERE reference=? AND gateway=?
+                """,
+                (
+                    json.dumps(
+                        result if isinstance(result, dict)
+                        else {"message": "Invalid gateway response"}
+                    )[:12000],
+                    reference, gateway_name
+                )
+            )
+            conn.commit()
+            gateway_message = (
+                result.get("message", "") if isinstance(result, dict) else ""
+            )
+            gateway_status = (
+                result.get("status", "") if isinstance(result, dict) else ""
+            )
+            gateway_data = (
+                result.get("data") if isinstance(result, dict) else None
+            )
+            gateway_link_host = ""
+            if isinstance(payment_link, str):
+                try:
+                    gateway_link_host = urlparse(payment_link).hostname or ""
+                except Exception:
+                    gateway_link_host = "unparseable"
+            app.logger.error(
+                "%s checkout rejected: reference=%s http_status=%s gateway_status=%s gateway_message=%s data_type=%s link_present=%s link_host=%s valid_link=%s",
+                gateway_name,
+                reference,
+                response.status_code,
+                str(gateway_status)[:40],
+                str(gateway_message)[:200],
+                type(gateway_data).__name__,
+                bool(payment_link),
+                gateway_link_host[:120],
+                valid_link
+            )
+            return jsonify({
+                "error": gateway_name + " checkout initialization failed.",
+                "reference": reference
+            }), 502
+
+        conn.execute(
+            """
+            UPDATE payment_transactions
+            SET gateway_response=?
+            WHERE reference=? AND gateway=?
+            """,
+            (json.dumps(result)[:12000], reference, gateway_name)
+        )
+        conn.commit()
+
+        return jsonify({
+            "reference": reference,
+            "status": "Pending",
+            "authorization_url": payment_link
+        }), 201
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        app.logger.exception("Flutterwave payment initiation failed.")
+        return jsonify({
+            "error": "Payment initialization could not be completed."
+        }), 500
+
 
 
 @login_required
@@ -8465,7 +11288,7 @@ def create_member_appointment(member_id):
             "message": "Church office appointment added successfully."
         }), 201
 
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Could not create appointment: " + str(e)
@@ -8594,7 +11417,7 @@ def update_member_appointment(appointment_id):
             "message": "Church office appointment updated successfully."
         })
 
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Could not update appointment: " + str(e)
@@ -8669,7 +11492,7 @@ def terminate_member_appointment(appointment_id):
             "message": "Church office appointment terminated. Membership remains active."
         })
 
-    except sqlite3.Error as e:
+    except database_error_types() as e:
         conn.rollback()
         return jsonify({
             "error": "Could not terminate appointment: " + str(e)
@@ -8703,7 +11526,17 @@ _ML_TABLE = "church_media_library"
 _ML_TYPES = {
     ".pdf": ("application/pdf", "document"),
     ".docx": ("application/vnd.openxmlformats-officedocument.wordprocessingml.document", "document"),
+    ".doc": ("application/msword", "document"),
+    ".jpg": ("image/jpeg", "document"),
+    ".jpeg": ("image/jpeg", "document"),
+    ".png": ("image/png", "document"),
+    ".gif": ("image/gif", "document"),
+    ".webp": ("image/webp", "document"),
+    ".txt": ("text/plain", "document"),
+    ".md": ("text/markdown", "document"),
     ".mp3": ("audio/mpeg", "audio"),
+    ".mid": ("audio/midi", "audio"),
+    ".midi": ("audio/midi", "audio"),
     ".wav": ("audio/wav", "audio"),
     ".ogg": ("audio/ogg", "audio"),
     ".m4a": ("audio/mp4", "audio"),
@@ -8791,7 +11624,7 @@ def _ml_signed(path):
     return signed
 
 
-def _ml_storage_request(method, path, data=None, content_type=None):
+def _ml_storage_request(method, path, data=None, content_type=None, upsert=False):
     import requests as _requests
 
     base, key = _ml_credentials()
@@ -8803,12 +11636,21 @@ def _ml_storage_request(method, path, data=None, content_type=None):
     if content_type:
         headers["Content-Type"] = content_type
     if method == "POST":
-        headers["x-upsert"] = "false"
+        headers["x-upsert"] = "true" if upsert else "false"
 
     response = _requests.request(
         method, url, headers=headers, data=data, timeout=120
     )
     return response
+
+
+def _ml_is_text_file(data):
+    """Accept UTF-8 plain-text and Markdown uploads without binary payloads."""
+    try:
+        data.decode("utf-8-sig")
+        return True
+    except UnicodeDecodeError:
+        return False
 
 
 def _ml_prepare_item(row):
@@ -8822,17 +11664,251 @@ def _ml_prepare_item(row):
     return item
 
 
+
+def _ml_public_document(media_id):
+    """Find any published media-library item by catalogue ID."""
+    rows = _ml_supabase_request(
+        "GET",
+        params={
+            "select": "id,title,description,storage_path,mime_type,media_type,published",
+            "id": f"eq.{media_id}",
+            "published": "eq.true",
+            "limit": "1",
+        },
+    )
+    return rows[0] if rows else None
+
+
+def _ml_document_bytes(row):
+    """Read a document from private Supabase Storage with a strict size limit."""
+    import requests as _requests
+    from flask import abort
+
+    base, key = _ml_credentials()
+    path = _ml_quote(row["storage_path"], safe="/")
+    url = f"{base}/storage/v1/object/{_ML_BUCKET}/{path}"
+
+    response = None
+    try:
+        response = _requests.get(
+            url,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "apikey": key,
+            },
+            timeout=60,
+            stream=True,
+        )
+
+        if response.status_code == 404:
+            abort(404)
+
+        if not response.ok:
+            raise RuntimeError(
+                f"Supabase document retrieval failed "
+                f"(HTTP {response.status_code})."
+            )
+
+        content_length = response.headers.get("Content-Length")
+        if content_length:
+            try:
+                if int(content_length) > _ML_MAX:
+                    abort(413)
+            except ValueError:
+                pass
+
+        chunks = []
+        total = 0
+
+        for chunk in response.iter_content(chunk_size=64 * 1024):
+            if not chunk:
+                continue
+
+            total += len(chunk)
+            if total > _ML_MAX:
+                abort(413)
+
+            chunks.append(chunk)
+
+        return b"".join(chunks)
+
+    finally:
+        if response is not None:
+            response.close()
+
+@app.get("/media-library/document/<media_id>/view")
+def media_document_view(media_id):
+    """Render PDFs and images inline without exposing a Supabase URL."""
+    from flask import abort, send_file
+    from werkzeug.exceptions import HTTPException
+    from markupsafe import escape
+
+    try:
+        row = _ml_public_document(media_id)
+        if not row:
+            abort(404)
+
+        mime = (row.get("mime_type") or "").lower()
+        filename = row.get("storage_path", "").rsplit("/", 1)[-1]
+        ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+        # Browsers cannot reliably render Word files natively.
+        # Keep the visitor on our website and offer a download.
+        if ext in {".doc", ".docx"}:
+            title = escape(row.get("title") or filename)
+            description = escape(row.get("description") or "")
+            download_url = url_for(
+                "media_document_download", media_id=media_id
+            )
+            html = f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title>
+<style>
+body{{font:16px system-ui;max-width:760px;margin:40px auto;padding:20px;
+color:#17342a;background:#f4f8f6}}
+article{{background:white;padding:28px;border-radius:14px}}
+a{{display:inline-block;padding:12px 18px;background:#125d43;
+color:white;border-radius:8px;text-decoration:none}}
+</style></head><body><article>
+<p>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE</p>
+<h1>{title}</h1><p>{description}</p>
+<p>Browser preview is not available for this Word document.</p>
+<p><a href="{download_url}">Download Document</a></p>
+<p><a href="/media-library">Back to Media Library</a></p>
+</article></body></html>"""
+            return Response(
+                html,
+                mimetype="text/html",
+                headers={"X-Content-Type-Options": "nosniff"},
+            )
+
+        if not (
+            mime in {"application/pdf", "text/plain", "text/markdown"}
+            or mime.startswith(("image/", "audio/", "video/"))
+        ):
+            abort(415)
+
+        data = _ml_document_bytes(row)
+        raw_url = url_for("media_document_view", media_id=media_id, raw="1")
+        download_url = url_for("media_document_download", media_id=media_id)
+        title = escape(row.get("title") or filename)
+
+        # A dedicated responsive viewer prevents phones from opening oversized
+        # source images directly and gives PDFs an in-page reader.
+        if request.args.get("raw") != "1" and mime.startswith("image/"):
+            html = f"""<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title><style>
+*{{box-sizing:border-box}}html,body{{margin:0;width:100%;height:100%;background:#101522;color:#fff;font:15px system-ui}}
+header{{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:#10285a}}
+header a{{color:#fff;text-decoration:none;font-weight:700}}main{{height:calc(100dvh - 56px);display:flex;align-items:center;justify-content:center;padding:10px}}
+img{{display:block;max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain}}
+</style></head><body><header><a href="/media-library">← Media Library</a><a href="{download_url}">Download</a></header>
+<main><img src="{raw_url}" alt="{title}"></main></body></html>"""
+            return Response(html, mimetype="text/html", headers={"Cache-Control":"no-store"})
+
+        if request.args.get("raw") != "1" and mime == "application/pdf":
+            html = f"""<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{title}</title><style>
+*{{box-sizing:border-box}}body{{margin:0;background:#eef2f7;color:#172b4d;font:14px system-ui}}
+header{{position:sticky;top:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px;background:#10285a;color:#fff}}
+header a,button{{color:#fff;background:#176b50;border:0;border-radius:7px;padding:9px 12px;text-decoration:none;font-weight:700}}
+#pages{{max-width:900px;margin:14px auto;padding:0 10px}}canvas{{display:block;width:100%;height:auto;margin:0 auto 14px;background:#fff;box-shadow:0 3px 14px #0002}}
+#status{{text-align:center;padding:16px}} 
+</style></head><body><header><a href="/media-library">← Media Library</a><span>{title}</span><a href="{download_url}">Download</a></header>
+<div id="status">Loading PDF…</div><main id="pages"></main>
+<script type="module">
+const status=document.getElementById('status'),pages=document.getElementById('pages');
+try{{
+ const pdfjs=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs');
+ pdfjs.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs';
+ const pdf=await pdfjs.getDocument('{raw_url}').promise;status.textContent=pdf.numPages+' page(s)';
+ for(let n=1;n<=pdf.numPages;n++){{
+  const page=await pdf.getPage(n),base=page.getViewport({{scale:1}});
+  const scale=Math.min((window.innerWidth-20)/base.width,1.6),vp=page.getViewport({{scale}});
+  const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d'),ratio=Math.min(devicePixelRatio||1,2);
+  canvas.width=Math.floor(vp.width*ratio);canvas.height=Math.floor(vp.height*ratio);
+  canvas.style.width=vp.width+'px';canvas.style.maxWidth='100%';canvas.style.height='auto';
+  ctx.setTransform(ratio,0,0,ratio,0,0);pages.appendChild(canvas);
+  await page.render({{canvasContext:ctx,viewport:vp}}).promise;
+ }}
+}}catch(e){{status.textContent='PDF preview could not load. Use Download to open this document.';}}
+</script></body></html>"""
+            return Response(html, mimetype="text/html", headers={"Cache-Control":"no-store"})
+
+        response = send_file(
+            io.BytesIO(data),
+            mimetype=mime,
+            as_attachment=False,
+            download_name=filename,
+            conditional=True,
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        app.logger.exception("Document preview failed for catalogue ID %s", media_id)
+        return "Document preview is temporarily unavailable.", 503
+
+
+@app.get("/media-library/document/<media_id>/download")
+def media_document_download(media_id):
+    """Download a published document through the application."""
+    from flask import abort, send_file
+    from werkzeug.exceptions import HTTPException
+
+    try:
+        row = _ml_public_document(media_id)
+        if not row:
+            abort(404)
+
+        filename = row.get("storage_path", "").rsplit("/", 1)[-1]
+        mime = row.get("mime_type") or "application/octet-stream"
+        data = _ml_document_bytes(row)
+
+        response = send_file(
+            io.BytesIO(data),
+            mimetype=mime,
+            as_attachment=True,
+            download_name=filename,
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Cache-Control"] = "private, no-store"
+        return response
+    except HTTPException:
+        raise
+    except Exception:
+        app.logger.exception("Document download failed for catalogue ID %s", media_id)
+        return "Document download is temporarily unavailable.", 503
+
+
 @app.route("/media-library")
-def media_library_public():
+@app.route("/media-library/<collection>")
+def media_library_public(collection=None):
     category = (request.args.get("type") or "").strip().lower()
     if category not in {"document", "audio", "video"}:
         category = ""
+
+    collection = (collection or request.args.get("collection") or "").strip().lower()
+    collection_titles = {
+        "sermons": "Recent Sermons",
+        "bible-teachings": "Bible Teachings",
+        "choir-music": "Choir & Music",
+    }
+    if collection and collection not in collection_titles:
+        return "Media collection not found.", 404
 
     params = {
         "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
         "published": "eq.true",
         "order": "created_at.desc",
     }
+    if collection:
+        params["storage_path"] = f"like.library/{collection}/*"
     if category:
         params["media_type"] = f"eq.{category}"
 
@@ -8840,13 +11916,1348 @@ def media_library_public():
         rows = _ml_supabase_request("GET", params=params)
         items = [_ml_prepare_item(row) for row in rows]
         return render_template(
-            "media_library.html", items=items, selected_type=category
+            "media_library.html", items=items, selected_type=category,
+            collection=collection, collection_title=collection_titles.get(collection, "Church Media Library")
         )
     except Exception:
         app.logger.exception("Public Supabase media catalogue could not be loaded")
         return render_template(
-            "media_library.html", items=[], selected_type=category
+            "media_library.html", items=[], selected_type=category,
+            collection=collection, collection_title=collection_titles.get(collection, "Church Media Library")
         )
+
+
+
+# --- Public Methodist Devotional & Worship Centre ---
+_DEVOTIONAL_COLLECTIONS = {
+    "english-hymns": ("english_hymns", "English Methodist Hymns"),
+    "yoruba-hymns": ("yoruba_hymns", "Yoruba Methodist Hymns"),
+    "akokun": ("akokun", "Akokun Hymns"),
+    "bible-verses": ("bible_verses", "Bible Verses"),
+    "canticles": ("canticles", "Canticles"),
+    "communion": ("communion_english", "English Communion"),
+    "yoruba-communion": ("communion_yoruba", "Yoruba Communion"),
+    "creeds": ("creeds", "Creeds & Confessions"),
+}
+
+
+def _dc_admin_required():
+    user = current_user()
+    return bool(user and user["role"] == "Admin")
+
+
+def _dc_s3_client():
+    """Return an S3-compatible client for Naijacloud Object Storage."""
+    endpoint = (os.environ.get("S3_ENDPOINT") or "").strip().rstrip("/")
+    region = (os.environ.get("S3_REGION") or "").strip()
+    bucket = (os.environ.get("S3_BUCKET") or "").strip()
+    access_key = (os.environ.get("S3_ACCESS_KEY_ID") or "").strip()
+    secret_key = (os.environ.get("S3_SECRET_ACCESS_KEY") or "").strip()
+    missing = [
+        name for name, value in (
+            ("S3_ENDPOINT", endpoint), ("S3_REGION", region),
+            ("S3_BUCKET", bucket), ("S3_ACCESS_KEY_ID", access_key),
+            ("S3_SECRET_ACCESS_KEY", secret_key)
+        ) if not value
+    ]
+    if missing:
+        raise RuntimeError(
+            "Naijacloud Object Storage is not configured. Missing: " +
+            ", ".join(missing)
+        )
+    return boto3.client(
+        "s3", endpoint_url=endpoint, region_name=region,
+        aws_access_key_id=access_key, aws_secret_access_key=secret_key,
+        config=BotoConfig(signature_version="s3v4",
+                          s3={"addressing_style": "path"},
+                          connect_timeout=20, read_timeout=180,
+                          retries={"max_attempts": 3, "mode": "standard"})
+    )
+
+
+def _dc_s3_bucket():
+    return (os.environ.get("S3_BUCKET") or "").strip()
+
+
+def _dc_s3_put(path, data, content_type="application/octet-stream"):
+    """Persist one devotional object in the private Naijacloud bucket."""
+    _dc_s3_client().put_object(
+        Bucket=_dc_s3_bucket(), Key=str(path).lstrip("/"),
+        Body=data, ContentType=content_type or "application/octet-stream"
+    )
+    return True
+
+
+def _dc_s3_get(path):
+    """Read one devotional object from Naijacloud Object Storage."""
+    result = _dc_s3_client().get_object(
+        Bucket=_dc_s3_bucket(), Key=str(path).lstrip("/")
+    )
+    body = result["Body"]
+    try:
+        return body.read()
+    finally:
+        body.close()
+
+
+def _dc_signed(path):
+    if not path:
+        return ""
+    try:
+        return _dc_s3_client().generate_presigned_url(
+            "get_object",
+            Params={"Bucket": _dc_s3_bucket(), "Key": str(path).lstrip("/")},
+            ExpiresIn=3600
+        )
+    except Exception:
+        app.logger.exception("Could not sign Naijacloud devotional media path")
+        return ""
+
+
+def _dc_update_job(job_id, status=None, progress=None, message=None,
+                   imported_records=None, uploaded_assets=None):
+    fields = []
+    values = []
+    for name, value in (
+        ("status", status), ("progress", progress), ("message", message),
+        ("imported_records", imported_records), ("uploaded_assets", uploaded_assets)
+    ):
+        if value is not None:
+            fields.append(name + "=?")
+            values.append(value)
+    fields.append("updated_at=CURRENT_TIMESTAMP")
+    values.append(job_id)
+    db().execute(
+        "UPDATE devotional_import_jobs SET " + ", ".join(fields) + " WHERE job_id=?",
+        tuple(values),
+    )
+    db().commit()
+
+
+def _dc_store_zip_chunks(local_path, storage_prefix):
+    """Persist a ZIP as small independent objects in Naijacloud Object Storage."""
+    chunk_size = 2 * 1024 * 1024
+    count = 0
+    with open(local_path, "rb") as source:
+        while True:
+            chunk = source.read(chunk_size)
+            if not chunk:
+                break
+            object_path = storage_prefix.rstrip("/") + "/" + str(count).zfill(6) + ".part"
+            _dc_s3_put(object_path, chunk, "application/octet-stream")
+            count += 1
+    return count
+
+
+def _dc_run_import(zip_path, job_id):
+    """Import structured devotional records into PostgreSQL and media into Naijacloud Object Storage."""
+    import zipfile as _zipfile
+    import json as _json
+    import hashlib as _hashlib
+    import mimetypes as _mimetypes
+    import urllib.parse as _urlparse
+    import concurrent.futures as _futures
+
+    with app.app_context():
+        uploaded_count = 0
+        record_count = 0
+        try:
+            _dc_update_job(job_id, status="processing", progress=2,
+                           message="Checking the devotional package…")
+            with _zipfile.ZipFile(zip_path, "r") as archive:
+                members = archive.namelist()
+                if len(members) > 2500:
+                    raise ValueError("The package contains too many files.")
+                decoded_lookup = {_urlparse.unquote(n): n for n in members}
+                asset_root = "assets/flutter_assets/assets/"
+                json_names = {
+                    "hymns.json": ("english_hymns", "English Methodist Hymns"),
+                    "yorubaHymns.json": ("yoruba_hymns", "Yoruba Methodist Hymns"),
+                    "akokun.json": ("akokun", "Akokun Hymns"),
+                    "verses.json": ("bible_verses", "Bible Verses"),
+                    "canticles.json": ("canticles", "Canticles"),
+                    "communion.json": ("communion_english", "English Communion"),
+                    "yoruba_communion.json": ("communion_yoruba", "Yoruba Communion"),
+                    "apostles_creed.json": ("creeds", "Apostles Creed"),
+                    "ijewo_igbagbo.json": ("creeds", "Yoruba Apostles Creed"),
+                    "nicene_creed.json": ("creeds", "Nicene Creed"),
+                    "nicene_creed_yoruba.json": ("creeds", "Yoruba Nicene Creed"),
+                }
+                raw_collections = {}
+                missing_json = []
+                json_total = len(json_names)
+                json_done = 0
+                _dc_update_job(job_id, progress=3,
+                               message="Unpacking ZIP contents and locating hymn books, Scripture and worship files…")
+                for filename, spec in json_names.items():
+                    member = decoded_lookup.get(asset_root + filename)
+                    if not member:
+                        missing_json.append(filename)
+                        json_done += 1
+                        continue
+                    try:
+                        raw_collections[filename] = _json.loads(
+                            archive.read(member).decode("utf-8-sig")
+                        )
+                    except Exception as exc:
+                        raise ValueError("Could not read " + filename + ": " + str(exc))
+                    json_done += 1
+                    _dc_update_job(
+                        job_id, progress=3 + int((json_done / max(json_total, 1)) * 2),
+                        message="Unpacking and reading content files (" +
+                                str(json_done) + "/" + str(json_total) + "): " + filename
+                    )
+                required = {"hymns.json", "yorubaHymns.json", "akokun.json", "verses.json"}
+                if not required.issubset(raw_collections):
+                    raise ValueError("The package is missing required data: " +
+                                     ", ".join(sorted(required - set(raw_collections))))
+
+                source_paths = set()
+                for filename in ("hymns.json",):
+                    for hymn in raw_collections.get(filename, []):
+                        music = hymn.get("musicFilePath")
+                        if music:
+                            source_paths.add(asset_root + str(music).lstrip("/"))
+                        for tune in hymn.get("otherTunes") or []:
+                            if isinstance(tune, dict) and tune.get("musicFilePath"):
+                                source_paths.add(asset_root + str(tune["musicFilePath"]).lstrip("/"))
+                        author = hymn.get("author") or {}
+                        if isinstance(author, dict) and author.get("imagePath"):
+                            source_paths.add("assets/flutter_assets/" + str(author["imagePath"]).lstrip("/"))
+
+                resolved_assets = {}
+                for source in source_paths:
+                    member = decoded_lookup.get(_urlparse.unquote(source))
+                    if member:
+                        resolved_assets[source] = member
+
+                # Process one ZIP member at a time. The previous implementation
+                # retained every extracted media file in RAM before uploading.
+                # Large hymn packages could therefore stall or exhaust memory
+                # around the middle of the 670-file asset set.
+                path_map = {}
+                total_assets = len(resolved_assets)
+                _dc_update_job(
+                    job_id, progress=5,
+                    message="Preparing " + str(total_assets) +
+                            " music and author-image files for persistent storage…"
+                )
+                for asset_index, (source, member) in enumerate(resolved_assets.items(), 1):
+                    digest = _hashlib.sha256(source.encode("utf-8")).hexdigest()[:24]
+                    ext = os.path.splitext(member)[1].lower()
+                    folder = "music" if "/music/" in source else "authors"
+                    destination = "devotional-centre/" + folder + "/" + digest + ext
+                    mime = _mimetypes.guess_type(member)[0] or "application/octet-stream"
+                    try:
+                        raw = archive.read(member)
+                        _dc_s3_put(destination, raw, mime)
+                        del raw
+                    except Exception as storage_error:
+                        raise RuntimeError(
+                            "Naijacloud media upload failed for " +
+                            os.path.basename(destination) + ": " +
+                            str(storage_error)[:180]
+                        )
+                    path_map[source] = destination
+                    # Update every file so the administrator can see that the
+                    # importer is alive, even when a large individual file takes time.
+                    progress = 5 + int((asset_index / max(total_assets, 1)) * 60)
+                    _dc_update_job(
+                        job_id, progress=progress,
+                        message="Saving devotional media to Naijacloud Object Storage (" +
+                                str(asset_index) + "/" + str(total_assets) + ")…",
+                        uploaded_assets=asset_index
+                    )
+                _dc_update_job(job_id, progress=68,
+                               message="Media upload complete. Preparing hymn, Scripture, canticle, Communion and creed records…",
+                               uploaded_assets=len(path_map))
+
+                def replace_media_paths(item):
+                    item = dict(item)
+                    music = item.get("musicFilePath")
+                    if music:
+                        source = asset_root + str(music).lstrip("/")
+                        item["musicFilePath"] = path_map.get(source, "")
+                    author = item.get("author")
+                    if isinstance(author, dict):
+                        author = dict(author)
+                        image_path = author.get("imagePath")
+                        if image_path:
+                            source = "assets/flutter_assets/" + str(image_path).lstrip("/")
+                            author["imagePath"] = path_map.get(source, "")
+                        item["author"] = author
+                    tunes = []
+                    for tune in item.get("otherTunes") or []:
+                        if not isinstance(tune, dict):
+                            continue
+                        tune = dict(tune)
+                        music = tune.get("musicFilePath")
+                        if music:
+                            source = asset_root + str(music).lstrip("/")
+                            tune["musicFilePath"] = path_map.get(source, "")
+                        tunes.append(tune)
+                    item["otherTunes"] = tunes
+                    return item
+
+                records = []
+                _dc_update_job(job_id, progress=69,
+                               message="Converting imported content into searchable library entries…",
+                               uploaded_assets=len(path_map))
+                for filename, (collection, label) in json_names.items():
+                    data = raw_collections.get(filename)
+                    if data is None:
+                        continue
+                    if isinstance(data, dict):
+                        title = label
+                        content = dict(data)
+                        content["title"] = content.get("title") or title
+                        records.append((
+                            "creed_" + filename.replace(".json", ""),
+                            collection, "", title, content,
+                            title + " " + str(content.get("content", "")), "", ""
+                        ))
+                    elif isinstance(data, list):
+                        for index, original in enumerate(data, 1):
+                            item = replace_media_paths(original) if isinstance(original, dict) else {"content": original}
+                            number = str(item.get("number") or item.get("reference") or index)
+                            title = str(item.get("title") or item.get("reference") or label + " " + number)
+                            if filename == "verses.json":
+                                title = str(item.get("reference") or title)
+                            resource_id = collection + ":" + number
+                            search_text = " ".join([
+                                title, number, str(item.get("firstline") or ""),
+                                str(item.get("reference") or ""),
+                                _json.dumps(item, ensure_ascii=False)
+                            ])
+                            audio_path = str(item.get("musicFilePath") or "")
+                            author_path = str((item.get("author") or {}).get("imagePath") or "")
+                            records.append((
+                                resource_id, collection, number, title, item,
+                                search_text, audio_path, author_path
+                            ))
+
+                for start in range(0, len(records), 100):
+                    batch = records[start:start + 100]
+                    for rid, collection, number, title, payload, search_text, audio_path, author_path in batch:
+                        db().execute(
+                            """INSERT INTO devotional_resources
+                               (resource_id,collection,item_number,title,content_json,
+                                search_text,audio_path,author_path,published,updated_at)
+                               VALUES (?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)
+                               ON CONFLICT(resource_id) DO UPDATE SET
+                                 collection=excluded.collection,
+                                 item_number=excluded.item_number,
+                                 title=excluded.title,
+                                 content_json=excluded.content_json,
+                                 search_text=excluded.search_text,
+                                 audio_path=excluded.audio_path,
+                                 author_path=excluded.author_path,
+                                 published=1,
+                                 updated_at=CURRENT_TIMESTAMP""",
+                            (rid, collection, number, title,
+                             _json.dumps(payload, ensure_ascii=False),
+                             search_text, audio_path, author_path)
+                        )
+                        record_count += 1
+                    db().commit()
+                    progress = 68 + int((min(start + len(batch), len(records)) /
+                                         max(len(records), 1)) * 30)
+                    _dc_update_job(job_id, progress=progress,
+                                   message="Saving devotional records (" +
+                                           str(min(start + len(batch), len(records))) +
+                                           "/" + str(len(records)) + ")…",
+                                   imported_records=record_count)
+            _dc_update_job(job_id, status="completed", progress=100,
+                           message="Import completed successfully.",
+                           imported_records=record_count,
+                           uploaded_assets=len(path_map))
+        except Exception as exc:
+            app.logger.exception("Devotional Centre import failed")
+            try:
+                _dc_update_job(job_id, status="failed",
+                               message="Import stopped: " + str(exc)[:350],
+                               imported_records=record_count,
+                               uploaded_assets=uploaded_count or len(locals().get("path_map", {})))
+            except Exception:
+                app.logger.exception("Could not update devotional import job")
+        finally:
+            try:
+                os.remove(zip_path)
+            except OSError:
+                pass
+
+
+
+# Durable Devotional Centre import queue.
+# ZIP packages and devotional media are persisted in Naijacloud Object Storage; PostgreSQL remains the job queue.
+import threading as _dc_threading
+_DC_WORKER_LOCK = _dc_threading.Lock()
+_DC_WORKER_STARTED = False
+
+
+def _dc_queue_worker():
+    import tempfile as _dc_tempfile
+    import time as _dc_time
+
+    # Gunicorn runs multiple OS processes. A Python threading.Lock only
+    # coordinates threads inside one process, so use a PostgreSQL session
+    # advisory lock to guarantee that only one process consumes the queue.
+    # IMPORTANT: losing the first lock race must not permanently kill this
+    # worker. Keep retrying so a process can take over after the current owner
+    # exits, including after a deployment or worker restart.
+    worker_lock_conn = None
+    if database_backend() == "postgres":
+        import time as _lock_time
+        while True:
+            try:
+                if worker_lock_conn is None:
+                    worker_lock_conn = connect_database(DB_PATH)
+                lock_row = worker_lock_conn.execute(
+                    "SELECT pg_try_advisory_lock(734219860124) AS locked"
+                ).fetchone()
+                if lock_row and bool(lock_row["locked"]):
+                    break
+                app.logger.info(
+                    "Devotional import queue is owned by another process; retrying lock in 10 seconds."
+                )
+                _lock_time.sleep(10)
+            except Exception:
+                app.logger.exception(
+                    "Could not acquire devotional queue lock; retrying in 10 seconds."
+                )
+                if worker_lock_conn:
+                    try:
+                        worker_lock_conn.close()
+                    except Exception:
+                        pass
+                    worker_lock_conn = None
+                _lock_time.sleep(10)
+
+        # A process may have been restarted while an import was running.
+        # Once this process owns the global lock, safely requeue resumable jobs.
+        with app.app_context():
+            db().execute(
+                """UPDATE devotional_import_jobs
+                   SET status='queued',
+                       message='Resuming after a web-service restart.',
+                       updated_at=CURRENT_TIMESTAMP
+                   WHERE status='processing'
+                     AND COALESCE(storage_path,'')<>''"""
+            )
+            db().commit()
+        app.logger.info("This process acquired the devotional import queue lock.")
+
+    while True:
+        active_job_id = None
+        try:
+            with app.app_context():
+                row = db().execute(
+                    """SELECT job_id,storage_path,package_size FROM devotional_import_jobs
+                       WHERE status='queued' AND COALESCE(storage_path,'')<>''
+                       ORDER BY created_at ASC LIMIT 1"""
+                ).fetchone()
+                if not row:
+                    pass
+                else:
+                    job_id = row["job_id"]
+                    active_job_id = job_id
+                    storage_path = row["storage_path"]
+                    package_size = int(row["package_size"] or 0)
+                    claim = db().execute(
+                        """UPDATE devotional_import_jobs
+                           SET status='processing',message='Import worker has picked up the saved package.',
+                               updated_at=CURRENT_TIMESTAMP
+                           WHERE job_id=? AND status='queued'""",
+                        (job_id,)
+                    )
+                    db().commit()
+                    if getattr(claim, "rowcount", 0) == 1:
+                        if package_size <= 0:
+                            raise RuntimeError("The saved devotional ZIP size is missing.")
+                        chunk_size = 2 * 1024 * 1024
+                        chunk_count = (package_size + chunk_size - 1) // chunk_size
+                        with _dc_tempfile.NamedTemporaryFile(
+                            prefix="mcn-devotional-", suffix=".zip", delete=False
+                        ) as handle:
+                            zip_path = handle.name
+                            received = 0
+                            for chunk_index in range(chunk_count):
+                                object_path = storage_path.rstrip("/") + "/" + str(chunk_index).zfill(6) + ".part"
+                                try:
+                                    part_data = _dc_s3_get(object_path)
+                                except Exception as storage_error:
+                                    raise RuntimeError(
+                                        "Could not retrieve saved ZIP part " +
+                                        str(chunk_index + 1) + " of " + str(chunk_count) +
+                                        " from Naijacloud Object Storage: " +
+                                        str(storage_error)[:180]
+                                    )
+                                handle.write(part_data)
+                                received += len(part_data)
+                        if received != package_size:
+                            raise RuntimeError(
+                                "Saved ZIP is incomplete: received " + str(received) +
+                                " of " + str(package_size) + " bytes."
+                            )
+                        _dc_run_import(zip_path, job_id)
+            _dc_time.sleep(3)
+        except Exception as exc:
+            app.logger.exception("Devotional Centre queue worker encountered an error")
+            try:
+                if active_job_id:
+                    with app.app_context():
+                        _dc_update_job(
+                            active_job_id, status="failed",
+                            message="Import worker error: " + str(exc)[:300]
+                        )
+            except Exception:
+                app.logger.exception(
+                    "Could not record devotional queue worker error for job %s",
+                    active_job_id
+                )
+            _dc_time.sleep(8)
+
+
+def _dc_start_queue_worker():
+    global _DC_WORKER_STARTED
+    if _DC_WORKER_STARTED:
+        return
+    with _DC_WORKER_LOCK:
+        if _DC_WORKER_STARTED:
+            return
+        # Old jobs from the temporary-disk importer cannot be resumed because
+        # their ZIP was never persisted. Mark them clearly instead of leaving
+        # the dashboard showing a permanent "processing" state.
+        with app.app_context():
+            # Ensure the durable queue columns exist before this process starts
+            # polling. This is an additive PostgreSQL migration and preserves jobs.
+            if database_backend() == "postgres":
+                db().execute(
+                    "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''"
+                )
+                db().execute(
+                    "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS package_size BIGINT DEFAULT 0"
+                )
+            db().execute(
+                """UPDATE devotional_import_jobs
+                   SET status='failed',
+                       message='This earlier import was interrupted before its ZIP was saved persistently. Please upload the package again.',
+                       updated_at=CURRENT_TIMESTAMP
+                   WHERE status IN ('queued','processing')
+                     AND (storage_path IS NULL OR storage_path='')"""
+            )
+            db().commit()
+        thread = _dc_threading.Thread(
+            target=_dc_queue_worker,
+            name="devotional-import-queue",
+            daemon=True,
+        )
+        thread.start()
+        _DC_WORKER_STARTED = True
+
+
+@app.before_request
+def start_devotional_queue_worker():
+    # Start once per live web process; queued jobs survive process restarts in PostgreSQL.
+    _dc_start_queue_worker()
+
+
+@app.get("/devotional-centre")
+def devotional_centre_home():
+    counts = {}
+    try:
+        rows = db().execute(
+            "SELECT collection, COUNT(*) AS total FROM devotional_resources WHERE published=1 GROUP BY collection"
+        ).fetchall()
+        counts = {row["collection"]: row["total"] for row in rows}
+    except Exception:
+        app.logger.exception("Devotional Centre catalogue is not initialized yet")
+    collections = [
+        ("english-hymns", "English Methodist Hymns", "979 hymns", "🎼", "Explore the English Methodist Hymn Book."),
+        ("yoruba-hymns", "Yoruba Methodist Hymns", "845 hymns", "📖", "Explore Methodist hymns in Yoruba."),
+        ("akokun", "Akokun Hymns", "Yoruba collection", "🎵", "Browse the Akokun hymn collection."),
+        ("bible-verses", "Bible Verses", "Scripture library", "✝", "Search Scripture references and verses."),
+        ("canticles", "Canticles", "74 resources", "🙏", "Explore canticles for worship."),
+        ("communion", "English Communion", "31 resources", "🍞", "Read English Communion materials."),
+        ("yoruba-communion", "Yoruba Communion", "30 resources", "🕊", "Read Yoruba Communion materials."),
+        ("creeds", "Creeds & Confessions", "Church worship", "📜", "Apostles’ Creed, Nicene Creed and Yoruba versions."),
+    ]
+    daily = {}
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        day_hash = hashlib.sha256(today.encode("utf-8")).hexdigest()
+        verses = db().execute(
+            """SELECT resource_id,title,content_json FROM devotional_resources
+            WHERE collection='bible_verses'
+              AND LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+            ORDER BY resource_id LIMIT 497"""
+        ).fetchall()
+        if verses:
+            daily = dict(verses[int(day_hash[:8], 16) % len(verses)])
+            daily["payload"] = json.loads(daily.get("content_json") or "{}")
+    except Exception:
+        app.logger.exception("Daily devotional Scripture could not be selected")
+    return render_template("devotional_centre.html", collections=collections,
+                           counts=counts, daily=daily)
+
+
+@app.get("/devotional-centre/lectionary")
+def devotional_yearly_lectionary():
+    """Public searchable view of the uploaded 2027 lectionary source."""
+    source_path = Path(ROOT) / "data" / "yearly_lectionary_2027.txt"
+    try:
+        readings = source_path.read_text(encoding="utf-8")
+    except OSError:
+        app.logger.exception("Yearly lectionary source file could not be read")
+        return "The yearly lectionary is temporarily unavailable.", 503
+    return render_template("devotional_lectionary.html", readings=readings)
+
+
+# Starter Scripture index: one representative passage from every book of the
+# 66-book Protestant Bible. KJV wording is public domain; existing imported
+# devotional verses are preserved and these records are inserted only once.
+_DEVOTIONAL_66_BOOK_VERSES = [
+    ("Genesis", "1:1", "In the beginning God created the heaven and the earth."),
+    ("Exodus", "14:14", "The LORD shall fight for you, and ye shall hold your peace."),
+    ("Leviticus", "19:18", "Thou shalt love thy neighbour as thyself: I am the LORD."),
+    ("Numbers", "6:24", "The LORD bless thee, and keep thee."),
+    ("Deuteronomy", "31:6", "Be strong and of a good courage, fear not... for the LORD thy God, he it is that doth go with thee."),
+    ("Joshua", "1:9", "Be strong and of a good courage; be not afraid, neither be thou dismayed: for the LORD thy God is with thee whithersoever thou goest."),
+    ("Judges", "6:12", "The LORD is with thee, thou mighty man of valour."),
+    ("Ruth", "1:16", "Whither thou goest, I will go; and where thou lodgest, I will lodge: thy people shall be my people, and thy God my God."),
+    ("1 Samuel", "16:7", "Man looketh on the outward appearance, but the LORD looketh on the heart."),
+    ("2 Samuel", "22:2", "The LORD is my rock, and my fortress, and my deliverer."),
+    ("1 Kings", "8:23", "LORD God of Israel, there is no God like thee, in heaven above, or on earth beneath."),
+    ("2 Kings", "6:16", "Fear not: for they that be with us are more than they that be with them."),
+    ("1 Chronicles", "16:11", "Seek the LORD and his strength, seek his face continually."),
+    ("2 Chronicles", "7:14", "If my people, which are called by my name, shall humble themselves, and pray, and seek my face... then will I hear from heaven."),
+    ("Ezra", "7:10", "Ezra had prepared his heart to seek the law of the LORD, and to do it, and to teach in Israel statutes and judgments."),
+    ("Nehemiah", "8:10", "The joy of the LORD is your strength."),
+    ("Esther", "4:14", "Who knoweth whether thou art come to the kingdom for such a time as this?"),
+    ("Job", "19:25", "For I know that my redeemer liveth, and that he shall stand at the latter day upon the earth."),
+    ("Psalms", "23:1", "The LORD is my shepherd; I shall not want."),
+    ("Proverbs", "3:5", "Trust in the LORD with all thine heart; and lean not unto thine own understanding."),
+    ("Ecclesiastes", "3:1", "To every thing there is a season, and a time to every purpose under the heaven."),
+    ("Song of Solomon", "8:7", "Many waters cannot quench love, neither can the floods drown it."),
+    ("Isaiah", "40:31", "They that wait upon the LORD shall renew their strength; they shall mount up with wings as eagles."),
+    ("Jeremiah", "29:11", "For I know the thoughts that I think toward you, saith the LORD, thoughts of peace, and not of evil."),
+    ("Lamentations", "3:23", "They are new every morning: great is thy faithfulness."),
+    ("Ezekiel", "36:26", "A new heart also will I give you, and a new spirit will I put within you."),
+    ("Daniel", "2:20", "Blessed be the name of God for ever and ever: for wisdom and might are his."),
+    ("Hosea", "6:6", "For I desired mercy, and not sacrifice; and the knowledge of God more than burnt offerings."),
+    ("Joel", "2:13", "Rend your heart, and not your garments, and turn unto the LORD your God."),
+    ("Amos", "5:24", "Let judgment run down as waters, and righteousness as a mighty stream."),
+    ("Obadiah", "1:15", "The day of the LORD is near upon all the heathen."),
+    ("Jonah", "2:2", "I cried by reason of mine affliction unto the LORD, and he heard me."),
+    ("Micah", "6:8", "What doth the LORD require of thee, but to do justly, and to love mercy, and to walk humbly with thy God?"),
+    ("Nahum", "1:7", "The LORD is good, a strong hold in the day of trouble; and he knoweth them that trust in him."),
+    ("Habakkuk", "2:4", "The just shall live by his faith."),
+    ("Zephaniah", "3:17", "The LORD thy God in the midst of thee is mighty; he will save, he will rejoice over thee with joy."),
+    ("Haggai", "2:9", "The glory of this latter house shall be greater than of the former, saith the LORD of hosts."),
+    ("Zechariah", "4:6", "Not by might, nor by power, but by my spirit, saith the LORD of hosts."),
+    ("Malachi", "3:10", "Bring ye all the tithes into the storehouse... and prove me now herewith, saith the LORD of hosts."),
+    ("Matthew", "6:33", "Seek ye first the kingdom of God, and his righteousness; and all these things shall be added unto you."),
+    ("Mark", "10:27", "With God all things are possible."),
+    ("Luke", "1:37", "For with God nothing shall be impossible."),
+    ("John", "3:16", "For God so loved the world, that he gave his only begotten Son, that whosoever believeth in him should not perish, but have everlasting life."),
+    ("Acts", "1:8", "Ye shall receive power, after that the Holy Ghost is come upon you: and ye shall be witnesses unto me."),
+    ("Romans", "8:28", "All things work together for good to them that love God, to them who are the called according to his purpose."),
+    ("1 Corinthians", "13:13", "And now abideth faith, hope, charity, these three; but the greatest of these is charity."),
+    ("2 Corinthians", "5:7", "For we walk by faith, not by sight."),
+    ("Galatians", "5:22", "The fruit of the Spirit is love, joy, peace, longsuffering, gentleness, goodness, faith."),
+    ("Ephesians", "2:10", "For we are his workmanship, created in Christ Jesus unto good works."),
+    ("Philippians", "4:13", "I can do all things through Christ which strengtheneth me."),
+    ("Colossians", "3:23", "And whatsoever ye do, do it heartily, as to the Lord, and not unto men."),
+    ("1 Thessalonians", "5:16", "Rejoice evermore."),
+    ("2 Thessalonians", "3:3", "The Lord is faithful, who shall stablish you, and keep you from evil."),
+    ("1 Timothy", "4:12", "Be thou an example of the believers, in word, in conversation, in charity, in spirit, in faith, in purity."),
+    ("2 Timothy", "3:16", "All scripture is given by inspiration of God, and is profitable for doctrine, for reproof, for correction, for instruction in righteousness."),
+    ("Titus", "2:11", "For the grace of God that bringeth salvation hath appeared to all men."),
+    ("Philemon", "1:6", "That the communication of thy faith may become effectual by the acknowledging of every good thing which is in you in Christ Jesus."),
+    ("Hebrews", "11:1", "Now faith is the substance of things hoped for, the evidence of things not seen."),
+    ("James", "1:5", "If any of you lack wisdom, let him ask of God, that giveth to all men liberally."),
+    ("1 Peter", "5:7", "Casting all your care upon him; for he careth for you."),
+    ("2 Peter", "3:18", "But grow in grace, and in the knowledge of our Lord and Saviour Jesus Christ."),
+    ("1 John", "4:19", "We love him, because he first loved us."),
+    ("2 John", "1:6", "And this is love, that we walk after his commandments."),
+    ("3 John", "1:4", "I have no greater joy than to hear that my children walk in truth."),
+    ("Jude", "1:24", "Now unto him that is able to keep you from falling, and to present you faultless before the presence of his glory with exceeding joy."),
+    ("Revelation", "21:4", "And God shall wipe away all tears from their eyes; and there shall be no more death, neither sorrow, nor crying, neither shall there be any more pain.")
+]
+
+
+def _dc_seed_66_book_verses():
+    """Add one starter Scripture from each Bible book without replacing imports."""
+    for index, (book, reference, verse) in enumerate(_DEVOTIONAL_66_BOOK_VERSES, 1):
+        payload = {
+            "book": book,
+            "reference": book + " " + reference,
+            "verse": verse,
+            "firstline": verse,
+            "content": verse,
+            "translation": "KJV"
+        }
+        db().execute(
+            """INSERT INTO devotional_resources
+               (resource_id, collection, item_number, title, content_json,
+                search_text, audio_path, author_path, published)
+               VALUES (?, 'bible_verses', ?, ?, ?, ?, '', '', 1)
+               ON CONFLICT(resource_id) DO NOTHING""",
+            (
+                "bible66:" + str(index).zfill(2),
+                str(index).zfill(3),
+                book + " " + reference,
+                json.dumps(payload, ensure_ascii=False),
+                book + " " + reference + " " + verse
+            )
+        )
+    db().commit()
+
+
+@app.get("/devotional-centre/<collection_slug>")
+def devotional_centre_collection(collection_slug):
+    spec = _DEVOTIONAL_COLLECTIONS.get(collection_slug)
+    if not spec:
+        return "Devotional collection not found.", 404
+    collection, title = spec
+    if collection == "bible_verses":
+        _dc_seed_66_book_verses()
+    query = (request.args.get("q") or "").strip()[:120]
+    page = max(1, request.args.get("page", 1, type=int) or 1)
+    # Communion is rendered as one continuous, scrollable book.
+    # Other collections retain the normal paginated catalogue layout.
+    book_mode = collection in ("communion_english", "communion_yoruba")
+    per_page = 1000 if book_mode else (100 if collection == "bible_verses" else 40)
+    where = "collection=? AND published=1"
+    args = [collection]
+    if query:
+        where += " AND lower(search_text) LIKE ?"
+        args.append("%" + query.lower() + "%")
+    total_row = db().execute(
+        "SELECT COUNT(*) AS total FROM devotional_resources WHERE " + where,
+        tuple(args)
+    ).fetchone()
+    total = int(total_row["total"] or 0)
+    # Hymn numbers must be sorted numerically (1, 2, 3 … 10, 11),
+    # not lexicographically (1, 10, 100, 11, 2).
+    numeric_number_collections = {"english_hymns", "yoruba_hymns", "akokun"}
+    if book_mode or collection in numeric_number_collections:
+        ordering = "CAST(item_number AS INTEGER), item_number, title"
+    else:
+        ordering = "item_number, title"
+    rows = db().execute(
+        "SELECT resource_id,item_number,title,content_json,audio_path,author_path FROM devotional_resources WHERE " +
+        where + " ORDER BY " + ordering + " LIMIT ? OFFSET ?",
+        tuple(args + [per_page, 0 if book_mode else (page - 1) * per_page])
+    ).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["payload"] = json.loads(item.get("content_json") or "{}")
+        except Exception:
+            item["payload"] = {}
+        items.append(item)
+    return render_template("devotional_collection.html",
+                           collection_slug=collection_slug, collection_title=title,
+                           items=items, query=query, page=page,
+                           book_mode=book_mode,
+                           total=total, pages=max(1, (total + per_page - 1) // per_page))
+
+
+@app.get("/devotional-centre/item/<path:resource_id>")
+def devotional_centre_item(resource_id):
+    row = db().execute(
+        "SELECT * FROM devotional_resources WHERE resource_id=? AND published=1 LIMIT 1",
+        (resource_id,)
+    ).fetchone()
+    if not row:
+        return "Devotional resource not found.", 404
+    item = dict(row)
+    item["payload"] = json.loads(item.get("content_json") or "{}")
+    item["audio_url"] = _dc_signed(item.get("audio_path"))
+    item["author_url"] = _dc_signed(item.get("author_path"))
+    tunes = item["payload"].get("otherTunes") or []
+    for tune in tunes:
+        tune["signed_url"] = _dc_signed(tune.get("musicFilePath"))
+    return render_template("devotional_item.html", item=item)
+
+
+
+
+# CSB-only Bible reader. The licensed PDF is stored privately in Naijacloud Object Storage.
+_CSB_BIBLE_OBJECT_KEY = "devotional/bibles/csb-pew-bible-2017.pdf"
+_WEB_BIBLE_OBJECT_KEY = "devotional/bibles/web.bbl.mybible"
+
+def _web_bible_db_path():
+    """Download the installed WEB MyBible database from private object storage on demand."""
+    path = os.path.join(DATA_DIR, "web.bbl.mybible")
+    if not os.path.isfile(path) or os.path.getsize(path) < 1024:
+        payload = _dc_s3_get(_WEB_BIBLE_OBJECT_KEY)
+        if not payload.startswith(b"SQLite format 3\\x00"):
+            raise ValueError("Stored WEB Bible database is invalid.")
+        os.makedirs(DATA_DIR, exist_ok=True)
+        temp_path = path + ".tmp"
+        with open(temp_path, "wb") as handle:
+            handle.write(payload)
+        os.replace(temp_path, path)
+    return path
+
+def _web_bible_connect():
+    path = _web_bible_db_path()
+    conn = sqlite3.connect("file:" + path + "?mode=ro", uri=True, timeout=20)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+@app.get("/devotional-centre/bible")
+def devotional_bible_reader():
+    is_admin = _dc_admin_required()
+    available = False
+    try:
+        _dc_s3_client().head_object(Bucket=_dc_s3_bucket(), Key=_CSB_BIBLE_OBJECT_KEY)
+        available = True
+    except Exception:
+        app.logger.info("CSB Bible PDF has not yet been uploaded to Object Storage")
+    return render_template("devotional_bible.html",
+                           is_admin=is_admin, bible_available=available)
+
+
+@app.post("/admin/devotional-centre/bible/upload")
+@page_login_required
+def admin_upload_csb_bible():
+    request.max_content_length = 30 * 1024 * 1024
+    if not _dc_admin_required():
+        return "Administrator access required.", 403
+    upload = request.files.get("bible_pdf")
+    if not upload or not upload.filename:
+        flash("Select the uploaded CSB Pew Bible PDF first.", "error")
+        return redirect(url_for("devotional_bible_reader"))
+    if not upload.filename.lower().endswith(".pdf"):
+        flash("Only a PDF Bible file is accepted.", "error")
+        return redirect(url_for("devotional_bible_reader"))
+    try:
+        payload = upload.read(30 * 1024 * 1024 + 1)
+        if len(payload) > 30 * 1024 * 1024:
+            raise ValueError("The PDF is larger than the 30 MB upload limit.")
+        if not payload.startswith(b"%PDF"):
+            raise ValueError("The selected file is not a valid PDF.")
+        _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, payload, "application/pdf")
+        flash("Christian Standard Bible (CSB) uploaded successfully.", "success")
+    except Exception as exc:
+        app.logger.exception("CSB Bible upload failed")
+        flash("CSB upload failed: " + str(exc)[:220], "error")
+    return redirect(url_for("devotional_bible_reader"))
+
+
+
+@app.post("/admin/devotional-centre/bible/upload/init")
+@page_login_required
+def admin_csb_upload_init():
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    try:
+        data = request.get_json(silent=True) or {}
+        filename = secure_filename(str(data.get("filename") or "csb-bible.pdf"))
+        size = int(data.get("size") or 0)
+        if not filename.lower().endswith(".pdf"):
+            return jsonify({"error": "Please select a PDF file."}), 400
+        if size <= 0 or size > 30 * 1024 * 1024:
+            return jsonify({"error": "PDF size must be between 1 byte and 30 MB."}), 400
+        upload_id = secrets.token_hex(20)
+        upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        path = os.path.join(upload_dir, upload_id + ".csb.part")
+        meta = os.path.join(upload_dir, upload_id + ".csb.json")
+        with open(path, "wb"):
+            pass
+        with open(meta, "w", encoding="utf-8") as f:
+            json.dump({"size": size, "received": 0}, f)
+        return jsonify({"upload_id": upload_id, "chunk_size": 2 * 1024 * 1024})
+    except Exception as exc:
+        app.logger.exception("Could not initialise CSB PDF upload")
+        return jsonify({"error": "Could not initialise PDF upload: " + str(exc)[:180]}), 500
+
+
+@app.post("/admin/devotional-centre/bible/upload/<upload_id>/chunk")
+@page_login_required
+def admin_csb_upload_chunk(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    request.max_content_length = 3 * 1024 * 1024
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    path = os.path.join(upload_dir, upload_id + ".csb.part")
+    meta = os.path.join(upload_dir, upload_id + ".csb.json")
+    try:
+        os.makedirs(upload_dir, exist_ok=True)
+        if not os.path.isfile(path) or not os.path.isfile(meta):
+            return jsonify({"error": "PDF upload session not found. Start the upload again."}), 404
+        with open(meta, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        offset = int(request.headers.get("X-Chunk-Offset", "-1"))
+        chunk = request.get_data(cache=False)
+        if not chunk or len(chunk) > 2 * 1024 * 1024:
+            return jsonify({"error": "PDF part must be between 1 byte and 2 MB."}), 400
+        if offset != int(state.get("received", 0)) or os.path.getsize(path) != offset:
+            return jsonify({"error": "Upload position mismatch. Please restart the PDF upload."}), 409
+        if offset + len(chunk) > int(state["size"]):
+            return jsonify({"error": "PDF part exceeds the declared file size."}), 400
+        with open(path, "ab") as output:
+            output.write(chunk)
+        state["received"] = offset + len(chunk)
+        with open(meta, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        return jsonify({"received": state["received"], "size": state["size"]})
+    except FileNotFoundError:
+        return jsonify({"error": "PDF upload session expired. Please start again."}), 404
+    except Exception as exc:
+        app.logger.exception("CSB PDF chunk upload failed")
+        return jsonify({"error": "PDF part upload failed: " + str(exc)[:180]}), 500
+
+
+@app.post("/admin/devotional-centre/bible/upload/<upload_id>/complete")
+@page_login_required
+def admin_csb_upload_complete(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    path = os.path.join(upload_dir, upload_id + ".csb.part")
+    meta = os.path.join(upload_dir, upload_id + ".csb.json")
+    try:
+        with open(meta, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        if int(state.get("received", 0)) != int(state.get("size", -1)):
+            return jsonify({"error": "PDF upload is incomplete."}), 400
+        if not os.path.isfile(path) or os.path.getsize(path) != int(state.get("size", -1)):
+            return jsonify({"error": "The uploaded PDF file is missing or its size does not match. Please restart the upload."}), 400
+        with open(path, "rb") as f:
+            header = f.read(5)
+            if header != b"%PDF-":
+                return jsonify({"error": "The uploaded file is not a valid PDF. Please select the original CSB PDF, not a renamed ZIP."}), 400
+            f.seek(0)
+            payload = f.read()
+        if len(payload) != int(state["size"]):
+            return jsonify({"error": "The PDF could not be read completely. Please retry the upload."}), 400
+        _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, payload, "application/pdf")
+        # Verify the object exists and has the expected size before reporting success.
+        stored = _dc_s3_client().head_object(Bucket=_dc_s3_bucket(), Key=_CSB_BIBLE_OBJECT_KEY)
+        if int(stored.get("ContentLength", -1)) != len(payload):
+            raise RuntimeError("Object Storage did not confirm the complete PDF size.")
+        for item in (path, meta):
+            try:
+                os.remove(item)
+            except OSError:
+                app.logger.warning("Could not remove temporary CSB upload file: %s", item)
+        return jsonify({"success": True, "message": "CSB Bible uploaded and verified successfully.", "redirect": url_for("devotional_bible_reader")})
+    except Exception as exc:
+        app.logger.exception("Could not save completed CSB Bible PDF")
+        return jsonify({"error": "Could not save CSB PDF to Object Storage: " + str(exc)[:200]}), 503
+
+
+@app.get("/devotional-centre/bible/file")
+def devotional_bible_file():
+    try:
+        url = _dc_signed(_CSB_BIBLE_OBJECT_KEY)
+        if not url:
+            return "The CSB Bible PDF is not available yet. An administrator must upload it.", 404
+        return redirect(url)
+    except Exception:
+        app.logger.exception("Could not open CSB Bible PDF")
+        return "The CSB Bible PDF is not available yet. Please contact the diocesan administrator.", 404
+
+
+@app.post("/admin/devotional-centre/upload/init")
+@page_login_required
+def admin_devotional_upload_init():
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    try:
+        data = request.get_json(silent=True) or {}
+        filename = secure_filename(str(data.get("filename") or "devotional.zip"))
+        total_size = int(data.get("size") or 0)
+        if not filename.lower().endswith(".zip"):
+            return jsonify({"error": "Please select a ZIP package."}), 400
+        if total_size <= 0 or total_size > 150 * 1024 * 1024:
+            return jsonify({"error": "ZIP size must be between 1 byte and 150 MB."}), 400
+        upload_id = secrets.token_hex(20)
+        upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        upload_path = os.path.join(upload_dir, upload_id + ".part")
+        meta_path = os.path.join(upload_dir, upload_id + ".json")
+        with open(upload_path, "wb"):
+            pass
+        with open(meta_path, "w", encoding="utf-8") as meta:
+            json.dump({"filename": filename, "size": total_size, "received": 0}, meta)
+        return jsonify({"upload_id": upload_id, "chunk_size": 2 * 1024 * 1024})
+    except Exception as exc:
+        app.logger.exception("Could not initialise devotional upload")
+        return jsonify({"error": "Could not initialise upload: " + str(exc)[:200]}), 500
+
+
+@app.post("/admin/devotional-centre/upload/<upload_id>/chunk")
+@page_login_required
+def admin_devotional_upload_chunk(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    request.max_content_length = 3 * 1024 * 1024
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    upload_path = os.path.join(upload_dir, upload_id + ".part")
+    meta_path = os.path.join(upload_dir, upload_id + ".json")
+    try:
+        with open(meta_path, "r", encoding="utf-8") as meta:
+            state = json.load(meta)
+        chunk_index = int(request.headers.get("X-Chunk-Index", "-1"))
+        offset = int(request.headers.get("X-Chunk-Offset", "-1"))
+        chunk = request.get_data(cache=False)
+        if not chunk or len(chunk) > 2 * 1024 * 1024:
+            return jsonify({"error": "Chunk must be between 1 byte and 2 MB."}), 400
+        if offset != int(state.get("received", 0)) or os.path.getsize(upload_path) != offset:
+            return jsonify({"error": "Upload position mismatch. Please restart the upload."}), 409
+        if offset + len(chunk) > int(state["size"]):
+            return jsonify({"error": "Chunk exceeds the declared ZIP size."}), 400
+        storage_prefix = "devotional-imports/uploads/" + upload_id
+        object_path = storage_prefix + "/" + str(chunk_index).zfill(6) + ".part"
+        try:
+            _dc_s3_put(object_path, chunk, "application/octet-stream")
+        except Exception:
+            app.logger.exception("Could not persist devotional upload chunk in Naijacloud Object Storage")
+            return jsonify({
+                "error": "Could not save this upload part in Naijacloud Object Storage. Please retry this part."
+            }), 503
+        with open(upload_path, "ab") as output:
+            output.write(chunk)
+        state["received"] = offset + len(chunk)
+        with open(meta_path, "w", encoding="utf-8") as meta:
+            json.dump(state, meta)
+        return jsonify({"received": state["received"], "size": state["size"],
+                        "chunk_index": chunk_index,
+                        "progress": int(state["received"] * 100 / state["size"])})
+    except FileNotFoundError:
+        return jsonify({"error": "Upload session expired. Please start again."}), 404
+    except Exception as exc:
+        app.logger.exception("Devotional upload chunk failed")
+        return jsonify({"error": "Chunk upload failed: " + str(exc)[:200]}), 500
+
+
+@app.post("/admin/devotional-centre/upload/<upload_id>/complete")
+@page_login_required
+def admin_devotional_upload_complete(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    upload_path = os.path.join(upload_dir, upload_id + ".part")
+    meta_path = os.path.join(upload_dir, upload_id + ".json")
+    try:
+        with open(meta_path, "r", encoding="utf-8") as meta:
+            state = json.load(meta)
+        if int(state.get("received", 0)) != int(state.get("size", -1)):
+            return jsonify({"error": "Upload is incomplete. Received " +
+                            str(state.get("received", 0)) + " of " +
+                            str(state.get("size", 0)) + " bytes."}), 400
+        import zipfile as _zipfile
+        with _zipfile.ZipFile(upload_path, "r") as archive:
+            members = archive.infolist()
+            names = [item.filename for item in members]
+            if len(names) > 2500:
+                raise ValueError("The ZIP contains too many files.")
+            if any(n.startswith("/") or "\\\\" in n or ".." in n.split("/") for n in names):
+                raise ValueError("The ZIP contains an unsafe file path.")
+            bad_member = archive.testzip()
+            if bad_member:
+                raise ValueError("ZIP integrity check failed at " + str(bad_member)[:120])
+
+            # Convenience: install the uploaded World English Bible MyBible
+            # database directly, without an online Bible API or web-rendered text.
+            if not any(n.endswith("/hymns.json") for n in names):
+                web_files = [item for item in members
+                             if not item.is_dir() and os.path.basename(item.filename).lower() == "web.bbl.mybible"]
+                if web_files:
+                    if len(web_files) != 1 or int(web_files[0].file_size or 0) > 40 * 1024 * 1024:
+                        raise ValueError("The ZIP must contain exactly one WEB Bible database under 40 MB.")
+                    bible_payload = archive.read(web_files[0])
+                    if not bible_payload.startswith(b"SQLite format 3\\x00"):
+                        raise ValueError("The WEB Bible file is not a valid SQLite MyBible database.")
+                    import tempfile as _tempfile
+                    with _tempfile.NamedTemporaryFile(suffix=".bbl.mybible", delete=False) as check_file:
+                        check_file.write(bible_payload)
+                        check_path = check_file.name
+                    try:
+                        check_db = sqlite3.connect(check_path)
+                        details = check_db.execute("SELECT Abbreviation FROM Details LIMIT 1").fetchone()
+                        verse_count = check_db.execute("SELECT COUNT(*) FROM Bible").fetchone()[0]
+                        check_db.close()
+                        if not details or str(details[0]).upper() != "WEB" or verse_count < 30000:
+                            raise ValueError("The selected database is not a complete World English Bible.")
+                    finally:
+                        try: os.remove(check_path)
+                        except OSError: pass
+                    _dc_s3_put(_WEB_BIBLE_OBJECT_KEY, bible_payload, "application/vnd.sqlite3")
+                    for item in (upload_path, meta_path):
+                        try: os.remove(item)
+                        except OSError: pass
+                    return jsonify({
+                        "bible_uploaded": True,
+                        "message": "World English Bible installed for offline reading.",
+                        "redirect": url_for("devotional_holy_bible")
+                    })
+
+                pdfs = [item for item in members
+                        if not item.is_dir() and item.filename.lower().endswith(".pdf")]
+                preferred = [item for item in pdfs
+                             if "csb_pew_bible_2nd_printing" in os.path.basename(item.filename).lower()
+                             or "csb" in os.path.basename(item.filename).lower()]
+                selected = preferred[0] if len(preferred) == 1 else (pdfs[0] if len(pdfs) == 1 else None)
+                if selected is None:
+                    raise ValueError("This ZIP is not a Devotional Kits package and does not contain one identifiable CSB Bible PDF.")
+                if int(selected.file_size or 0) > 30 * 1024 * 1024:
+                    raise ValueError("The Bible PDF inside this ZIP is larger than the 30 MB limit.")
+                bible_payload = archive.read(selected)
+                if not bible_payload.startswith(b"%PDF-"):
+                    raise ValueError("The PDF inside this ZIP is not valid.")
+                _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, bible_payload, "application/pdf")
+                for item in (upload_path, meta_path):
+                    try:
+                        os.remove(item)
+                    except OSError:
+                        pass
+                return jsonify({
+                    "bible_uploaded": True,
+                    "message": "CSB Bible PDF extracted from the ZIP and uploaded successfully.",
+                    "redirect": url_for("devotional_bible_reader")
+                })
+
+        job_id = secrets.token_hex(12)
+        storage_path = "devotional-imports/uploads/" + upload_id
+        db().execute(
+            """INSERT INTO devotional_import_jobs
+               (job_id,status,progress,message,storage_path,package_size)
+               VALUES (?,?,?,?,?,?)""",
+            (job_id, "queued", 0,
+             "All ZIP parts are saved securely. Waiting for the import worker.",
+             storage_path, int(state["size"]))
+        )
+        db().commit()
+        try:
+            os.remove(meta_path)
+        except OSError:
+            pass
+        return jsonify({"job_id": job_id, "message": "Upload complete. Import has started."})
+    except Exception as exc:
+        app.logger.exception("Could not finalise devotional upload")
+        return jsonify({"error": "Could not start import: " + str(exc)[:250]}), 400
+
+
+@app.route("/admin/devotional-centre", methods=["GET", "POST"])
+@page_login_required
+def admin_devotional_centre():
+    if not _dc_admin_required():
+        return "Administrator access required.", 403
+    message = ""
+    error = ""
+    if request.method == "POST":
+        request.max_content_length = 120 * 1024 * 1024
+        package = request.files.get("package")
+        if not package or not package.filename.lower().endswith(".zip"):
+            error = "Choose the Devotional Kits ZIP package."
+        else:
+            import tempfile as _tempfile
+            import zipfile as _zipfile
+            temp_path = None
+            try:
+                with _tempfile.NamedTemporaryFile(prefix="mcn-devotional-", suffix=".zip", delete=False) as handle:
+                    temp_path = handle.name
+                    shutil.copyfileobj(package.stream, handle)
+                with _zipfile.ZipFile(temp_path, "r") as archive:
+                    names = archive.namelist()
+                    if len(names) > 2500 or not any(n.endswith("/hymns.json") for n in names):
+                        raise ValueError("This does not appear to be the expected Devotional Kits package.")
+                    if any(n.startswith("/") or ".." in n.split("/") for n in names):
+                        raise ValueError("The ZIP contains an unsafe file path.")
+                job_id = secrets.token_hex(12)
+                db().execute(
+                    "INSERT INTO devotional_import_jobs (job_id,status,progress,message) VALUES (?,?,?,?)",
+                    (job_id, "queued", 0, "Your import has been queued.")
+                )
+                db().commit()
+                storage_path = "devotional-imports/uploads/" + job_id
+                package_size = os.path.getsize(temp_path)
+                _dc_store_zip_chunks(temp_path, storage_path)
+                db().execute(
+                    """UPDATE devotional_import_jobs
+                       SET storage_path=?,package_size=? WHERE job_id=?""",
+                    (storage_path, package_size, job_id)
+                )
+                db().commit()
+                temp_path = None
+                message = "Import started. Keep this page open to follow progress."
+            except Exception as exc:
+                error = "Could not start import: " + str(exc)[:250]
+            finally:
+                if temp_path:
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+    jobs = db().execute(
+        "SELECT job_id,status,progress,message,imported_records,uploaded_assets,created_at FROM devotional_import_jobs ORDER BY created_at DESC LIMIT 5"
+    ).fetchall()
+    return render_template("devotional_admin.html", message=message,
+                           error=error, jobs=jobs)
+
+
+
+@app.route("/admin/devotional-centre/resources", methods=["GET", "POST"])
+@page_login_required
+def admin_devotional_resources():
+    if not _dc_admin_required():
+        return "Administrator access required.", 403
+    message = ""
+    error = ""
+    if request.method == "POST":
+        resource_id = (request.form.get("resource_id") or "").strip()
+        action = (request.form.get("action") or "save").strip()
+        row = db().execute(
+            "SELECT resource_id,title,content_json,published FROM devotional_resources WHERE resource_id=? LIMIT 1",
+            (resource_id,)
+        ).fetchone() if resource_id else None
+        if not row:
+            error = "Resource not found."
+        elif action == "toggle":
+            db().execute(
+                "UPDATE devotional_resources SET published=?,updated_at=CURRENT_TIMESTAMP WHERE resource_id=?",
+                (0 if bool(row["published"]) else 1, resource_id)
+            )
+            db().commit()
+            message = "Publication status updated."
+        elif action == "delete":
+            db().execute("DELETE FROM devotional_resources WHERE resource_id=?", (resource_id,))
+            db().commit()
+            message = "Resource deleted."
+        else:
+            title = (request.form.get("title") or "").strip()[:220]
+            raw_payload = request.form.get("content_json") or "{}"
+            try:
+                payload = json.loads(raw_payload)
+                if not isinstance(payload, (dict, list)):
+                    raise ValueError("Resource content must be a JSON object or list.")
+                if not title:
+                    raise ValueError("A title is required.")
+                search_text = title + " " + json.dumps(payload, ensure_ascii=False)
+                db().execute(
+                    """UPDATE devotional_resources
+                       SET title=?,content_json=?,search_text=?,updated_at=CURRENT_TIMESTAMP
+                       WHERE resource_id=?""",
+                    (title, json.dumps(payload, ensure_ascii=False), search_text, resource_id)
+                )
+                db().commit()
+                message = "Resource updated successfully."
+            except Exception as exc:
+                error = "Could not save resource: " + str(exc)[:220]
+    query = (request.args.get("q") or "").strip()[:120]
+    collection = (request.args.get("collection") or "").strip()[:60]
+    where = "1=1"
+    args = []
+    if query:
+        where += " AND lower(search_text) LIKE ?"
+        args.append("%" + query.lower() + "%")
+    if collection:
+        where += " AND collection=?"
+        args.append(collection)
+    rows = db().execute(
+        "SELECT resource_id,collection,item_number,title,content_json,published FROM devotional_resources WHERE " +
+        where + " ORDER BY collection,item_number LIMIT 60",
+        tuple(args)
+    ).fetchall()
+    return render_template("devotional_manage.html", resources=rows,
+                           query=query, collection=collection,
+                           collections=sorted({row["collection"] for row in rows}),
+                           message=message, error=error)
+
+
+@app.post("/admin/devotional-centre/jobs/<job_id>/retry")
+@page_login_required
+def admin_devotional_job_retry(job_id):
+    """Safely retry a failed import only when its complete ZIP remains in Object Storage."""
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    try:
+        # Additive guard for older PostgreSQL installations and interrupted migrations.
+        if database_backend() == "postgres":
+            db().execute(
+                "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''"
+            )
+            db().execute(
+                "ALTER TABLE devotional_import_jobs ADD COLUMN IF NOT EXISTS package_size BIGINT DEFAULT 0"
+            )
+            db().commit()
+        row = db().execute(
+            "SELECT job_id,status,storage_path,package_size FROM devotional_import_jobs WHERE job_id=?",
+            (job_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Import job not found."}), 404
+        if row["status"] == "completed":
+            return jsonify({"error": "This import has already completed."}), 409
+        storage_path = str(row["storage_path"] or "").strip()
+        package_size = int(row["package_size"] or 0)
+        if not storage_path or package_size <= 0:
+            return jsonify({
+                "error": "The original ZIP is not recorded in Object Storage for this job. Please upload the Devotional Kits ZIP again; the existing job history has been preserved."
+            }), 409
+        chunk_size = 2 * 1024 * 1024
+        chunk_count = (package_size + chunk_size - 1) // chunk_size
+        client = _dc_s3_client()
+        bucket = _dc_s3_bucket()
+        verified = 0
+        for index in range(chunk_count):
+            key = storage_path.rstrip("/") + "/" + str(index).zfill(6) + ".part"
+            head = client.head_object(Bucket=bucket, Key=key)
+            expected = min(chunk_size, package_size - verified)
+            actual = int(head.get("ContentLength", -1))
+            if actual != expected:
+                return jsonify({
+                    "error": "The saved ZIP is incomplete in Object Storage. Please upload the package again; the existing job history has been preserved."
+                }), 409
+            verified += actual
+        if verified != package_size:
+            return jsonify({"error": "The saved ZIP size could not be verified. Please upload it again."}), 409
+        db().execute(
+            """UPDATE devotional_import_jobs
+               SET status='queued',progress=0,
+                   message='Retry requested. Saved ZIP verified; waiting for the import worker.',
+                   updated_at=CURRENT_TIMESTAMP
+               WHERE job_id=?""",
+            (job_id,)
+        )
+        db().commit()
+        return jsonify({"success": True, "message": "Saved ZIP verified. The import has been queued for retry."})
+    except Exception as exc:
+        db().rollback()
+        app.logger.exception("Could not safely retry devotional import job %s", job_id)
+        return jsonify({"error": "Could not verify or retry this import: " + str(exc)[:220]}), 503
+
+
+@app.get("/admin/devotional-centre/jobs/<job_id>")
+@page_login_required
+def admin_devotional_job_status(job_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    row = db().execute(
+        "SELECT status,progress,message,imported_records,uploaded_assets FROM devotional_import_jobs WHERE job_id=?",
+        (job_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Import job not found."}), 404
+    return jsonify(dict(row))
+
 
 
 @app.route("/admin/media-library", methods=["GET", "POST"])
@@ -8856,7 +13267,7 @@ def media_library_admin():
     if not user or user["role"] != "Admin":
         return "Administrator access required.", 403
 
-    request.max_content_length = _ML_MAX + 1024 * 1024
+    request.max_content_length = (_ML_MAX * 10) + (2 * 1024 * 1024)
     message = ""
     error = ""
 
@@ -8917,72 +13328,138 @@ def media_library_admin():
                         )
 
             else:
-                uploaded_file = request.files.get("file")
+                photo_files = [
+                    item for item in request.files.getlist("photos")
+                    if item and item.filename
+                ]
+                other_files = [
+                    item for item in request.files.getlist("file")
+                    if item and item.filename
+                ]
+                uploaded_files = [(item, True) for item in photo_files] + [
+                    (item, False) for item in other_files
+                ]
                 title = (request.form.get("title") or "").strip()
                 description = (request.form.get("description") or "").strip()
+                collection = (request.form.get("collection") or "library").strip().lower()
+                allowed_collections = {"library", "sermons", "bible-teachings", "choir-music"}
+                if photo_files:
+                    collection = "gallery"
 
-                if not uploaded_file or not uploaded_file.filename:
-                    error = "Choose a file."
-                elif not title:
-                    error = "Enter a title."
+                # Allow text-only sermon, Bible lesson, or hymn uploads.
+                # The text is stored as a UTF-8 .txt object in Supabase Storage.
+                if not uploaded_files and description and collection in {"sermons", "bible-teachings", "choir-music"}:
+                    from werkzeug.datastructures import FileStorage
+                    text_name = (title or collection.replace("-", " ").title())[:150] + ".txt"
+                    text_file = FileStorage(
+                        stream=io.BytesIO(description.encode("utf-8")),
+                        filename=text_name,
+                        content_type="text/plain",
+                    )
+                    other_files = [text_file]
+                    uploaded_files = [(text_file, False)]
+
+                if collection not in allowed_collections and collection != "gallery":
+                    error = "Choose a valid media section."
+                elif not uploaded_files:
+                    error = "Choose one or more photos or files."
+                elif len(uploaded_files) > 10:
+                    error = "You can upload a maximum of 10 files at a time. Select the next batch afterwards."
+                elif other_files and not title:
+                    error = "Enter a title for the document or media upload."
+                elif len(title) > 180 or len(description) > 2000:
+                    error = "The title or description is too long."
                 else:
-                    name = uploaded_file.filename.split("/")[-1].split(chr(92))[-1]
-                    ext = ("." + name.rsplit(".", 1)[-1].lower()) if "." in name else ""
-                    spec = _ML_TYPES.get(ext)
+                    allowed_text = "Allowed: PDF, DOC, DOCX, TXT, MD, JPG, JPEG, PNG, GIF, WEBP, MP3, MID, MIDI, WAV, OGG, M4A, AAC, MP4, WEBM, MOV."
+                    checks_by_ext = {
+                        ".pdf": lambda data: data.startswith(b"%PDF-"),
+                        ".docx": lambda data: data.startswith(b"PK"),
+                        ".doc": lambda data: data.startswith(bytes.fromhex("D0CF11E0A1B11AE1")),
+                        ".jpg": lambda data: data.startswith(bytes.fromhex("FFD8FF")),
+                        ".jpeg": lambda data: data.startswith(bytes.fromhex("FFD8FF")),
+                        ".png": lambda data: data.startswith(bytes.fromhex("89504E470D0A1A0A")),
+                        ".gif": lambda data: data.startswith((b"GIF87a", b"GIF89a")),
+                        ".webp": lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP",
+                        ".txt": lambda data: _ml_is_text_file(data),
+                        ".md": lambda data: _ml_is_text_file(data),
+                        ".mid": lambda data: data.startswith(b"MThd"),
+                        ".midi": lambda data: data.startswith(b"MThd"),
+                        ".mp3": lambda data: data.startswith(b"ID3") or data.startswith(bytes([255, 251])) or data.startswith(bytes([255, 243])) or data.startswith(bytes([255, 242])),
+                        ".wav": lambda data: data.startswith(b"RIFF") and data[8:12] == b"WAVE",
+                        ".ogg": lambda data: data.startswith(b"OggS"),
+                        ".m4a": lambda data: len(data) > 12 and data[4:8] == b"ftyp",
+                        ".mp4": lambda data: len(data) > 12 and data[4:8] == b"ftyp",
+                        ".mov": lambda data: len(data) > 12 and data[4:8] == b"ftyp",
+                        ".aac": lambda data: data.startswith(bytes([255, 241])) or data.startswith(bytes([255, 249])),
+                        ".webm": lambda data: data.startswith(bytes([26, 69, 223, 163])),
+                    }
+                    uploaded_count = 0
+                    failures = []
+                    for uploaded_file, is_photo in uploaded_files:
+                        original_name = uploaded_file.filename.split("/")[-1].split(chr(92))[-1]
+                        ext = ("." + original_name.rsplit(".", 1)[-1].lower()) if "." in original_name else ""
+                        spec = _ML_TYPES.get(ext)
+                        if not spec:
+                            failures.append(f"{original_name}: unsupported file type. {allowed_text}")
+                            continue
 
-                    if not spec:
-                        error = "Allowed: PDF, DOCX, MP3, WAV, OGG, M4A, AAC, MP4, WEBM, MOV."
-                    else:
                         data = uploaded_file.stream.read(_ML_MAX + 1)
                         if not data:
-                            error = "The file is empty."
-                        elif len(data) > _ML_MAX:
-                            error = "Maximum file size is 50 MB."
-                        else:
-                            checks = {
-                                ".pdf": data.startswith(b"%PDF-"),
-                                ".docx": data.startswith(b"PK"),
-                                ".mp3": data.startswith(b"ID3") or data.startswith(bytes([255, 251])) or data.startswith(bytes([255, 243])) or data.startswith(bytes([255, 242])),
-                                ".wav": data.startswith(b"RIFF") and data[8:12] == b"WAVE",
-                                ".ogg": data.startswith(b"OggS"),
-                                ".m4a": len(data) > 12 and data[4:8] == b"ftyp",
-                                ".mp4": len(data) > 12 and data[4:8] == b"ftyp",
-                                ".mov": len(data) > 12 and data[4:8] == b"ftyp",
-                                ".aac": data.startswith(bytes([255, 241])) or data.startswith(bytes([255, 249])),
-                                ".webm": data.startswith(bytes([26, 69, 223, 163])),
-                            }
-                            if not checks.get(ext, False):
-                                error = "File content does not match its extension."
-                            else:
-                                storage_path = f"library/{_ml_uuid.uuid4().hex}{ext}"
-                                try:
-                                    response = _ml_storage_request(
-                                        "POST", storage_path, data, spec[0]
-                                    )
-                                    if not response.ok:
-                                        raise RuntimeError(
-                                            "Supabase upload failed "
-                                            f"(HTTP {response.status_code})."
-                                        )
+                            failures.append(f"{original_name}: file is empty.")
+                            continue
+                        if len(data) > _ML_MAX:
+                            failures.append(f"{original_name}: maximum file size is 50 MB.")
+                            continue
+                        if not checks_by_ext.get(ext, lambda _data: False)(data):
+                            failures.append(f"{original_name}: file content does not match its extension.")
+                            continue
 
-                                    _ml_supabase_request(
-                                        "POST",
-                                        payload={
-                                            "title": title,
-                                            "description": description,
-                                            "storage_path": storage_path,
-                                            "mime_type": spec[0],
-                                            "media_type": spec[1],
-                                            "published": False,
-                                            "created_by": str(user["id"]),
-                                        },
-                                        prefer="return=minimal",
-                                    )
-                                    message = "Upload complete. Publish it below when ready."
-                                except Exception as exc:
-                                    # Do not delete the uploaded object automatically:
-                                    # preserve it for safe recovery if metadata insert fails.
-                                    error = str(exc)
+                        storage_folder = "library" if collection == "library" else f"library/{collection}"
+                        if collection == "gallery":
+                            storage_folder = "library"
+                        storage_path = f"{storage_folder}/{_ml_uuid.uuid4().hex}{ext}"
+                        filename_title = original_name.rsplit(".", 1)[0].strip()
+                        display_title = (
+                            filename_title[:180] if is_photo
+                            else title
+                        )
+                        if not is_photo and len(other_files) > 1:
+                            display_title = f"{title} - {filename_title}"[:180]
+                        try:
+                            response = _ml_storage_request(
+                                "POST", storage_path, data, spec[0]
+                            )
+                            if not response.ok:
+                                raise RuntimeError(
+                                    f"Supabase upload failed (HTTP {response.status_code})."
+                                )
+                            _ml_supabase_request(
+                                "POST",
+                                payload={
+                                    "title": display_title,
+                                    "description": description,
+                                    "storage_path": storage_path,
+                                    "mime_type": spec[0],
+                                    "media_type": spec[1],
+                                    # Publish gallery photos and dedicated resource uploads immediately.
+                                    "published": bool(is_photo or collection in {"sermons", "bible-teachings", "choir-music"}),
+                                    "created_by": str(user["id"]),
+                                },
+                                prefer="return=minimal",
+                            )
+                            uploaded_count += 1
+                        except Exception as exc:
+                            app.logger.exception("Media upload failed for %s", original_name)
+                            failures.append(f"{original_name}: {exc}")
+
+                    if uploaded_count:
+                        message = (
+                            f"{uploaded_count} file(s) uploaded successfully. "
+                            "Published photos appear in the homepage gallery; section uploads appear in their selected resource page."
+                        )
+                    if failures:
+                        error = " ".join(failures)
+
 
         rows = _ml_supabase_request(
             "GET",
@@ -9012,7 +13489,513 @@ def media_library_admin():
         message=message,
         error=error,
     )
+
+# Root-scoped service worker for the Android WebView and mobile browsers.
+@app.get("/service-worker.js")
+def mcn_service_worker():
+    response = send_file(
+        Path(ROOT) / "static" / "mcn-offline-sw.js",
+        mimetype="application/javascript",
+        conditional=False,
+    )
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.after_request
+def register_mcn_offline_worker(response):
+    # Register the offline worker on every rendered page so navigation into the
+    # devotional centre and media library remains under the same offline scope.
+    if request.method == "GET" and response.status_code == 200 and response.mimetype == "text/html":
+        try:
+            html = response.get_data(as_text=True)
+            if "/service-worker.js" not in html and "</body>" in html:
+                registration = (
+                    '<script>(function(){if("serviceWorker" in navigator){'
+                    'window.mcnCacheEntireApp=function(){navigator.serviceWorker.ready.then(function(reg){'
+                    'var worker=reg.active||reg.waiting||reg.installing;if(worker){worker.postMessage({type:"CACHE_MCN_APP"});}});};'
+                    'navigator.serviceWorker.register("/service-worker.js",{scope:"/"})'
+                    '.catch(function(error){console.warn("Offline support unavailable",error);});'
+                    '}})();</script>'
+                )
+                response.set_data(html.replace("</body>", registration + "</body>"))
+        except Exception:
+            app.logger.exception("Could not add offline worker registration to HTML response")
+    return response
+
 # --- End media library ---
+
+
+
+# Offline MyBible library: all modules supplied in the diocesan bibles.zip package.
+_BIBLE_MODULES = {
+    "bbe": ("bbe.bbl.mybible", "Bible in Basic English"),
+    "bsb": ("berean-bsb.bbl.mybible", "Berean Standard Bible"),
+    "bishops": ("bishops.bbl.mybible", "Bishops' Bible"),
+    "cpdv": ("cpdv.bbl.mybible", "Catholic Public Domain Version"),
+    "easyenglish": ("easyenglish.bbl.mybible", "EasyEnglish Bible"),
+    "ebr": ("ebr.bbl.mybible", "English Bible in Basic English (EBR)"),
+    "erv": ("erv.bbl.mybible", "Easy-to-Read Version"),
+    "isv": ("isv.bbl.mybible", "International Standard Version"),
+    "kjv": ("kjv.bbl.mybible", "King James Version"),
+    "kjvlite": ("kjvlite.bbl.mybible", "King James Version Lite"),
+    "logos": ("logos.bbl.mybible", "Logos Bible"),
+    "net": ("net.bbl.mybible", "New English Translation"),
+    "nheb": ("nheb.bbl.mybible", "New Heart English Bible"),
+    "web": ("web.bbl.mybible", "World English Bible"),
+    "wesley": ("wesley.bbl.mybible", "Wesley's New Testament"),
+}
+_BIBLE_OBJECT_PREFIX = "devotional/bibles/translations/"
+
+def _bible_object_key(code):
+    if code not in _BIBLE_MODULES:
+        raise ValueError("Unknown Bible translation.")
+    return _BIBLE_OBJECT_PREFIX + _BIBLE_MODULES[code][0]
+
+def _bible_db_path(code):
+    filename = _BIBLE_MODULES[code][0]
+    path = os.path.join(DATA_DIR, "bible_modules", filename)
+    if not os.path.isfile(path) or os.path.getsize(path) < 1024:
+        payload = _dc_s3_get(_bible_object_key(code))
+        if not payload.startswith(b"SQLite format 3\x00"):
+            raise ValueError("Stored Bible module is not a valid SQLite database.")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temp_path = path + ".tmp"
+        with open(temp_path, "wb") as handle:
+            handle.write(payload)
+        os.replace(temp_path, path)
+    return path
+
+def _bible_connect(code):
+    path = _bible_db_path(code)
+    conn = sqlite3.connect("file:" + path + "?mode=ro", uri=True, timeout=30)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def _installed_bible_modules():
+    installed = []
+    for code, (filename, title) in _BIBLE_MODULES.items():
+        try:
+            _dc_s3_client().head_object(Bucket=_dc_s3_bucket(), Key=_bible_object_key(code))
+            installed.append({"id": code, "title": title, "filename": filename})
+        except Exception:
+            continue
+    return installed
+
+@app.route("/devotional-centre/holy-bible")
+def devotional_holy_bible():
+    installed = _installed_bible_modules()
+    return render_template(
+        "devotional_holy_bible.html",
+        bible_available=bool(installed),
+        translations=installed,
+        is_admin=_dc_admin_required(),
+    )
+
+@app.get("/devotional-centre/holy-bible/books")
+def devotional_holy_bible_books():
+    code = (request.args.get("translation") or "web").strip().lower()
+    if code not in _BIBLE_MODULES:
+        return jsonify({"error": "Choose a supported Bible translation."}), 400
+    try:
+        conn = _bible_connect(code)
+        try:
+            rows = conn.execute(
+                "SELECT Book, MAX(Chapter) AS chapters FROM Bible GROUP BY Book ORDER BY Book"
+            ).fetchall()
+            details = conn.execute("SELECT * FROM Details LIMIT 1").fetchone()
+        finally:
+            conn.close()
+        title = _BIBLE_MODULES[code][1]
+        if details:
+            keys = {k.lower(): k for k in details.keys()}
+            for key in ("title", "description"):
+                actual = keys.get(key)
+                if actual and details[actual]:
+                    title = str(details[actual]).strip()
+                    break
+        return jsonify({
+            "translation": code, "title": title,
+            "books": [{"id": int(r["Book"]), "chapters": int(r["chapters"])} for r in rows]
+        })
+    except Exception:
+        app.logger.exception("Could not read offline Bible book list for %s", code)
+        return jsonify({"error": "This Bible translation is not installed or readable yet."}), 503
+
+@app.get("/devotional-centre/holy-bible/chapter")
+def devotional_holy_bible_chapter():
+    code = (request.args.get("translation") or "web").strip().lower()
+    book = request.args.get("book", type=int)
+    chapter = request.args.get("chapter", type=int)
+    if code not in _BIBLE_MODULES:
+        return jsonify({"error": "Choose a supported Bible translation."}), 400
+    if not book or not chapter or book < 1 or book > 100 or chapter < 1 or chapter > 250:
+        return jsonify({"error": "Choose a valid Bible book and chapter."}), 400
+    try:
+        conn = _bible_connect(code)
+        try:
+            rows = conn.execute(
+                "SELECT Verse, Scripture FROM Bible WHERE Book=? AND Chapter=? ORDER BY Verse",
+                (book, chapter)
+            ).fetchall()
+        finally:
+            conn.close()
+        if not rows:
+            return jsonify({"error": "Chapter not found in this translation."}), 404
+        verses = []
+        for row in rows:
+            scripture = str(row["Scripture"] or "")
+            scripture = re.sub(r"<RF>.*?<Rf>", "", scripture, flags=re.S | re.I)
+            scripture = re.sub(r"<[^>]*>", "", scripture)
+            scripture = re.sub(r"\s+", " ", scripture).strip()
+            verses.append({"verse": int(row["Verse"]), "text": scripture})
+        return jsonify({"translation": code, "book": book, "chapter": chapter, "verses": verses})
+    except Exception:
+        app.logger.exception("Could not read offline Bible chapter for %s", code)
+        return jsonify({"error": "This Bible chapter could not be read."}), 503
+
+@app.post("/admin/devotional-centre/bibles/upload/init")
+@page_login_required
+def admin_bible_package_init():
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        size = int(data.get("size") or 0)
+        if size <= 0 or size > 100 * 1024 * 1024:
+            return jsonify({"error": "Bible ZIP must be between 1 byte and 100 MB."}), 400
+        upload_id = secrets.token_hex(20)
+        upload_dir = os.path.join(DATA_DIR, "bible_package_uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        path = os.path.join(upload_dir, upload_id + ".zip.part")
+        with open(path, "wb"):
+            pass
+        with open(path + ".json", "w", encoding="utf-8") as handle:
+            json.dump({"size": size, "received": 0}, handle)
+        return jsonify({"upload_id": upload_id, "chunk_size": 2 * 1024 * 1024})
+    except Exception:
+        app.logger.exception("Could not initialise Bible ZIP upload")
+        return jsonify({"error": "Could not start Bible package upload."}), 500
+
+@app.post("/admin/devotional-centre/bibles/upload/<upload_id>/chunk")
+@page_login_required
+def admin_bible_package_chunk(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id):
+        return jsonify({"error": "Invalid upload ID."}), 400
+    upload_dir = os.path.join(DATA_DIR, "bible_package_uploads")
+    path = os.path.join(upload_dir, upload_id + ".zip.part")
+    meta_path = path + ".json"
+    try:
+        with open(meta_path, "r", encoding="utf-8") as handle:
+            meta = json.load(handle)
+        chunk = request.get_data(cache=False)
+        if not chunk or len(chunk) > 2 * 1024 * 1024 + 1024:
+            return jsonify({"error": "Invalid upload chunk size."}), 400
+        if int(meta["received"]) + len(chunk) > int(meta["size"]):
+            return jsonify({"error": "Received more data than expected."}), 400
+        with open(path, "ab") as handle:
+            handle.write(chunk)
+        meta["received"] = int(meta["received"]) + len(chunk)
+        with open(meta_path, "w", encoding="utf-8") as handle:
+            json.dump(meta, handle)
+        return jsonify({"received": meta["received"], "total": meta["size"]})
+    except Exception:
+        app.logger.exception("Bible ZIP chunk upload failed")
+        return jsonify({"error": "Could not save this upload chunk."}), 500
+
+@app.post("/admin/devotional-centre/bibles/upload/<upload_id>/complete")
+@page_login_required
+def admin_bible_package_complete(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id):
+        return jsonify({"error": "Invalid upload ID."}), 400
+    import zipfile as _zipfile
+    upload_dir = os.path.join(DATA_DIR, "bible_package_uploads")
+    zip_path = os.path.join(upload_dir, upload_id + ".zip.part")
+    meta_path = zip_path + ".json"
+    installed = []
+    try:
+        with open(meta_path, "r", encoding="utf-8") as handle:
+            meta = json.load(handle)
+        if int(meta.get("received", 0)) != int(meta.get("size", -1)):
+            return jsonify({"error": "Upload is incomplete. Please retry the missing chunks."}), 400
+        with _zipfile.ZipFile(zip_path, "r") as archive:
+            members = archive.namelist()
+            if len(members) > 100:
+                raise ValueError("The ZIP contains too many files.")
+            expected = {filename.lower(): code for code, (filename, _) in _BIBLE_MODULES.items()}
+            matched = {}
+            for member in members:
+                base = os.path.basename(member.replace("\\", "/")).lower()
+                if base in expected and not member.endswith("/"):
+                    matched[expected[base]] = member
+            if not matched:
+                raise ValueError("No recognised .bbl.mybible modules were found in the ZIP.")
+            for code, member in matched.items():
+                payload = archive.read(member)
+                if not payload.startswith(b"SQLite format 3\x00"):
+                    raise ValueError("Invalid SQLite Bible module: " + os.path.basename(member))
+                temp_db = os.path.join(upload_dir, upload_id + "-" + code + ".sqlite")
+                with open(temp_db, "wb") as handle:
+                    handle.write(payload)
+                try:
+                    check = sqlite3.connect("file:" + temp_db + "?mode=ro", uri=True, timeout=30)
+                    try:
+                        tables = {row[0] for row in check.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                        if "Bible" not in tables:
+                            raise ValueError("Missing Bible table: " + os.path.basename(member))
+                        verse_count = check.execute("SELECT COUNT(*) FROM Bible").fetchone()[0]
+                        if not verse_count:
+                            raise ValueError("Empty Bible module: " + os.path.basename(member))
+                    finally:
+                        check.close()
+                finally:
+                    try:
+                        os.remove(temp_db)
+                    except OSError:
+                        pass
+                _dc_s3_put(_bible_object_key(code), payload, "application/vnd.sqlite3")
+                installed.append({"id": code, "title": _BIBLE_MODULES[code][1], "bytes": len(payload)})
+        try:
+            os.remove(zip_path)
+            os.remove(meta_path)
+        except OSError:
+            pass
+        return jsonify({"ok": True, "installed": installed, "count": len(installed)})
+    except Exception as exc:
+        app.logger.exception("Bible package import failed")
+        return jsonify({"error": "Bible import failed: " + str(exc)[:240]}), 500
+
+
+
+# Public read-only endpoints used by the native app's offline resource modules.
+@app.get("/api/offline/devotional-resources")
+def api_offline_devotional_resources():
+    allowed = {
+        "english_hymns", "yoruba_hymns", "akokun", "bible_verses",
+        "canticles", "communion_english", "communion_yoruba", "creeds"
+    }
+    collection = (request.args.get("collection") or "").strip()
+    if collection not in allowed:
+        return jsonify({"error": "Unknown devotional collection."}), 400
+    include_audio = request.args.get("include_audio", "0").strip() == "1"
+    page = max(1, min(request.args.get("page", 1, type=int) or 1, 10000))
+    per_page = max(1, min(request.args.get("per_page", 100, type=int) or 100, 100))
+    # Support both PostgreSQL BOOLEAN and legacy SQLite INTEGER publication flags.
+    published_filter = "LOWER(CAST(published AS TEXT)) IN ('1','true','t')"
+    total_row = db().execute(
+        "SELECT COUNT(*) AS total FROM devotional_resources WHERE collection=? AND " + published_filter,
+        (collection,)
+    ).fetchone()
+    total = int(total_row["total"] or 0)
+    rows = db().execute(
+        """SELECT resource_id,collection,item_number,title,content_json,audio_path,author_path
+           FROM devotional_resources
+           WHERE collection=? AND """ + published_filter + """
+           ORDER BY item_number,title
+           LIMIT ? OFFSET ?""",
+        (collection, per_page, (page - 1) * per_page)
+    ).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        try:
+            payload = json.loads(item.get("content_json") or "{}")
+        except Exception:
+            payload = {}
+        audio_path = item.pop("audio_path", "") or payload.get("musicFilePath") or ""
+        item.pop("author_path", None)
+        item.pop("content_json", None)
+        payload["musicFilePath"] = ""
+        item["payload"] = payload
+        item["audio_extension"] = os.path.splitext(audio_path)[1].lower()
+        item["audio_url"] = _dc_signed(audio_path) if include_audio else ""
+        item["author_url"] = ""
+        if include_audio:
+            for tune in payload.get("otherTunes") or []:
+                tune_path = tune.get("musicFilePath") or tune.get("audio_path") or ""
+                tune["audio_extension"] = os.path.splitext(tune_path)[1].lower()
+                tune["musicFilePath"] = ""
+                tune.pop("audio_path", None)
+                tune["signed_url"] = _dc_signed(tune_path)
+        items.append(item)
+    return jsonify({
+        "collection": collection,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": max(1, (total + per_page - 1) // per_page),
+        "items": items
+    })
+
+
+@app.get("/api/offline/daily-devotion")
+def api_offline_daily_devotion():
+    try:
+        return jsonify(_daily_scripture_and_hymn())
+    except Exception:
+        app.logger.exception("Daily offline devotion could not be prepared")
+        return jsonify({"error": "Daily devotion is temporarily unavailable."}), 503
+
+
+@app.get("/api/offline/csb-bible")
+def api_offline_csb_bible():
+    try:
+        signed_url = _dc_signed(_CSB_BIBLE_OBJECT_KEY)
+        if not signed_url:
+            return jsonify({"available": False, "error": "The uploaded CSB Bible is not available."}), 404
+        return jsonify({"available": True, "download_url": signed_url, "title": "Christian Standard Bible — 2017 Pew Bible"})
+    except Exception:
+        app.logger.exception("Offline CSB Bible link could not be created")
+        return jsonify({"available": False, "error": "The CSB Bible is temporarily unavailable."}), 503
+
+
+@app.get("/api/offline/lectionary")
+def api_offline_lectionary():
+    source_path = Path(ROOT) / "data" / "yearly_lectionary_2027.txt"
+    try:
+        return jsonify({"title": "2027 Methodist Lectionary", "content": source_path.read_text(encoding="utf-8")})
+    except OSError:
+        return jsonify({"error": "The yearly lectionary is temporarily unavailable."}), 503
+
+
+@app.get("/api/offline/media-catalogue")
+def api_offline_media_catalogue():
+    """Public, published-only media catalogue for offline audio/video/document downloads."""
+    try:
+        rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,created_at",
+                "published": "eq.true",
+                "order": "created_at.desc",
+                "limit": "1000",
+            },
+        )
+        items = []
+        for row in rows:
+            try:
+                signed_url = _ml_signed(row["storage_path"])
+            except Exception:
+                app.logger.warning("Could not sign published offline media item %s", row.get("id"))
+                continue
+            items.append({
+                "id": row.get("id"),
+                "title": row.get("title") or "Church media",
+                "description": row.get("description") or "",
+                "mime_type": row.get("mime_type") or "application/octet-stream",
+                "media_type": row.get("media_type") or "document",
+                "created_at": row.get("created_at"),
+                "download_url": signed_url,
+            })
+        return jsonify({"items": items, "count": len(items)})
+    except Exception:
+        app.logger.exception("Offline media catalogue could not be loaded")
+        return jsonify({"error": "Offline media catalogue is temporarily unavailable."}), 503
+
+
+
+
+@app.post("/api/offline/sync")
+@login_required
+def api_offline_sync():
+    """Idempotent synchronization for queued attendance records only."""
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    operation = data.get("operation") or {}
+    operation_id = str(operation.get("operation_id") or "").strip()
+    if not operation_id or len(operation_id) > 100:
+        return jsonify({"error": "A valid operation_id is required."}), 400
+    if operation.get("type") != "attendance":
+        return jsonify({"error": "Unsupported offline operation."}), 400
+    allowed_roles = {
+        "Admin", "Evangelism Minister", "Planting Officer",
+        "Circuit Coordinator", "Local Church Evangelism Officer"
+    }
+    if user["role"] not in allowed_roles:
+        return jsonify({"error": "Attendance recording access denied."}), 403
+
+    conn = db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS offline_sync_receipts (
+            operation_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    existing = conn.execute(
+        "SELECT username,result_json FROM offline_sync_receipts WHERE operation_id=?",
+        (operation_id,)
+    ).fetchone()
+    if existing:
+        if existing["username"] != user["username"]:
+            return jsonify({"error": "Operation ID already belongs to another account."}), 409
+        return jsonify(json.loads(existing["result_json"]))
+
+    payload = operation.get("data") or {}
+    try:
+        member_id = int(payload.get("member_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid member_id is required."}), 400
+    attendance_date = str(payload.get("attendance_date") or "").strip()
+    meeting_type = str(payload.get("meeting_type") or "").strip()
+    status = str(payload.get("status") or "Present").strip().title()
+    if not attendance_date:
+        return jsonify({"error": "attendance_date is required."}), 400
+    if status not in {"Present", "Absent"}:
+        return jsonify({"error": "Status must be Present or Absent."}), 400
+    try:
+        datetime.strptime(attendance_date, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "attendance_date must use YYYY-MM-DD."}), 400
+
+    member = conn.execute(
+        "SELECT id,circuit,church_name FROM members WHERE id=?",
+        (member_id,)
+    ).fetchone()
+    if not member:
+        return jsonify({"error": "Member record not found."}), 404
+    if user["role"] == "Circuit Coordinator" and user["circuit"] and member["circuit"] != user["circuit"]:
+        return jsonify({"error": "Member is outside your circuit."}), 403
+    if user["role"] == "Local Church Evangelism Officer" and (
+        member["circuit"] != user["circuit"] or member["church_name"] != user["church_name"]
+    ):
+        return jsonify({"error": "Member is outside your local church."}), 403
+
+    try:
+        inserted = conn.execute(
+            """INSERT INTO member_attendance
+               (member_id,attendance_date,meeting_type,status,circuit,church_name,recorded_by,notes)
+               VALUES(?,?,?,?,?,?,?,?) RETURNING id""",
+            (member_id, attendance_date, meeting_type, status, member["circuit"],
+             member["church_name"], user["username"], str(payload.get("notes") or "").strip())
+        ).fetchone()
+        result = {
+            "ok": True, "status": "synced",
+            "operation_id": operation_id, "id": inserted["id"]
+        }
+        conn.execute(
+            "INSERT INTO offline_sync_receipts(operation_id,username,result_json) VALUES(?,?,?)",
+            (operation_id, user["username"], json.dumps(result))
+        )
+        conn.commit()
+        return jsonify(result), 201
+    except Exception:
+        conn.rollback()
+        existing = conn.execute(
+            "SELECT username,result_json FROM offline_sync_receipts WHERE operation_id=?",
+            (operation_id,)
+        ).fetchone()
+        if existing and existing["username"] == user["username"]:
+            return jsonify(json.loads(existing["result_json"]))
+        app.logger.exception("Offline attendance synchronization failed")
+        return jsonify({"error": "Offline attendance could not be synchronized."}), 500
+
 
 if __name__ == "__main__":
     app.run(
@@ -9020,3 +14003,4 @@ if __name__ == "__main__":
         port=int(os.environ.get("PORT", "8080")),
         debug=False
     )
+

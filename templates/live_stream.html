@@ -28,6 +28,34 @@ button,.button{display:inline-block;border:0;border-radius:8px;background:var(--
 footer{text-align:center;padding:24px;color:#a8b9ad;font-size:13px}
 a{color:var(--gold)}
 @media(max-width:500px){main{width:calc(100% - 20px);margin:14px auto}.panel{padding:13px}}
+
+    .live-news-ticker {
+        display:flex; align-items:center; gap:14px; overflow:hidden;
+        margin:16px 0; padding:12px 14px; border-radius:10px;
+        background:#063b2b; color:#fff; border-left:5px solid #e6b422;
+    }
+    .live-news-label {
+        flex:0 0 auto; font-weight:800; color:#ffd966;
+        text-transform:uppercase; letter-spacing:.06em;
+    }
+    .live-news-window { overflow:hidden; min-width:0; flex:1; }
+    .live-news-track {
+        display:flex; width:max-content; gap:36px;
+        animation:live-news-scroll 38s linear infinite;
+    }
+    .live-news-ticker:hover .live-news-track { animation-play-state:paused; }
+    .live-news-item { white-space:nowrap; }
+    .live-news-item strong { color:#ffe08a; }
+    @keyframes live-news-scroll {
+        from { transform:translateX(0); }
+        to { transform:translateX(-50%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .live-news-track { animation:none; flex-wrap:wrap; width:auto; }
+        .live-news-window { overflow:visible; }
+        .live-news-ticker { flex-wrap:wrap; }
+    }
+
 </style>
 </head>
 <body>
@@ -37,6 +65,36 @@ a{color:var(--gold)}
 <p>Worship · Witness · Service · Discipleship</p>
 </header>
 <main>
+
+<div class="live-news-ticker" role="region" aria-label="Latest church news">
+  <span class="live-news-label">Latest News</span>
+  <div class="live-news-window">
+    <div class="live-news-track">
+      {% if latest_news %}
+        {% for item in latest_news %}
+          <span class="live-news-item">
+            <strong>{{ item.title|default('Church Announcement', true) }}</strong>
+            {% if item.event_date %} — {{ item.event_date }}{% endif %}
+            {% if item.venue %} · {{ item.venue }}{% endif %}
+            {% if item.description %} · {{ item.description }}{% endif %}
+          </span>
+        {% endfor %}
+        {% for item in latest_news %}
+          <span class="live-news-item" aria-hidden="true">
+            <strong>{{ item.title|default('Church Announcement', true) }}</strong>
+            {% if item.event_date %} — {{ item.event_date }}{% endif %}
+            {% if item.venue %} · {{ item.venue }}{% endif %}
+            {% if item.description %} · {{ item.description }}{% endif %}
+          </span>
+        {% endfor %}
+      {% else %}
+        <span class="live-news-item">Welcome to Methodist Church Nigeria, Delta South Diocese — join us for worship, prayer and fellowship.</span>
+        <span class="live-news-item" aria-hidden="true">Welcome to Methodist Church Nigeria, Delta South Diocese — join us for worship, prayer and fellowship.</span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
 <section class="panel">
 <div class="status"><span class="dot"></span><span id="status">CHECKING STREAM</span></div>
 <h2>Live Worship Service</h2>

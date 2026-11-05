@@ -18,7 +18,13 @@ button,a{display:inline-block;background:#123d70;color:white;padding:12px;border
 <body>
 <header><h2>METHODIST CHURCH NIGERIA</h2><p>Delta South Diocese — Homepage Management</p></header>
 <main>
-<a href="/">Public Homepage</a> <a href="/admin/leadership">Leadership Management</a>
+<a href="/">Public Homepage</a>
+<a href="/admin/leadership">Leadership Management</a>
+<section style="border:2px solid #d6e2f2;background:#fff;padding:16px;border-radius:10px;margin:16px 0">
+<h2 style="margin:0 0 8px">📸 Homepage Photo Gallery</h2>
+<p style="margin:0 0 12px;line-height:1.5">Upload and manage church photographs that appear one after another in the public homepage gallery. You can add many photos, publish or hide each one, and delete photos you no longer need.</p>
+<a href="/admin/media-library" style="background:#147447;font-weight:bold">Manage Photo Gallery & Upload Pictures</a>
+</section>
 {% if message %}<p>{{ message }}</p>{% endif %}
 {% if error %}<p>{{ error }}</p>{% endif %}
 <form method="post">

@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Yearly Lectionary 2027 | MCN Delta South</title>
+<style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;min-width:0;overflow-x:hidden}
+body{background:#fffde9;color:#28251c;font:14px/1.38 Georgia,"Times New Roman",serif}
+.hero{background:#fffde9;color:#28251c;padding:22px 18px 12px;text-align:center}
+.wrap,main{width:100%;max-width:1000px;margin:0 auto;min-width:0}
+.eyebrow{font:700 11px/1.4 Arial,sans-serif;letter-spacing:.5px;text-transform:uppercase;color:#554d36}
+.hero h1{font:700 clamp(17px,2.4vw,22px)/1.25 Georgia,serif;margin:8px 0 16px}
+.hero p{font:12px/1.4 Arial,sans-serif;margin:0 auto;max-width:720px;color:#655e4c}
+main{padding:10px clamp(12px,4vw,42px) 40px}
+.nav{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:0 0 12px;font:12px Arial,sans-serif}
+.nav a{color:#61583f;text-decoration:none;font-weight:700}
+.tools{position:sticky;top:0;z-index:3;background:#fffde9;padding:8px 0 10px}
+.tools input{display:block;width:100%;min-width:0;padding:10px 12px;border:1px solid #d8d1b9;border-radius:5px;font:14px Arial,sans-serif;background:#fffef5;color:#28251c}
+.hint{font:11px Arial,sans-serif;color:#766e59;margin:5px 2px}
+.readings{display:grid;grid-template-columns:minmax(0,1fr);gap:0;min-width:0}
+.entry{min-width:0;width:100%;padding:10px 0 15px;border-bottom:1px solid #e8e2cc;overflow-wrap:anywhere}
+.entry[hidden]{display:none}
+.entry-heading{font:14px/1.35 Georgia,"Times New Roman",serif;color:#262319;white-space:pre-wrap;margin-bottom:3px}
+.reading-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(8px,3vw,30px);width:100%;min-width:0}
+.reading-column{min-width:0;white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.38 Georgia,"Times New Roman",serif}
+.reading-column:empty{min-height:1px}
+.empty{display:none;padding:20px;text-align:center;color:#655e4c;font:13px Arial,sans-serif}
+@media(max-width:420px){body{font-size:12px}.hero{padding:18px 10px 8px}.hero h1{font-size:17px;margin-bottom:10px}main{padding:8px 10px 30px}.entry{padding:8px 0 12px}.entry-heading,.reading-column{font-size:12px;line-height:1.35}.reading-columns{gap:7px}.tools input{font-size:13px;padding:9px}}
+</style></head><body>
+<header class="hero"><div class="wrap"><div class="eyebrow">Methodist Church Nigeria · Delta South Diocese</div><h1>Yearly Lectionary</h1><p>Appointed Scripture readings from the uploaded diocesan lectionary. Search by date, Sunday, feast day or Bible reference.</p></div></header>
+<main><nav class="nav"><a href="/devotional-centre">← Devotional Centre</a><a href="/">Diocesan Homepage</a></nav>
+<div class="tools"><input id="lectionarySearch" type="search" placeholder="Search date, Sunday, feast or Bible reference…" autocomplete="off"><div class="hint"><span id="resultCount"></span> · Source: LECTIONAR 2027 (Year B and opening of Year C)</div></div>
+<div class="readings" id="lectionaryEntries">
+{% for block in readings.split('\n\n') %}{% set block = block.strip() %}{% if block %}
+<article class="entry" data-search="{{ block|lower|e }}"><pre>{{ block }}</pre></article>
+{% endif %}{% endfor %}
+</div><div class="empty" id="noResults">No matching lectionary entry. Try another date or Scripture reference.</div>
+</main>
+<script>
+(()=>{document.querySelectorAll('.entry').forEach(card=>{
+ const source=card.querySelector('pre');if(!source)return;
+ const original=source.textContent.replace(/\r/g,'');
+ const rawLines=original.split('\n');
+ const marker=rawLines.findIndex(line=>/Second Service/i.test(line));
+ let headingLines=[],leftLines=[],rightLines=[];
+ if(marker>=0){
+   headingLines=rawLines.slice(0,marker).map(line=>line.replace(/First Service/ig,'').trimEnd()).filter(line=>line.trim());
+   rawLines.slice(marker+1).forEach(line=>{
+     if(!line.trim())return;
+     const match=line.match(/\s{3,}/);
+     if(match){const cut=match.index;leftLines.push(line.slice(0,cut).trimEnd());rightLines.push(line.slice(cut+match[0].length).trim());}
+     else {leftLines.push(line.trim());}
+   });
+ }else{
+   const nonempty=rawLines.filter(line=>line.trim());
+   headingLines=[nonempty.shift()||''];
+   leftLines=nonempty;
+ }
+ const heading=document.createElement('div');heading.className='entry-heading';heading.textContent=headingLines.join('\n');
+ const columns=document.createElement('div');columns.className='reading-columns';
+ const left=document.createElement('div'),right=document.createElement('div');
+ left.className=right.className='reading-column';left.textContent=leftLines.join('\n');right.textContent=rightLines.join('\n');
+ columns.append(left,right);card.replaceChildren(heading,columns);
+});})();
+(()=>{const input=document.getElementById('lectionarySearch'),cards=[...document.querySelectorAll('.entry')],count=document.getElementById('resultCount'),empty=document.getElementById('noResults');function filter(){const q=input.value.trim().toLocaleLowerCase();let n=0;cards.forEach(card=>{const show=!q||(card.dataset.search||'').includes(q);card.hidden=!show;if(show)n++});count.textContent=n+' entries shown';empty.style.display=n?'none':'block'}input.addEventListener('input',filter);filter()})();
+</script></body></html>

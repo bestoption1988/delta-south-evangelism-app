@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Giving Confirmation | Methodist Church Nigeria</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f1f4fa;color:#1d2939;font:16px/1.55 Arial,sans-serif}
+header{background:#092657;color:#fff;text-align:center;padding:18px 12px;font-weight:700;letter-spacing:.4px}
+header small{display:block;font-size:11px;letter-spacing:2px;margin-top:4px}
+main{max-width:620px;margin:42px auto;padding:0 16px}.panel{background:#fff;border-radius:16px;padding:30px 24px;box-shadow:0 8px 30px #14213d12;text-align:center}
+.mark{width:62px;height:62px;border-radius:50%;display:grid;place-items:center;margin:0 auto 16px;background:#e7f8ee;color:#15934b;font-size:34px;font-weight:bold}
+.pending .mark{background:#fff4df;color:#ad7200}.failed .mark{background:#fdebec;color:#b42336}
+h1{font-size:24px;margin:8px 0 10px}.lead{color:#586579;margin:0 auto 20px;max-width:470px}
+.details{background:#f7f9fc;border-radius:10px;padding:14px;text-align:left;margin:20px 0;font-size:14px}
+.details div{display:flex;justify-content:space-between;gap:12px;padding:5px 0}.details span{color:#667085}.details strong{text-align:right;overflow-wrap:anywhere}
+.actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:22px}
+a.btn{display:inline-block;padding:12px 18px;border-radius:8px;background:#b51f36;color:#fff;text-decoration:none;font-weight:700}
+a.secondary{background:#eef2f8;color:#17345f}
+.note{font-size:13px;color:#667085;margin-top:18px}
+@media(max-width:480px){main{margin:20px auto}.panel{padding:24px 17px}h1{font-size:21px}}
+</style></head>
+<body>
+<header>METHODIST CHURCH NIGERIA<small>DELTA SOUTH DIOCESE</small></header>
+<main><section class="panel {% if not paid %}pending{% endif %}">
+<div class="mark">{% if paid %}✓{% else %}…{% endif %}</div>
+{% if paid %}
+<h1>Thank you for your generous giving!</h1>
+<p class="lead">Your payment has been verified and successfully recorded by Methodist Church Nigeria, Delta South Diocese. May God bless you and your household.</p>
+{% else %}
+<h1>We are checking your payment</h1>
+<p class="lead">Flutterwave has returned you to the Diocese website, but we have not yet confirmed the payment in our records. Please do not pay again until the Finance Office checks the reference below.</p>
+{% endif %}
+{% if reference %}<div class="details">
+{% if donor_name %}<div><span>Donor</span><strong>{{ donor_name }}</strong></div>{% endif %}
+{% if amount is not none %}<div><span>Amount</span><strong>₦{{ "%.2f"|format(amount|float) }}</strong></div>{% endif %}
+{% if purpose %}<div><span>Purpose</span><strong>{{ purpose }}</strong></div>{% endif %}
+{% if church_name %}<div><span>Giving account</span><strong>{{ church_name }}</strong></div>{% endif %}
+<div><span>Reference</span><strong>{{ reference }}</strong></div>
+<div><span>Status</span><strong>{% if paid %}SUCCESSFUL{% else %}PENDING VERIFICATION{% endif %}</strong></div>
+</div>{% endif %}
+<div class="actions">
+{% if is_member %}<a class="btn" href="/member-dashboard">Go to Members Portal</a>{% else %}<a class="btn" href="/">Return to Diocese Homepage</a><a class="btn secondary" href="/login">Members Login</a>{% endif %}
+</div>
+<p class="note">For payment enquiries, provide the transaction reference to the Diocese Finance Office. Do not share your card PIN, OTP or password.</p>
+</section></main></body></html>
