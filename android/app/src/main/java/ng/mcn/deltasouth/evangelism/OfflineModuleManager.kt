@@ -111,6 +111,12 @@ object OfflineModuleManager {
         val items = org.json.JSONObject(json).optJSONArray("items") ?: JSONArray()
         val directory = File(context.filesDir, "offline_media")
         if (!directory.exists()) directory.mkdirs()
+        val oldIndex = runCatching { JSONArray(File(directory, "index.json").readText()) }.getOrDefault(JSONArray())
+        val oldVersions = mutableMapOf<String, String>()
+        for (i in 0 until oldIndex.length()) {
+            val old = oldIndex.optJSONObject(i) ?: continue
+            oldVersions[old.optString("id")] = old.optString("created_at")
+        }
         var count = 0
         val index = JSONArray()
         for (i in 0 until items.length()) {
@@ -128,7 +134,8 @@ object OfflineModuleManager {
             }
             val safeId = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
             val target = File(directory, safeId + extension)
-            if (!target.exists() || target.length() == 0L) {
+            val currentVersion = item.optString("created_at")
+            if (!target.exists() || target.length() == 0L || oldVersions[id] != currentVersion) {
                 val mediaRequest = Request.Builder().url(url).get().build()
                 longClient.newCall(mediaRequest).execute().use { response ->
                     if (!response.isSuccessful) throw IllegalStateException("Media download HTTP " + response.code)
