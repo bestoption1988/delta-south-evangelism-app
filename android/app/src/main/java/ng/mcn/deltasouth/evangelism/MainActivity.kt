@@ -1539,6 +1539,7 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
                     settings.domStorageEnabled = true
                     settings.loadsImagesAutomatically = true
                     settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.setSupportMultipleWindows(false)
                     settings.mediaPlaybackRequiresUserGesture = false
                     settings.useWideViewPort = true
                     settings.loadWithOverviewMode = false
