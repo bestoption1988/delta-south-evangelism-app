@@ -251,7 +251,27 @@ private fun NativeDioceseApp() {
         PublicDiocesanHomepage(
             online = online,
             onStaffLogin = { showStaffLogin = true },
-            onOfflineLibrary = { showOfflineLibrary = true },
+            onOfflineDownload = {
+                if (online && !downloadBusy) {
+                    downloadBusy = true
+                    downloadMessage = "Saving the diocesan homepage, devotional resources, media and permitted records for offline use…"
+                    scope.launch {
+                        val result = withContext(Dispatchers.IO) {
+                            runCatching { OfflineModuleManager.downloadAll(appContext) }
+                        }
+                        result.onSuccess { summary ->
+                            downloadedModules = summary.downloaded
+                            mediaDownloadedCount = summary.mediaDownloaded
+                            devotionalResourceCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_resources_count", 0)
+                            devotionalAudioCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_audio_count", 0)
+                            downloadMessage = "Offline package updated: ${summary.downloaded} data sets, ${summary.mediaDownloaded} media files, ${summary.unavailable} account-restricted items and ${summary.failed} failed items."
+                        }.onFailure { error ->
+                            downloadMessage = error.message ?: "The offline package could not be completed."
+                        }
+                        downloadBusy = false
+                    }
+                }
+            },
             onBackPressed = { }
         )
     } else if (!signedIn && showOfflineLibrary) {
@@ -1722,7 +1742,7 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, onOfflineLibrary: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -1798,8 +1818,15 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
             shadowElevation = 3.dp
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                TextButton(onClick = onOfflineLibrary, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-                    Text("Offline Library")
+                TextButton(
+                    onClick = {
+                        webView?.evaluateJavascript("window.mcnCacheEntireApp && window.mcnCacheEntireApp()", null)
+                        onOfflineDownload()
+                    },
+                    enabled = online,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+                ) {
+                    Text("Save app offline")
                 }
                 TextButton(onClick = onStaffLogin, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
                     Text("Staff sign in")
