@@ -302,6 +302,46 @@ private fun NativeDioceseApp() {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(if (downloadBusy) "Downloading…" else "Download All Modules") }
+                    Text("Download published media by module", style = MaterialTheme.typography.titleMedium)
+                    val downloadMediaModule: (String, String) -> Unit = { mediaType, label ->
+                        downloadBusy = true
+                        downloadMessage = "Downloading $label for offline use…"
+                        scope.launch {
+                            val saved = withContext(Dispatchers.IO) {
+                                OfflineModuleManager.downloadMediaCategory(appContext, mediaType)
+                            }
+                            offlineMediaRows = withContext(Dispatchers.IO) {
+                                runCatching {
+                                    val file = File(OfflineModuleManager.offlineMediaDirectory(appContext), "index.json")
+                                    val array = if (file.exists()) JSONArray(file.readText()) else JSONArray()
+                                    (0 until array.length()).mapNotNull { index ->
+                                        val item = array.optJSONObject(index) ?: return@mapNotNull null
+                                        mapOf("title" to item.optString("title"), "description" to item.optString("description"), "mime_type" to item.optString("mime_type"), "media_type" to item.optString("media_type"), "file" to item.optString("file"))
+                                    }
+                                }.getOrDefault(emptyList())
+                            }
+                            mediaDownloadedCount = offlineMediaRows.size
+                            downloadMessage = if (saved > 0) "$saved $label item(s) saved for offline use." else "No new published $label files could be downloaded. Check that the files are published in the Church Media Library."
+                            downloadBusy = false
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            enabled = online && !downloadBusy,
+                            onClick = { downloadMediaModule("audio", "audio") },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Audio") }
+                        Button(
+                            enabled = online && !downloadBusy,
+                            onClick = { downloadMediaModule("video", "video") },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Video") }
+                        Button(
+                            enabled = online && !downloadBusy,
+                            onClick = { downloadMediaModule("document", "document") },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Documents") }
+                    }
                     Button(
                         enabled = online && pendingAttendanceCount > 0 && !downloadBusy,
                         onClick = {
