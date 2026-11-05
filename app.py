@@ -13421,6 +13421,39 @@ def media_library_admin():
         message=message,
         error=error,
     )
+
+# Root-scoped service worker for the Android WebView and mobile browsers.
+@app.get("/service-worker.js")
+def mcn_service_worker():
+    response = send_file(
+        Path(ROOT) / "static" / "mcn-offline-sw.js",
+        mimetype="application/javascript",
+        conditional=False,
+    )
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@app.after_request
+def register_mcn_offline_worker(response):
+    # Register the offline worker on every rendered page so navigation into the
+    # devotional centre and media library remains under the same offline scope.
+    if request.method == "GET" and response.status_code == 200 and response.mimetype == "text/html":
+        try:
+            html = response.get_data(as_text=True)
+            if "/service-worker.js" not in html and "</body>" in html:
+                registration = (
+                    '<script>(function(){if("serviceWorker" in navigator){'
+                    'navigator.serviceWorker.register("/service-worker.js",{scope:"/"})'
+                    '.catch(function(error){console.warn("Offline support unavailable",error);});'
+                    '}})();</script>'
+                )
+                response.set_data(html.replace("</body>", registration + "</body>"))
+        except Exception:
+            app.logger.exception("Could not add offline worker registration to HTML response")
+    return response
+
 # --- End media library ---
 
 
