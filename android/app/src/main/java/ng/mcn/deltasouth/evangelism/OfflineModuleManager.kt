@@ -203,7 +203,7 @@ object OfflineModuleManager {
     fun downloadAllDevotionalResources(context: Context): Int {
         var total = 0
         devotionalCollections.forEach { collection ->
-            total += downloadDevotionalCollection(context, collection, includeAudio = false)
+            runCatching { total += downloadDevotionalCollection(context, collection, includeAudio = false) }
         }
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
             .edit().putInt("last_devotional_resources_count", total).apply()
@@ -275,7 +275,7 @@ object OfflineModuleManager {
     fun downloadHymnAudio(context: Context): Int {
         var total = 0
         listOf("english_hymns", "yoruba_hymns", "akokun").forEach { collection ->
-            total += downloadDevotionalCollection(context, collection, includeAudio = true)
+            runCatching { total += downloadDevotionalCollection(context, collection, includeAudio = true) }
         }
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
             .edit().putInt("last_devotional_audio_count", total).apply()
