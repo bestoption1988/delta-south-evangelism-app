@@ -13446,6 +13446,8 @@ def register_mcn_offline_worker(response):
                 registration = (
                     '<script>(function(){if("serviceWorker" in navigator){'
                     'navigator.serviceWorker.register("/service-worker.js",{scope:"/"})'
+                    '.then(function(){window.mcnCacheEntireApp=function(){navigator.serviceWorker.ready.then(function(reg){'
+                    'var worker=reg.active||reg.waiting||reg.installing;if(worker){worker.postMessage({type:"CACHE_MCN_APP"});}});};})'
                     '.catch(function(error){console.warn("Offline support unavailable",error);});'
                     '}})();</script>'
                 )
