@@ -4,7 +4,17 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - native-android-integrated
+      - main
+      - postgres-migration-integration
+    paths:
+      - "android/**"
+      - ".github/workflows/build-apk.yml"
+      - "app.py"
+      - "templates/**"
+      - "static/**"
+      - "data/**"
+      - "requirements.txt"
+  pull_request:
     paths:
       - "android/**"
       - ".github/workflows/build-apk.yml"
