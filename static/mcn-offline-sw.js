@@ -2,7 +2,7 @@
  * Public pages and assets are cached for offline reading. Protected API writes,
  * payment routes and authenticated private responses are never cached here.
  */
-const CACHE_VERSION = "mcn-delta-south-shell-v5";
+const CACHE_VERSION = "mcn-delta-south-shell-v6";
 const PAGE_CACHE = CACHE_VERSION + "-pages";
 const ASSET_CACHE = CACHE_VERSION + "-assets";
 const PUBLIC_ROUTES = [
