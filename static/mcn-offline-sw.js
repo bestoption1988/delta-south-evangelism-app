@@ -127,26 +127,8 @@ self.addEventListener("fetch", event => {
   if (request.method !== "GET") return;
   const url = new URL(request.url);
 
-  // Cache previously opened WEB Bible chapters so those chapters remain readable offline.
-  if (url.hostname === "bible-api.com") {
-    event.respondWith((async () => {
-      const cache = await caches.open(ASSET_CACHE);
-      try {
-        const live = await fetch(request);
-        if (live.ok) await cache.put(request, live.clone());
-        return live;
-      } catch (_) {
-        return (await cache.match(request)) || new Response(
-          JSON.stringify({ error: "This WEB Bible chapter has not yet been saved on this device." }),
-          { status: 503, headers: { "Content-Type": "application/json" } }
-        );
-      }
-    })());
-    return;
-  }
-
   if (url.origin !== self.location.origin) {
-    if (url.protocol === "https:" && (/\.supabase\.co$/i.test(url.hostname) || url.hostname === "bible-api.com")) {
+    if (url.protocol === "https:" && (/\.supabase\.co$/i.test(url.hostname))) {
       event.respondWith((async () => {
         const cache = await caches.open(ASSET_CACHE);
         const cached = await cache.match(request);
