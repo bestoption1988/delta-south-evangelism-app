@@ -13560,7 +13560,7 @@ def _bible_db_path(code):
     path = os.path.join(DATA_DIR, "bible_modules", filename)
     if not os.path.isfile(path) or os.path.getsize(path) < 1024:
         payload = _dc_s3_get(_bible_object_key(code))
-        if not payload.startswith(b"SQLite format 3\\x00"):
+        if not payload.startswith(b"SQLite format 3\x00"):
             raise ValueError("Stored Bible module is not a valid SQLite database.")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         temp_path = path + ".tmp"
@@ -13650,7 +13650,7 @@ def devotional_holy_bible_chapter():
             scripture = str(row["Scripture"] or "")
             scripture = re.sub(r"<RF>.*?<Rf>", "", scripture, flags=re.S | re.I)
             scripture = re.sub(r"<[^>]*>", "", scripture)
-            scripture = re.sub(r"\\s+", " ", scripture).strip()
+            scripture = re.sub(r"\s+", " ", scripture).strip()
             verses.append({"verse": int(row["Verse"]), "text": scripture})
         return jsonify({"translation": code, "book": book, "chapter": chapter, "verses": verses})
     except Exception:
@@ -13739,7 +13739,7 @@ def admin_bible_package_complete(upload_id):
                 raise ValueError("No recognised .bbl.mybible modules were found in the ZIP.")
             for code, member in matched.items():
                 payload = archive.read(member)
-                if not payload.startswith(b"SQLite format 3\\x00"):
+                if not payload.startswith(b"SQLite format 3\x00"):
                     raise ValueError("Invalid SQLite Bible module: " + os.path.basename(member))
                 temp_db = os.path.join(upload_dir, upload_id + "-" + code + ".sqlite")
                 with open(temp_db, "wb") as handle:
