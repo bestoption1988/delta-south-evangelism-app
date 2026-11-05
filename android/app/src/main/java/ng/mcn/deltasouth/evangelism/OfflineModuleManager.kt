@@ -593,7 +593,7 @@ object OfflineModuleManager {
             val target = File(directory, safeId + extension)
             val currentVersion = item.optString("created_at")
             try {
-                if (!target.exists() || target.length() == 0L || currentVersion.isBlank() || oldVersions[id] != currentVersion) {
+                if (!target.exists() || target.length() == 0L || (currentVersion.isNotBlank() && oldVersions[id] != currentVersion)) {
                     val mediaRequest = Request.Builder().url(url).get().build()
                     longClient.newCall(mediaRequest).execute().use { response ->
                         if (!response.isSuccessful) throw IllegalStateException("Media download HTTP " + response.code)
