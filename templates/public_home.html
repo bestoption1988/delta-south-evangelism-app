@@ -30,7 +30,7 @@
 </div>
 
 <nav class="navbar">
-  <button id="menuToggle" aria-label="Open navigation" aria-expanded="false">☰ Menu</button>
+  <button id="menuToggle" type="button" aria-label="Open navigation" aria-controls="navLinks" aria-expanded="false">☰ Menu</button>
   <div id="navLinks">
     <a href="#home">⌂ Home</a>
     <a href="#about">About Us</a>
@@ -302,17 +302,48 @@
 </footer>
 
 <script>
-const toggle = document.getElementById("menuToggle");
-const links = document.getElementById("navLinks");
-toggle.addEventListener("click", () => {
-  const open = links.classList.toggle("open");
-  toggle.setAttribute("aria-expanded", String(open));
-});
-links.querySelectorAll("a").forEach(a => a.addEventListener("click", () => {
-  links.classList.remove("open");
-  toggle.setAttribute("aria-expanded", "false");
-}));
-document.getElementById("year").textContent = new Date().getFullYear();
+(function () {
+  function initialiseDiocesanNavigation() {
+    var toggle = document.getElementById("menuToggle");
+    var links = document.getElementById("navLinks");
+    if (!toggle || !links || toggle.dataset.ready === "true") return;
+    toggle.dataset.ready = "true";
+
+    function closeMenu() {
+      links.classList.remove("open");
+      toggle.setAttribute("aria-expanded", "false");
+      toggle.setAttribute("aria-label", "Open navigation");
+    }
+    function toggleMenu(event) {
+      if (event) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      var open = !links.classList.contains("open");
+      links.classList.toggle("open", open);
+      toggle.setAttribute("aria-expanded", open ? "true" : "false");
+      toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
+    }
+    toggle.addEventListener("click", toggleMenu, false);
+    toggle.addEventListener("touchend", function (event) {
+      if (event.cancelable) event.preventDefault();
+      toggleMenu(event);
+    }, { passive: false });
+    links.querySelectorAll("a").forEach(function (link) {
+      link.addEventListener("click", closeMenu, false);
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") closeMenu();
+    });
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initialiseDiocesanNavigation);
+  } else {
+    initialiseDiocesanNavigation();
+  }
+  var year = document.getElementById("year");
+  if (year) year.textContent = new Date().getFullYear();
+})();
 </script>
 </body>
 </html>
