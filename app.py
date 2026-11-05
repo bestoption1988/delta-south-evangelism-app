@@ -3065,7 +3065,7 @@ def public_home():
     except Exception:
         app.logger.exception("Homepage published videos could not be loaded")
 
-    # The public photo gallery includes every published image in the catalogue.
+    # The public photo gallery includes the ten latest published images in the catalogue.
     try:
         gallery_rows = _ml_supabase_request(
             "GET",
@@ -3073,7 +3073,7 @@ def public_home():
                 "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
                 "published": "eq.true",
                 "order": "created_at.desc",
-                "limit": "100",
+                "limit": "10",
             },
         )
         homepage_gallery_items = []
