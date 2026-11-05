@@ -169,7 +169,7 @@ object OfflineModuleManager {
             }
         }
         try {
-            mediaDownloaded = downloadPublishedMedia(context)
+            mediaDownloaded = downloadPublishedMedia(context, null)
         } catch (_: Exception) {
             failed++
         }
@@ -184,7 +184,7 @@ object OfflineModuleManager {
         return OfflineDownloadSummary(downloaded, unavailable, failed, mediaDownloaded)
     }
 
-    private fun downloadPublishedMedia(context: Context): Int {
+    fun downloadMediaCategory(context: Context, mediaType: String): Int {\n        require(mediaType in setOf("audio", "video", "document"))\n        val count = downloadPublishedMedia(context, setOf(mediaType))\n        val directory = offlineMediaDirectory(context)\n        val index = runCatching { JSONArray(File(directory, "index.json").readText()) }.getOrDefault(JSONArray())\n        context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)\n            .edit().putInt("last_media_downloaded_count", index.length()).apply()\n        return count\n    }\n\n    private fun downloadPublishedMedia(context: Context, filterTypes: Set<String>?): Int {
         val catalogueRequest = Request.Builder()
             .url(BuildConfig.API_BASE_URL + "api/offline/media-catalogue")
             .get()
@@ -207,60 +207,88 @@ object OfflineModuleManager {
         val directory = File(context.filesDir, "offline_media")
         if (!directory.exists()) directory.mkdirs()
         val oldIndex = runCatching { JSONArray(File(directory, "index.json").readText()) }.getOrDefault(JSONArray())
+        val oldEntries = linkedMapOf<String, JSONObject>()
         val oldVersions = mutableMapOf<String, String>()
         for (i in 0 until oldIndex.length()) {
             val old = oldIndex.optJSONObject(i) ?: continue
+            oldEntries[old.optString("id")] = old
             oldVersions[old.optString("id")] = old.optString("created_at")
         }
         var count = 0
-        val index = JSONArray()
         for (i in 0 until items.length()) {
             val item = items.optJSONObject(i) ?: continue
+            val mediaType = item.optString("media_type", "document")
+            if (filterTypes != null && mediaType !in filterTypes) continue
             val id = item.optString("id")
             val url = item.optString("download_url")
             if (id.isBlank() || url.isBlank()) continue
             val mime = item.optString("mime_type", "application/octet-stream")
             val extension = when {
                 mime.contains("pdf", true) -> ".pdf"
-                mime.contains("audio", true) -> ".audio"
-                mime.contains("video", true) -> ".video"
-                mime.contains("word", true) -> ".doc"
+                mime.contains("audio", true) -> when {
+                    mime.contains("mpeg", true) -> ".mp3"
+                    mime.contains("wav", true) -> ".wav"
+                    mime.contains("ogg", true) -> ".ogg"
+                    mime.contains("mp4", true) -> ".m4a"
+                    else -> ".audio"
+                }
+                mime.contains("video", true) -> when {
+                    mime.contains("webm", true) -> ".webm"
+                    else -> ".mp4"
+                }
+                mime.contains("word", true) -> ".docx"
                 else -> ".bin"
             }
             val safeId = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
             val target = File(directory, safeId + extension)
             val currentVersion = item.optString("created_at")
-            if (!target.exists() || target.length() == 0L || currentVersion.isBlank() || oldVersions[id] != currentVersion) {
-                val mediaRequest = Request.Builder().url(url).get().build()
-                longClient.newCall(mediaRequest).execute().use { response ->
-                    if (!response.isSuccessful) throw IllegalStateException("Media download HTTP " + response.code)
-                    val body = response.body ?: throw IllegalStateException("Empty media file")
-                    val temporary = File(directory, safeId + extension + ".part")
-                    body.byteStream().use { input ->
-                        temporary.outputStream().use { output -> input.copyTo(output) }
-                    }
-                    if (temporary.length() == 0L) {
-                        temporary.delete()
-                        throw IllegalStateException("Downloaded media is empty")
-                    }
-                    if (target.exists()) target.delete()
-                    if (!temporary.renameTo(target)) {
-                        temporary.copyTo(target, overwrite = true)
-                        temporary.delete()
+            try {
+                if (!target.exists() || target.length() == 0L || currentVersion.isBlank() || oldVersions[id] != currentVersion) {
+                    val mediaRequest = Request.Builder().url(url).get().build()
+                    longClient.newCall(mediaRequest).execute().use { response ->
+                        if (!response.isSuccessful) throw IllegalStateException("Media download HTTP " + response.code)
+                        val body = response.body ?: throw IllegalStateException("Empty media file")
+                        val temporary = File(directory, safeId + extension + ".part")
+                        body.byteStream().use { input ->
+                            temporary.outputStream().use { output -> input.copyTo(output) }
+                        }
+                        if (temporary.length() == 0L) {
+                            temporary.delete()
+                            throw IllegalStateException("Downloaded media is empty")
+                        }
+                        if (target.exists()) target.delete()
+                        if (!temporary.renameTo(target)) {
+                            temporary.copyTo(target, overwrite = true)
+                            temporary.delete()
+                        }
                     }
                 }
+                oldEntries[id] = JSONObject()
+                    .put("id", id)
+                    .put("title", item.optString("title"))
+                    .put("description", item.optString("description"))
+                    .put("mime_type", mime)
+                    .put("media_type", mediaType)
+                    .put("file", target.name)
+                    .put("created_at", currentVersion)
+                count++
+            } catch (_: Exception) {
+                // One unavailable media object must not cancel the rest of the library.
             }
-            index.put(org.json.JSONObject()
-                .put("id", id)
-                .put("title", item.optString("title"))
-                .put("description", item.optString("description"))
-                .put("mime_type", mime)
-                .put("media_type", item.optString("media_type"))
-                .put("file", target.name)
-                .put("created_at", item.optString("created_at")))
-            count++
         }
-        File(directory, "index.json").writeText(index.toString())
+        val index = JSONArray()
+        oldEntries.values.forEach { entry ->
+            val file = File(directory, entry.optString("file"))
+            if (file.exists() && file.length() > 0L) index.put(entry)
+        }
+        val indexFile = File(directory, "index.json")
+        val temporaryIndex = File(directory, "index.json.part")
+        temporaryIndex.writeText(index.toString())
+        if (indexFile.exists()) indexFile.delete()
+        if (!temporaryIndex.renameTo(indexFile)) {
+            temporaryIndex.copyTo(indexFile, overwrite = true)
+            temporaryIndex.delete()
+        }
         return count
     }
 
