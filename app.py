@@ -13527,40 +13527,115 @@ def register_mcn_offline_worker(response):
 # --- End media library ---
 
 
+
+# Offline MyBible library: all modules supplied in the diocesan bibles.zip package.
+_BIBLE_MODULES = {
+    "hisb": ("HiSB.bbl.mybible", "HiSB Hebrew Interpolated Study Bible"),
+    "abp": ("abp.bbl.mybible", "Apostolic Bible Polyglot"),
+    "bbe": ("bbe.bbl.mybible", "Bible in Basic English"),
+    "bsb": ("berean-bsb.bbl.mybible", "Berean Standard Bible"),
+    "bishops": ("bishops.bbl.mybible", "Bishops' Bible"),
+    "cpdv": ("cpdv.bbl.mybible", "Catholic Public Domain Version"),
+    "easyenglish": ("easyenglish.bbl.mybible", "EasyEnglish Bible"),
+    "ebr": ("ebr.bbl.mybible", "English Bible in Basic English (EBR)"),
+    "erv": ("erv.bbl.mybible", "Easy-to-Read Version"),
+    "isv": ("isv.bbl.mybible", "International Standard Version"),
+    "kjv": ("kjv.bbl.mybible", "King James Version"),
+    "kjvlite": ("kjvlite.bbl.mybible", "King James Version Lite"),
+    "logos": ("logos.bbl.mybible", "Logos Bible"),
+    "net": ("net.bbl.mybible", "New English Translation"),
+    "nheb": ("nheb.bbl.mybible", "New Heart English Bible"),
+    "web": ("web.bbl.mybible", "World English Bible"),
+    "wesley": ("wesley.bbl.mybible", "Wesley's New Testament"),
+}
+_BIBLE_OBJECT_PREFIX = "devotional/bibles/translations/"
+
+def _bible_object_key(code):
+    if code not in _BIBLE_MODULES:
+        raise ValueError("Unknown Bible translation.")
+    return _BIBLE_OBJECT_PREFIX + _BIBLE_MODULES[code][0]
+
+def _bible_db_path(code):
+    filename = _BIBLE_MODULES[code][0]
+    path = os.path.join(DATA_DIR, "bible_modules", filename)
+    if not os.path.isfile(path) or os.path.getsize(path) < 1024:
+        payload = _dc_s3_get(_bible_object_key(code))
+        if not payload.startswith(b"SQLite format 3\\x00"):
+            raise ValueError("Stored Bible module is not a valid SQLite database.")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        temp_path = path + ".tmp"
+        with open(temp_path, "wb") as handle:
+            handle.write(payload)
+        os.replace(temp_path, path)
+    return path
+
+def _bible_connect(code):
+    path = _bible_db_path(code)
+    conn = sqlite3.connect("file:" + path + "?mode=ro", uri=True, timeout=30)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+def _installed_bible_modules():
+    installed = []
+    for code, (filename, title) in _BIBLE_MODULES.items():
+        try:
+            _dc_s3_client().head_object(Bucket=_dc_s3_bucket(), Key=_bible_object_key(code))
+            installed.append({"id": code, "title": title, "filename": filename})
+        except Exception:
+            continue
+    return installed
+
 @app.route("/devotional-centre/holy-bible")
 def devotional_holy_bible():
-    """Offline reader backed by the installed World English Bible MyBible database."""
-    available = False
-    try:
-        _web_bible_db_path()
-        available = True
-    except Exception:
-        app.logger.info("Offline WEB Bible is not installed yet.")
-    return render_template("devotional_holy_bible.html", bible_available=available)
-
+    installed = _installed_bible_modules()
+    return render_template(
+        "devotional_holy_bible.html",
+        bible_available=bool(installed),
+        translations=installed,
+        is_admin=_dc_admin_required(),
+    )
 
 @app.get("/devotional-centre/holy-bible/books")
 def devotional_holy_bible_books():
+    code = (request.args.get("translation") or "web").strip().lower()
+    if code not in _BIBLE_MODULES:
+        return jsonify({"error": "Choose a supported Bible translation."}), 400
     try:
-        conn = _web_bible_connect()
+        conn = _bible_connect(code)
         try:
-            rows = conn.execute("SELECT Book, MAX(Chapter) AS chapters FROM Bible GROUP BY Book ORDER BY Book").fetchall()
+            rows = conn.execute(
+                "SELECT Book, MAX(Chapter) AS chapters FROM Bible GROUP BY Book ORDER BY Book"
+            ).fetchall()
+            details = conn.execute("SELECT * FROM Details LIMIT 1").fetchone()
         finally:
             conn.close()
-        return jsonify({"translation": "WEB", "books": [{"id": int(r["Book"]), "chapters": int(r["chapters"])} for r in rows]})
-    except Exception as exc:
-        app.logger.exception("Could not read installed WEB Bible book list")
-        return jsonify({"error": "The offline WEB Bible is not installed or available."}), 503
-
+        title = _BIBLE_MODULES[code][1]
+        if details:
+            keys = {k.lower(): k for k in details.keys()}
+            for key in ("title", "description"):
+                actual = keys.get(key)
+                if actual and details[actual]:
+                    title = str(details[actual]).strip()
+                    break
+        return jsonify({
+            "translation": code, "title": title,
+            "books": [{"id": int(r["Book"]), "chapters": int(r["chapters"])} for r in rows]
+        })
+    except Exception:
+        app.logger.exception("Could not read offline Bible book list for %s", code)
+        return jsonify({"error": "This Bible translation is not installed or readable yet."}), 503
 
 @app.get("/devotional-centre/holy-bible/chapter")
 def devotional_holy_bible_chapter():
+    code = (request.args.get("translation") or "web").strip().lower()
     book = request.args.get("book", type=int)
     chapter = request.args.get("chapter", type=int)
-    if not book or not chapter or book < 1 or book > 66 or chapter < 1 or chapter > 200:
+    if code not in _BIBLE_MODULES:
+        return jsonify({"error": "Choose a supported Bible translation."}), 400
+    if not book or not chapter or book < 1 or book > 100 or chapter < 1 or chapter > 250:
         return jsonify({"error": "Choose a valid Bible book and chapter."}), 400
     try:
-        conn = _web_bible_connect()
+        conn = _bible_connect(code)
         try:
             rows = conn.execute(
                 "SELECT Verse, Scripture FROM Bible WHERE Book=? AND Chapter=? ORDER BY Verse",
@@ -13569,17 +13644,133 @@ def devotional_holy_bible_chapter():
         finally:
             conn.close()
         if not rows:
-            return jsonify({"error": "Chapter not found."}), 404
+            return jsonify({"error": "Chapter not found in this translation."}), 404
         verses = []
         for row in rows:
             scripture = str(row["Scripture"] or "")
-            scripture = re.sub(r"<RF>.*?<Rf>", "", scripture, flags=re.S)
+            scripture = re.sub(r"<RF>.*?<Rf>", "", scripture, flags=re.S | re.I)
             scripture = re.sub(r"<[^>]*>", "", scripture)
-            verses.append({"verse": int(row["Verse"]), "text": scripture.strip()})
-        return jsonify({"translation": "WEB", "book": book, "chapter": chapter, "verses": verses})
+            scripture = re.sub(r"\\s+", " ", scripture).strip()
+            verses.append({"verse": int(row["Verse"]), "text": scripture})
+        return jsonify({"translation": code, "book": book, "chapter": chapter, "verses": verses})
     except Exception:
-        app.logger.exception("Could not read offline WEB Bible chapter")
-        return jsonify({"error": "The offline WEB Bible could not be read."}), 503
+        app.logger.exception("Could not read offline Bible chapter for %s", code)
+        return jsonify({"error": "This Bible chapter could not be read."}), 503
+
+@app.post("/admin/devotional-centre/bibles/upload/init")
+@page_login_required
+def admin_bible_package_init():
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        size = int(data.get("size") or 0)
+        if size <= 0 or size > 100 * 1024 * 1024:
+            return jsonify({"error": "Bible ZIP must be between 1 byte and 100 MB."}), 400
+        upload_id = secrets.token_hex(20)
+        upload_dir = os.path.join(DATA_DIR, "bible_package_uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        path = os.path.join(upload_dir, upload_id + ".zip.part")
+        with open(path, "wb"):
+            pass
+        with open(path + ".json", "w", encoding="utf-8") as handle:
+            json.dump({"size": size, "received": 0}, handle)
+        return jsonify({"upload_id": upload_id, "chunk_size": 2 * 1024 * 1024})
+    except Exception:
+        app.logger.exception("Could not initialise Bible ZIP upload")
+        return jsonify({"error": "Could not start Bible package upload."}), 500
+
+@app.post("/admin/devotional-centre/bibles/upload/<upload_id>/chunk")
+@page_login_required
+def admin_bible_package_chunk(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id):
+        return jsonify({"error": "Invalid upload ID."}), 400
+    upload_dir = os.path.join(DATA_DIR, "bible_package_uploads")
+    path = os.path.join(upload_dir, upload_id + ".zip.part")
+    meta_path = path + ".json"
+    try:
+        with open(meta_path, "r", encoding="utf-8") as handle:
+            meta = json.load(handle)
+        chunk = request.get_data(cache=False)
+        if not chunk or len(chunk) > 2 * 1024 * 1024 + 1024:
+            return jsonify({"error": "Invalid upload chunk size."}), 400
+        if int(meta["received"]) + len(chunk) > int(meta["size"]):
+            return jsonify({"error": "Received more data than expected."}), 400
+        with open(path, "ab") as handle:
+            handle.write(chunk)
+        meta["received"] = int(meta["received"]) + len(chunk)
+        with open(meta_path, "w", encoding="utf-8") as handle:
+            json.dump(meta, handle)
+        return jsonify({"received": meta["received"], "total": meta["size"]})
+    except Exception:
+        app.logger.exception("Bible ZIP chunk upload failed")
+        return jsonify({"error": "Could not save this upload chunk."}), 500
+
+@app.post("/admin/devotional-centre/bibles/upload/<upload_id>/complete")
+@page_login_required
+def admin_bible_package_complete(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id):
+        return jsonify({"error": "Invalid upload ID."}), 400
+    import zipfile as _zipfile
+    upload_dir = os.path.join(DATA_DIR, "bible_package_uploads")
+    zip_path = os.path.join(upload_dir, upload_id + ".zip.part")
+    meta_path = zip_path + ".json"
+    installed = []
+    try:
+        with open(meta_path, "r", encoding="utf-8") as handle:
+            meta = json.load(handle)
+        if int(meta.get("received", 0)) != int(meta.get("size", -1)):
+            return jsonify({"error": "Upload is incomplete. Please retry the missing chunks."}), 400
+        with _zipfile.ZipFile(zip_path, "r") as archive:
+            members = archive.namelist()
+            if len(members) > 100:
+                raise ValueError("The ZIP contains too many files.")
+            expected = {filename.lower(): code for code, (filename, _) in _BIBLE_MODULES.items()}
+            matched = {}
+            for member in members:
+                base = os.path.basename(member.replace("\\", "/")).lower()
+                if base in expected and not member.endswith("/"):
+                    matched[expected[base]] = member
+            if not matched:
+                raise ValueError("No recognised .bbl.mybible modules were found in the ZIP.")
+            for code, member in matched.items():
+                payload = archive.read(member)
+                if not payload.startswith(b"SQLite format 3\\x00"):
+                    raise ValueError("Invalid SQLite Bible module: " + os.path.basename(member))
+                temp_db = os.path.join(upload_dir, upload_id + "-" + code + ".sqlite")
+                with open(temp_db, "wb") as handle:
+                    handle.write(payload)
+                try:
+                    check = sqlite3.connect("file:" + temp_db + "?mode=ro", uri=True, timeout=30)
+                    try:
+                        tables = {row[0] for row in check.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                        if "Bible" not in tables:
+                            raise ValueError("Missing Bible table: " + os.path.basename(member))
+                        verse_count = check.execute("SELECT COUNT(*) FROM Bible").fetchone()[0]
+                        if not verse_count:
+                            raise ValueError("Empty Bible module: " + os.path.basename(member))
+                    finally:
+                        check.close()
+                finally:
+                    try:
+                        os.remove(temp_db)
+                    except OSError:
+                        pass
+                _dc_s3_put(_bible_object_key(code), payload, "application/vnd.sqlite3")
+                installed.append({"id": code, "title": _BIBLE_MODULES[code][1], "bytes": len(payload)})
+        try:
+            os.remove(zip_path)
+            os.remove(meta_path)
+        except OSError:
+            pass
+        return jsonify({"ok": True, "installed": installed, "count": len(installed)})
+    except Exception as exc:
+        app.logger.exception("Bible package import failed")
+        return jsonify({"error": "Bible import failed: " + str(exc)[:240]}), 500
 
 
 
