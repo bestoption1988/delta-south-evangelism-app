@@ -264,8 +264,9 @@ object OfflineModuleManager {
         Backend.initialize(context.applicationContext)
         val directory = devotionalDirectory(context)
         val longClient = Backend.client.newBuilder()
-            .readTimeout(180, TimeUnit.SECONDS)
-            .callTimeout(10, TimeUnit.MINUTES)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(300, TimeUnit.SECONDS)
+            .callTimeout(30, TimeUnit.MINUTES)
             .build()
         val allItems = JSONArray()
         var audioDownloaded = 0
@@ -553,8 +554,9 @@ object OfflineModuleManager {
             .get()
             .build()
         val longClient = Backend.client.newBuilder()
-            .readTimeout(180, TimeUnit.SECONDS)
-            .callTimeout(5, TimeUnit.MINUTES)
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(300, TimeUnit.SECONDS)
+            .callTimeout(30, TimeUnit.MINUTES)
             .build()
         val json = runCatching {
             longClient.newCall(catalogueRequest).execute().use { response ->
