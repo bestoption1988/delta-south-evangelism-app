@@ -1826,7 +1826,6 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
             }
         }
     }
-    }
 
 }
 
