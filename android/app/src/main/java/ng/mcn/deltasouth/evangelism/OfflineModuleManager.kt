@@ -11,9 +11,11 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import okhttp3.Request
+import org.json.JSONArray
+import java.io.File
 import java.util.concurrent.TimeUnit
 
-data class OfflineDownloadSummary(val downloaded: Int, val unavailable: Int, val failed: Int)
+data class OfflineDownloadSummary(val downloaded: Int, val unavailable: Int, val failed: Int, val mediaDownloaded: Int = 0)
 
 object OfflineModuleManager {
     // These are the native app's role-protected read modules. Server authorization remains authoritative.
@@ -28,8 +30,6 @@ object OfflineModuleManager {
         "api/member/announcements",
         "api/member/events",
         "api/member/notifications",
-        "api/member/testimonies",
-        "api/member/appreciations",
         "api/membership/churches",
         "api/circuits",
         "api/members",
@@ -49,7 +49,6 @@ object OfflineModuleManager {
         "api/customer-care",
         "api/customer-care/unread-count",
         "api/church-accounts",
-        "api/member-registrations"
     )
 
     fun downloadAll(context: Context): OfflineDownloadSummary {
@@ -57,6 +56,7 @@ object OfflineModuleManager {
         var downloaded = 0
         var unavailable = 0
         var failed = 0
+        var mediaDownloaded = 0
         moduleRequests.forEach { path ->
             try {
                 val request = Request.Builder()
@@ -79,15 +79,90 @@ object OfflineModuleManager {
                 failed++
             }
         }
+        try {
+            mediaDownloaded = downloadPublishedMedia(context)
+        } catch (_: Exception) {
+            failed++
+        }
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
             .edit()
             .putLong("last_download_at", System.currentTimeMillis())
             .putInt("last_downloaded_count", downloaded)
             .putInt("last_unavailable_count", unavailable)
             .putInt("last_failed_count", failed)
+            .putInt("last_media_downloaded_count", mediaDownloaded)
             .apply()
-        return OfflineDownloadSummary(downloaded, unavailable, failed)
+        return OfflineDownloadSummary(downloaded, unavailable, failed, mediaDownloaded)
     }
+
+    private fun downloadPublishedMedia(context: Context): Int {
+        val catalogueRequest = Request.Builder()
+            .url(BuildConfig.API_BASE_URL + "api/offline/media-catalogue")
+            .get()
+            .build()
+        val longClient = Backend.client.newBuilder()
+            .readTimeout(180, TimeUnit.SECONDS)
+            .callTimeout(5, TimeUnit.MINUTES)
+            .build()
+        val json = longClient.newCall(catalogueRequest).execute().use { response ->
+            if (!response.isSuccessful) throw IllegalStateException("Media catalogue HTTP " + response.code)
+            response.body?.string() ?: throw IllegalStateException("Empty media catalogue")
+        }
+        val items = org.json.JSONObject(json).optJSONArray("items") ?: JSONArray()
+        val directory = File(context.filesDir, "offline_media")
+        if (!directory.exists()) directory.mkdirs()
+        var count = 0
+        val index = JSONArray()
+        for (i in 0 until items.length()) {
+            val item = items.optJSONObject(i) ?: continue
+            val id = item.optString("id")
+            val url = item.optString("download_url")
+            if (id.isBlank() || url.isBlank()) continue
+            val mime = item.optString("mime_type", "application/octet-stream")
+            val extension = when {
+                mime.contains("pdf", true) -> ".pdf"
+                mime.contains("audio", true) -> ".audio"
+                mime.contains("video", true) -> ".video"
+                mime.contains("word", true) -> ".doc"
+                else -> ".bin"
+            }
+            val safeId = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
+            val target = File(directory, safeId + extension)
+            if (!target.exists() || target.length() == 0L) {
+                val mediaRequest = Request.Builder().url(url).get().build()
+                longClient.newCall(mediaRequest).execute().use { response ->
+                    if (!response.isSuccessful) throw IllegalStateException("Media download HTTP " + response.code)
+                    val body = response.body ?: throw IllegalStateException("Empty media file")
+                    val temporary = File(directory, safeId + extension + ".part")
+                    body.byteStream().use { input ->
+                        temporary.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    if (temporary.length() == 0L) {
+                        temporary.delete()
+                        throw IllegalStateException("Downloaded media is empty")
+                    }
+                    if (target.exists()) target.delete()
+                    if (!temporary.renameTo(target)) {
+                        temporary.copyTo(target, overwrite = true)
+                        temporary.delete()
+                    }
+                }
+            }
+            index.put(org.json.JSONObject()
+                .put("id", id)
+                .put("title", item.optString("title"))
+                .put("description", item.optString("description"))
+                .put("mime_type", mime)
+                .put("media_type", item.optString("media_type"))
+                .put("file", target.name)
+                .put("created_at", item.optString("created_at")))
+            count++
+        }
+        File(directory, "index.json").writeText(index.toString())
+        return count
+    }
+
+    fun offlineMediaDirectory(context: Context): File = File(context.filesDir, "offline_media")
 
     fun scheduleImmediateUpdate(context: Context) {
         val constraints = Constraints.Builder()
