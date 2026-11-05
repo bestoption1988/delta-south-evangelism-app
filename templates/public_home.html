@@ -325,10 +325,6 @@
       toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
     }
     toggle.addEventListener("click", toggleMenu, false);
-    toggle.addEventListener("touchend", function (event) {
-      if (event.cancelable) event.preventDefault();
-      toggleMenu(event);
-    }, { passive: false });
     links.querySelectorAll("a").forEach(function (link) {
       link.addEventListener("click", closeMenu, false);
     });
