@@ -1069,3 +1069,50 @@ video { height:auto; max-height:70vh; background:#071331; object-fit:contain; }
 .mcn-android-app .daily-devotion-marquee{animation-duration:38s;gap:3rem}
 .mcn-android-app .daily-devotion-modal{z-index:30000}
 .mcn-android-app .daily-devotion-modal-panel{width:calc(100vw - 36px);max-width:560px;min-height:220px;max-height:76vh;overflow-y:auto;display:block}
+
+/* Final Android offline controls and devotional dialog sizing */
+html.mcn-android-app #mcnAppQuickActions{
+  position:fixed!important;
+  top:auto!important;
+  right:auto!important;
+  left:7px!important;
+  bottom:calc(env(safe-area-inset-bottom,0px) + 7px)!important;
+  z-index:9999!important;
+  display:flex!important;
+  width:max-content!important;
+  max-width:calc(100vw - 14px)!important;
+  padding:3px!important;
+  gap:4px!important;
+  border-radius:18px!important;
+  background:rgba(7,27,80,.94)!important;
+}
+html.mcn-android-app #mcnAppQuickActions a{
+  min-height:25px!important;
+  padding:0 8px!important;
+  font-size:9px!important;
+  line-height:1!important;
+}
+html.mcn-android-app .daily-devotion-modal{
+  padding:8px!important;
+  align-items:center!important;
+  justify-content:center!important;
+}
+html.mcn-android-app .daily-devotion-modal-panel{
+  width:98vw!important;
+  max-width:900px!important;
+  height:88vh!important;
+  min-height:60vh!important;
+  max-height:90vh!important;
+  padding:22px!important;
+  overflow-y:auto!important;
+  border-radius:18px!important;
+}
+@media(max-width:650px){
+  html.mcn-android-app .daily-devotion-modal-panel{
+    width:98vw!important;
+    height:88vh!important;
+    min-height:60vh!important;
+    max-height:90vh!important;
+    padding:20px 18px 26px!important;
+  }
+}
