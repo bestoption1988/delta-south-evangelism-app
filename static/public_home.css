@@ -1349,3 +1349,8 @@ html.mcn-android-app .navbar #navLinks.open button {
     left:4vw!important; width:92vw!important; max-width:none!important;
   }
 }
+
+
+/* Ensure mobile menu and daily devotion dialogs stay above page controls. */
+@media(max-width:700px){.navbar{z-index:1000}.navbar #navLinks.open{z-index:1005;visibility:visible;opacity:1;pointer-events:auto}.navbar #menuToggle{touch-action:manipulation;pointer-events:auto}}
+.daily-devotion-modal.is-open{z-index:30000}
