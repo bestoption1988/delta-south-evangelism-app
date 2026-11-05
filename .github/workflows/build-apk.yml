@@ -68,7 +68,9 @@ jobs:
 
       - name: Verify APK and AAB packages
         run: |
-          apksigner verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
+          test -s app/build/outputs/apk/debug/app-debug.apk
+          test -s app/build/outputs/bundle/release/app-release.aab
           unzip -t app/build/outputs/bundle/release/app-release.aab
           sha256sum app/build/outputs/apk/debug/app-debug.apk app/build/outputs/bundle/release/app-release.aab > app/build/outputs/SHA256SUMS.txt
 
