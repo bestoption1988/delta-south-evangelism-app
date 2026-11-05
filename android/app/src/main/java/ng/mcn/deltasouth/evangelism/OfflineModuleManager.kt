@@ -1,6 +1,7 @@
 package ng.mcn.deltasouth.evangelism
 
 import android.content.Context
+import android.text.Html
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -191,9 +192,15 @@ object OfflineModuleManager {
             .readTimeout(180, TimeUnit.SECONDS)
             .callTimeout(5, TimeUnit.MINUTES)
             .build()
-        val json = longClient.newCall(catalogueRequest).execute().use { response ->
-            if (!response.isSuccessful) throw IllegalStateException("Media catalogue HTTP " + response.code)
-            response.body?.string() ?: throw IllegalStateException("Empty media catalogue")
+        val json = runCatching {
+            longClient.newCall(catalogueRequest).execute().use { response ->
+                if (!response.isSuccessful) throw IllegalStateException("Media catalogue HTTP " + response.code)
+                response.body?.string() ?: throw IllegalStateException("Empty media catalogue")
+            }
+        }.getOrElse {
+            // Older production deployments may not yet expose the JSON catalogue endpoint.
+            // The existing public media-library page already contains signed published-media links.
+            fetchLegacyMediaCatalogue(longClient)
         }
         val items = org.json.JSONObject(json).optJSONArray("items") ?: JSONArray()
         val directory = File(context.filesDir, "offline_media")
@@ -222,7 +229,7 @@ object OfflineModuleManager {
             val safeId = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
             val target = File(directory, safeId + extension)
             val currentVersion = item.optString("created_at")
-            if (!target.exists() || target.length() == 0L || oldVersions[id] != currentVersion) {
+            if (!target.exists() || target.length() == 0L || currentVersion.isBlank() || oldVersions[id] != currentVersion) {
                 val mediaRequest = Request.Builder().url(url).get().build()
                 longClient.newCall(mediaRequest).execute().use { response ->
                     if (!response.isSuccessful) throw IllegalStateException("Media download HTTP " + response.code)
@@ -254,6 +261,53 @@ object OfflineModuleManager {
         }
         File(directory, "index.json").writeText(index.toString())
         return count
+    }
+
+    private fun fetchLegacyMediaCatalogue(client: okhttp3.OkHttpClient): String {
+        val request = Request.Builder().url(BuildConfig.API_BASE_URL + "media-library").get().build()
+        val html = client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw IllegalStateException("Public media library HTTP " + response.code)
+            response.body?.string() ?: throw IllegalStateException("Empty public media library")
+        }
+        val items = JSONArray()
+        val cards = Regex("(?is)<article\\s+class=[\"']card[\"']>(.*?)</article>").findAll(html)
+        for (match in cards) {
+            val card = match.groupValues[1]
+            val titleRaw = Regex("(?is)<h2>(.*?)</h2>").find(card)?.groupValues?.get(1) ?: continue
+            val mediaMatch = Regex("(?is)<(audio|video)[^>]*src=[\"']([^\"']+)[\"']").find(card)
+            val linkMatch = Regex("(?is)<a[^>]*href=[\"']([^\"']+)[\"']").find(card)
+            val sourceRaw = mediaMatch?.groupValues?.get(2) ?: linkMatch?.groupValues?.get(1) ?: continue
+            val source = Html.fromHtml(sourceRaw.replace("&amp;", "&"), Html.FROM_HTML_MODE_LEGACY).toString()
+            val title = Html.fromHtml(titleRaw, Html.FROM_HTML_MODE_LEGACY).toString().trim()
+            val path = runCatching { android.net.Uri.parse(source).path.orEmpty() }.getOrDefault("")
+            val ext = path.substringAfterLast('.', "").lowercase(Locale.ROOT)
+            val mime = when (ext) {
+                "pdf" -> "application/pdf"
+                "doc", "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                "mp3" -> "audio/mpeg"
+                "wav" -> "audio/wav"
+                "ogg" -> "audio/ogg"
+                "m4a", "aac" -> "audio/mp4"
+                "mp4", "mov" -> "video/mp4"
+                "webm" -> "video/webm"
+                else -> "application/octet-stream"
+            }
+            val type = when (mediaMatch?.groupValues?.get(1)?.lowercase(Locale.ROOT)) {
+                "audio" -> "audio"
+                "video" -> "video"
+                else -> "document"
+            }
+            val stableId = path.hashCode().toString().replace("-", "")
+            items.put(JSONObject()
+                .put("id", stableId)
+                .put("title", title)
+                .put("description", "")
+                .put("mime_type", mime)
+                .put("media_type", type)
+                .put("created_at", "")
+                .put("download_url", source))
+        }
+        return JSONObject().put("items", items).put("count", items.length()).toString()
     }
 
     fun offlineMediaDirectory(context: Context): File = File(context.filesDir, "offline_media")
