@@ -4,10 +4,15 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - native-android-development
+      - native-android-integrated
     paths:
       - "android/**"
       - ".github/workflows/build-apk.yml"
+      - "app.py"
+      - "templates/**"
+      - "static/**"
+      - "data/**"
+      - "requirements.txt"
 
 permissions:
   contents: read
