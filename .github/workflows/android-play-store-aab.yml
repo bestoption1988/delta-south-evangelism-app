@@ -65,12 +65,31 @@ jobs:
           jarsigner -verify -verbose -certs "$AAB"
           keytool -printcert -jarfile "$AAB"
 
-      - name: Verify signed installable APK
+      - name: Sign APK if needed and verify installable package
+        env:
+          ANDROID_KEYSTORE_PATH: android/app/release-key.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           APK="android/app/build/outputs/apk/release/app-release.apk"
           test -s "$APK"
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -n "$APKSIGNER" || { echo "apksigner was not found in Android SDK build-tools"; exit 1; }
+          if ! "$APKSIGNER" verify "$APK" >/dev/null 2>&1; then
+            echo "Gradle produced an unsigned APK; signing it with the configured upload key."
+            UNSIGNED_APK="${APK%.apk}-unsigned.apk"
+            SIGNED_APK="${APK%.apk}-signed.apk"
+            cp "$APK" "$UNSIGNED_APK"
+            "$APKSIGNER" sign \
+              --ks "$ANDROID_KEYSTORE_PATH" \
+              --ks-key-alias "$ANDROID_KEY_ALIAS" \
+              --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
+              --key-pass env:ANDROID_KEY_PASSWORD \
+              --out "$SIGNED_APK" "$UNSIGNED_APK"
+            mv "$SIGNED_APK" "$APK"
+            rm -f "$UNSIGNED_APK"
+          fi
           "$APKSIGNER" verify --verbose "$APK"
 
       - name: Upload Play Store AAB
