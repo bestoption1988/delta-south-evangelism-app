@@ -265,9 +265,15 @@ private fun NativeDioceseApp() {
                             mediaDownloadedCount = summary.mediaDownloaded
                             devotionalResourceCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_resources_count", 0)
                             devotionalAudioCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_audio_count", 0)
-                            downloadMessage = "Offline package updated: ${summary.downloaded} data sets, ${summary.mediaDownloaded} media files, ${summary.unavailable} account-restricted items and ${summary.failed} failed items."
+                            val offlinePrefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+                            val webChapters = offlinePrefs.getInt("last_web_bible_chapter_count", 0)
+                            val missingWebChapters = offlinePrefs.getInt("last_web_bible_missing_count", 0)
+                            downloadMessage = "Offline package updated: ${summary.downloaded} data sets, ${summary.mediaDownloaded} media files, ${webChapters} WEB Bible chapters, ${summary.unavailable} account-restricted items and ${summary.failed} failed modules."
+                            if (missingWebChapters > 0) downloadMessage += " ${missingWebChapters} WEB Bible chapters need another download."
+                            android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }.onFailure { error ->
                             downloadMessage = error.message ?: "The offline package could not be completed."
+                            android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }
                         downloadBusy = false
                     }
