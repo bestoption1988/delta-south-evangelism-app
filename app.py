@@ -2951,7 +2951,8 @@ def _daily_scripture_and_hymn():
                 hymn_number = hymn_number_match.group(1) if hymn_number_match else ""
                 hymn_row = db().execute(
                     """SELECT audio_path,content_json FROM devotional_resources
-                       WHERE published=1 AND collection='english_hymns'
+                       WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+                         AND collection='english_hymns'
                          AND (LOWER(title)=LOWER(?) OR item_number=?)
                        ORDER BY CASE WHEN LOWER(title)=LOWER(?) THEN 0 ELSE 1 END
                        LIMIT 1""",
@@ -12471,7 +12472,10 @@ def devotional_centre_home():
         today = datetime.now().strftime("%Y-%m-%d")
         day_hash = hashlib.sha256(today.encode("utf-8")).hexdigest()
         verses = db().execute(
-            "SELECT resource_id,title,content_json FROM devotional_resources WHERE collection='bible_verses' AND published=1 ORDER BY resource_id LIMIT 497"
+            "SELECT resource_id,title,content_json FROM devotional_resources
+            WHERE collection='bible_verses'
+              AND LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+            ORDER BY resource_id LIMIT 497"
         ).fetchall()
         if verses:
             daily = dict(verses[int(day_hash[:8], 16) % len(verses)])
@@ -13440,20 +13444,20 @@ def api_offline_devotional_resources():
     include_audio = request.args.get("include_audio", "0").strip() == "1"
     page = max(1, min(request.args.get("page", 1, type=int) or 1, 10000))
     per_page = max(1, min(request.args.get("per_page", 100, type=int) or 100, 100))
+    # Support both PostgreSQL BOOLEAN and legacy SQLite INTEGER publication flags.
+    published_filter = "LOWER(CAST(published AS TEXT)) IN ('1','true','t')"
     total_row = db().execute(
-        "SELECT COUNT(*) AS total FROM devotional_resources WHERE collection=? AND published=1",
+        "SELECT COUNT(*) AS total FROM devotional_resources WHERE collection=? AND " + published_filter,
         (collection,)
     ).fetchone()
     total = int(total_row["total"] or 0)
     rows = db().execute(
         """SELECT resource_id,collection,item_number,title,content_json,audio_path,author_path
            FROM devotional_resources
-           WHERE collection=? AND published=1
-           ORDER BY CASE WHEN ? IN ('english_hymns','yoruba_hymns','akokun')
-                         THEN CAST(item_number AS INTEGER) ELSE 0 END,
-                    item_number,title
+           WHERE collection=? AND """ + published_filter + """
+           ORDER BY item_number,title
            LIMIT ? OFFSET ?""",
-        (collection, collection, per_page, (page - 1) * per_page)
+        (collection, per_page, (page - 1) * per_page)
     ).fetchall()
     items = []
     for row in rows:
