@@ -821,19 +821,6 @@
 </script>
 
 
-<style id="daily-devotion-mobile-readable-style">
-/* Keep the daily Scripture and hymn as expandable reading cards.
-   This is more reliable in Android WebView than a modal dialog. */
-#daily-devotion .daily-devotion-heading,
-#daily-devotion .daily-devotion-grid{display:block!important}
-#daily-devotion .daily-devotion-grid{max-width:1200px;margin:auto;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-#daily-devotion .daily-devotion-card{display:block!important}
-#daily-devotion .daily-devotion-card[open] .daily-devotion-full{display:block}
-#daily-devotion .daily-devotion-full{overflow-wrap:anywhere}
-@media(max-width:650px){ #daily-devotion .daily-devotion-grid{grid-template-columns:1fr}}
-</style>
-
-
 <!-- MCN Delta South: automatic birthday celebration -->
 {% if birthday_celebration_members %}
 <div id="ds-birthday-modal" class="ds-birthday-overlay"
