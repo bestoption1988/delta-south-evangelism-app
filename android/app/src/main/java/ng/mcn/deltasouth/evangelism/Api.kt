@@ -92,8 +92,11 @@ private object OfflineResponseCache {
  }
  fun clear() { prefs?.edit()?.clear()?.apply() }
  private fun cacheable(path: String): Boolean {
-  val allowed = listOf("/api/me", "/api/dashboard", "/api/member/records", "/api/member/id-card", "/api/member/attendance", "/api/member/attendance-summary", "/api/member/giving-history", "/api/member/announcements", "/api/member/events", "/api/member/notifications", "/api/membership/churches", "/api/circuits", "/api/membership-statistics", "/api/conference")
-  return allowed.any { path == it || path.startsWith("$it/") }
+  // Persist successful, role-authorized API reads for offline screens. Volatile presence/typing
+  // endpoints are deliberately excluded. Sensitive payloads remain encrypted and session-scoped.
+  return path.startsWith("/api/") &&
+   !path.contains("/typing") &&
+   !path.contains("/presence")
  }
  private fun key(request: okhttp3.Request): String {
   val session = Backend.cookies.sessionFingerprint()
@@ -112,7 +115,9 @@ private object OfflineResponseCache {
     val body = response.body
     if (response.isSuccessful && body != null && body.contentType()?.subtype?.contains("json", true) == true) {
      val content = body.string()
-     prefs?.edit()?.putString(cacheKey, content)?.apply()
+     if (content.toByteArray(Charsets.UTF_8).size <= 2 * 1024 * 1024) {
+      prefs?.edit()?.putString(cacheKey, content)?.apply()
+     }
      response.newBuilder().body(content.toResponseBody(body.contentType())).build()
     } else response
    } catch (error: IOException) {
