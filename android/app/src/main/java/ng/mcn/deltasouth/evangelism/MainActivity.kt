@@ -19,6 +19,7 @@ import android.webkit.WebChromeClient
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
@@ -251,7 +252,7 @@ private fun NativeDioceseApp() {
             add("Conferences")
             if (canReview) add("Approvals")
         }
-        Column(Modifier.fillMaxSize().padding(16.dp)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text("MCN Delta South Diocese", style = MaterialTheme.typography.headlineSmall)
             Text(if (online) "ONLINE • Live diocesan data" else "OFFLINE • Showing saved data where available; changes require internet", color = if (online) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelMedium)
             Text("Welcome, ${profile["full_name"] ?: profile["username"] ?: "Member"}")
@@ -1336,9 +1337,18 @@ private fun PublicDiocesanHomepage(onStaffLogin: () -> Unit, onBackPressed: () -
                     settings.domStorageEnabled = true
                     settings.loadsImagesAutomatically = true
                     settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.mediaPlaybackRequiresUserGesture = false
+                    settings.useWideViewPort = true
+                    settings.loadWithOverviewMode = false
                     settings.allowFileAccess = false
                     settings.allowContentAccess = true
                     settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    isFocusable = true
+                    isFocusableInTouchMode = true
+                    isVerticalScrollBarEnabled = true
+                    isHorizontalScrollBarEnabled = false
+                    overScrollMode = android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS
+                    setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                     webViewClient = object : WebViewClient() {
                         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                             pageLoading = true
@@ -1373,10 +1383,16 @@ private fun PublicDiocesanHomepage(onStaffLogin: () -> Unit, onBackPressed: () -
                 }
             }
         }
-        FilledTonalButton(
-            onClick = onStaffLogin,
-            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomEnd).padding(16.dp)
-        ) { Text("Staff sign in") }
+        Surface(
+            modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(8.dp),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            shape = MaterialTheme.shapes.large,
+            shadowElevation = 3.dp
+        ) {
+            TextButton(onClick = onStaffLogin, contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)) {
+                Text("Staff sign in")
+            }
+        }
     }
 }
 
