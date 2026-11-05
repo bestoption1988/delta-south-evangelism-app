@@ -12687,6 +12687,27 @@ def devotional_centre_item(resource_id):
 
 # CSB-only Bible reader. The licensed PDF is stored privately in Naijacloud Object Storage.
 _CSB_BIBLE_OBJECT_KEY = "devotional/bibles/csb-pew-bible-2017.pdf"
+_WEB_BIBLE_OBJECT_KEY = "devotional/bibles/web.bbl.mybible"
+
+def _web_bible_db_path():
+    """Download the installed WEB MyBible database from private object storage on demand."""
+    path = os.path.join(DATA_DIR, "web.bbl.mybible")
+    if not os.path.isfile(path) or os.path.getsize(path) < 1024:
+        payload = _dc_s3_get(_WEB_BIBLE_OBJECT_KEY)
+        if not payload.startswith(b"SQLite format 3\\x00"):
+            raise ValueError("Stored WEB Bible database is invalid.")
+        os.makedirs(DATA_DIR, exist_ok=True)
+        temp_path = path + ".tmp"
+        with open(temp_path, "wb") as handle:
+            handle.write(payload)
+        os.replace(temp_path, path)
+    return path
+
+def _web_bible_connect():
+    path = _web_bible_db_path()
+    conn = sqlite3.connect("file:" + path + "?mode=ro", uri=True, timeout=20)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 @app.get("/devotional-centre/bible")
@@ -12953,9 +12974,41 @@ def admin_devotional_upload_complete(upload_id):
             if bad_member:
                 raise ValueError("ZIP integrity check failed at " + str(bad_member)[:120])
 
-            # Convenience: if the ZIP contains a Bible PDF rather than a full
-            # Devotional Kits package, install that PDF as the CSB Bible.
+            # Convenience: install the uploaded World English Bible MyBible
+            # database directly, without an online Bible API or web-rendered text.
             if not any(n.endswith("/hymns.json") for n in names):
+                web_files = [item for item in members
+                             if not item.is_dir() and os.path.basename(item.filename).lower() == "web.bbl.mybible"]
+                if web_files:
+                    if len(web_files) != 1 or int(web_files[0].file_size or 0) > 40 * 1024 * 1024:
+                        raise ValueError("The ZIP must contain exactly one WEB Bible database under 40 MB.")
+                    bible_payload = archive.read(web_files[0])
+                    if not bible_payload.startswith(b"SQLite format 3\\x00"):
+                        raise ValueError("The WEB Bible file is not a valid SQLite MyBible database.")
+                    import tempfile as _tempfile
+                    with _tempfile.NamedTemporaryFile(suffix=".bbl.mybible", delete=False) as check_file:
+                        check_file.write(bible_payload)
+                        check_path = check_file.name
+                    try:
+                        check_db = sqlite3.connect(check_path)
+                        details = check_db.execute("SELECT Abbreviation FROM Details LIMIT 1").fetchone()
+                        verse_count = check_db.execute("SELECT COUNT(*) FROM Bible").fetchone()[0]
+                        check_db.close()
+                        if not details or str(details[0]).upper() != "WEB" or verse_count < 30000:
+                            raise ValueError("The selected database is not a complete World English Bible.")
+                    finally:
+                        try: os.remove(check_path)
+                        except OSError: pass
+                    _dc_s3_put(_WEB_BIBLE_OBJECT_KEY, bible_payload, "application/vnd.sqlite3")
+                    for item in (upload_path, meta_path):
+                        try: os.remove(item)
+                        except OSError: pass
+                    return jsonify({
+                        "bible_uploaded": True,
+                        "message": "World English Bible installed for offline reading.",
+                        "redirect": url_for("devotional_holy_bible")
+                    })
+
                 pdfs = [item for item in members
                         if not item.is_dir() and item.filename.lower().endswith(".pdf")]
                 preferred = [item for item in pdfs
@@ -13476,8 +13529,57 @@ def register_mcn_offline_worker(response):
 
 @app.route("/devotional-centre/holy-bible")
 def devotional_holy_bible():
-    """On-site Bible reader. Scripture text is fetched from the public-domain WEB API."""
-    return render_template("devotional_holy_bible.html")
+    """Offline reader backed by the installed World English Bible MyBible database."""
+    available = False
+    try:
+        _web_bible_db_path()
+        available = True
+    except Exception:
+        app.logger.info("Offline WEB Bible is not installed yet.")
+    return render_template("devotional_holy_bible.html", bible_available=available)
+
+
+@app.get("/devotional-centre/holy-bible/books")
+def devotional_holy_bible_books():
+    try:
+        conn = _web_bible_connect()
+        try:
+            rows = conn.execute("SELECT Book, MAX(Chapter) AS chapters FROM Bible GROUP BY Book ORDER BY Book").fetchall()
+        finally:
+            conn.close()
+        return jsonify({"translation": "WEB", "books": [{"id": int(r["Book"]), "chapters": int(r["chapters"])} for r in rows]})
+    except Exception as exc:
+        app.logger.exception("Could not read installed WEB Bible book list")
+        return jsonify({"error": "The offline WEB Bible is not installed or available."}), 503
+
+
+@app.get("/devotional-centre/holy-bible/chapter")
+def devotional_holy_bible_chapter():
+    book = request.args.get("book", type=int)
+    chapter = request.args.get("chapter", type=int)
+    if not book or not chapter or book < 1 or book > 66 or chapter < 1 or chapter > 200:
+        return jsonify({"error": "Choose a valid Bible book and chapter."}), 400
+    try:
+        conn = _web_bible_connect()
+        try:
+            rows = conn.execute(
+                "SELECT Verse, Scripture FROM Bible WHERE Book=? AND Chapter=? ORDER BY Verse",
+                (book, chapter)
+            ).fetchall()
+        finally:
+            conn.close()
+        if not rows:
+            return jsonify({"error": "Chapter not found."}), 404
+        verses = []
+        for row in rows:
+            scripture = str(row["Scripture"] or "")
+            scripture = re.sub(r"<RF>.*?<Rf>", "", scripture, flags=re.S)
+            scripture = re.sub(r"<[^>]*>", "", scripture)
+            verses.append({"verse": int(row["Verse"]), "text": scripture.strip()})
+        return jsonify({"translation": "WEB", "book": book, "chapter": chapter, "verses": verses})
+    except Exception:
+        app.logger.exception("Could not read offline WEB Bible chapter")
+        return jsonify({"error": "The offline WEB Bible could not be read."}), 503
 
 
 
