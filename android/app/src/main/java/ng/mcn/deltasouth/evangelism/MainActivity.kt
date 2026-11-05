@@ -37,6 +37,23 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Backend.initialize(applicationContext)
+        android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
+            object : android.webkit.ServiceWorkerClient() {
+                override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
+                    if (!networkAvailable(applicationContext) && request.url.host == "bible-api.com") {
+                        val cachedChapter = OfflineModuleManager.cachedWebBibleChapter(applicationContext, request.url.toString())
+                        if (cachedChapter != null) {
+                            return android.webkit.WebResourceResponse(
+                                "application/json", "UTF-8", 200, "OK",
+                                mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Methods" to "GET, OPTIONS"),
+                                cachedChapter.inputStream()
+                            )
+                        }
+                    }
+                    return null
+                }
+            }
+        )
         OfflineModuleManager.scheduleAutomaticUpdates(applicationContext)
         setContent { MaterialTheme { NativeDioceseApp() } }
     }
