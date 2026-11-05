@@ -291,7 +291,7 @@ object OfflineModuleManager {
                     if (audioUrl.isNotBlank()) {
                         val ext = mediaExtension(item.optString("audio_extension"), "audio")
                         val target = File(directory, "hymn_" + id + ext)
-                        if (downloadSignedFile(longClient, audioUrl, target)) {
+                        if (downloadSignedFile(longClient, audioUrl, target) { done, total -> onProgress("Hymn audio: " + item.optString("title", collection), if (total > 0L) (done * 100 / total).toInt() else 0) }) {
                             item.put("audio_file", target.name)
                             audioDownloaded++
                         }
@@ -305,7 +305,7 @@ object OfflineModuleManager {
                             if (tuneUrl.isBlank()) continue
                             val tuneExt = mediaExtension(tune.optString("audio_extension"), "audio")
                             val tuneFile = File(directory, "hymn_" + id + "_tune" + tuneIndex + tuneExt)
-                            if (downloadSignedFile(longClient, tuneUrl, tuneFile)) {
+                            if (downloadSignedFile(longClient, tuneUrl, tuneFile) { done, total -> onProgress("Hymn tune: " + item.optString("title", collection), if (total > 0L) (done * 100 / total).toInt() else 0) }) {
                                 tune.put("offline_file", tuneFile.name)
                                 audioDownloaded++
                             }
@@ -613,7 +613,19 @@ object OfflineModuleManager {
                         val body = response.body ?: throw IllegalStateException("Empty media file")
                         val temporary = File(directory, safeId + extension + ".part")
                         body.byteStream().use { input ->
-                            temporary.outputStream().use { output -> input.copyTo(output) }
+                            temporary.outputStream().use { output ->
+                                val buffer = ByteArray(64 * 1024)
+                                var copied = 0L
+                                val totalBytes = body.contentLength()
+                                while (true) {
+                                    val read = input.read(buffer)
+                                    if (read < 0) break
+                                    output.write(buffer, 0, read)
+                                    copied += read
+                                    val itemPercent = if (totalBytes > 0L) (copied * 100 / totalBytes).toInt() else 0
+                                    onProgress("Downloading " + mediaType + ": " + item.optString("title", "media item") + " • " + itemPercent + "%", if (totalItems > 0) (position * 100 / totalItems + itemPercent / totalItems).coerceIn(0, 99) else 0)
+                                }
+                            }
                         }
                         if (temporary.length() == 0L) {
                             temporary.delete()
