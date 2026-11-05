@@ -399,7 +399,7 @@ object OfflineModuleManager {
             val bookId = book.optInt("id")
             val chapters = book.optInt("chapters")
             if (bookId in 1..66 && chapters > 0) {
-                for (chapter in 1..chapters) tasks += bookId to chapter
+                for (chapter in 1..chapters) tasks.add(Pair(bookId, chapter))
             }
         }
         if (tasks.isEmpty()) throw IllegalStateException("The installed WEB Bible contains no chapters.")
