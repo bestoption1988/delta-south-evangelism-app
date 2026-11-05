@@ -55,8 +55,8 @@
 .daily-devotion-open:focus-visible{outline:3px solid #d8aa25;outline-offset:-3px}
 .daily-devotion-type{display:block;margin:0 0 8px;color:#102d60;font:800 clamp(16px,2.2vw,21px)/1.3 Arial,Helvetica,sans-serif}
 .daily-devotion-reference{display:block;margin:0 0 7px;color:#102d60;font-weight:800;font-size:clamp(16px,2vw,20px)}
-.daily-devotion-preview{display:block;width:100%;overflow:hidden;white-space:nowrap;color:#25314a;font:italic clamp(20px,3vw,29px)/1.5 Georgia,serif}
-.daily-devotion-marquee{display:flex;width:max-content;min-width:200%;align-items:center;gap:5rem;animation:dailyDevotionRightToLeft 32s linear infinite;will-change:transform}
+.daily-devotion-preview{display:block;width:100%;min-width:0;overflow:hidden;white-space:nowrap;color:#25314a;font:italic clamp(19px,3vw,27px)/1.45 Georgia,serif}
+.daily-devotion-marquee{display:flex;width:max-content;min-width:200%;max-width:none;align-items:center;gap:4rem;animation:dailyDevotionRightToLeft 38s linear infinite;will-change:transform}
 .daily-devotion-marquee span{display:block;flex:0 0 auto;white-space:nowrap}
 @keyframes dailyDevotionRightToLeft{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .daily-devotion-open:hover .daily-devotion-marquee,.daily-devotion-open:focus-visible .daily-devotion-marquee{animation-play-state:paused}
@@ -64,8 +64,8 @@
 .daily-devotion-hymn-preview{padding-left:8px}
 .daily-devotion-tap{display:none}
 .daily-devotion-modal{position:fixed;inset:0;z-index:20000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(4,16,43,.38)}
-.daily-devotion-modal.is-open{display:flex}
-.daily-devotion-modal-panel{position:relative;width:min(92vw,680px);max-height:78vh;overflow:auto;background:#fff;color:#172b4d;border:1px solid #dce3ed;border-radius:16px;padding:22px clamp(18px,4vw,30px);box-shadow:0 14px 42px #0003}
+.daily-devotion-modal.is-open{display:flex!important}
+.daily-devotion-modal-panel{position:relative;display:block;flex:0 1 auto;width:min(92vw,680px);height:auto;min-height:180px;max-height:76vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#172b4d;border:1px solid #dce3ed;border-radius:16px;padding:22px clamp(18px,4vw,30px);box-shadow:0 14px 42px #0003}
 .daily-devotion-modal-close{position:sticky;top:0;float:right;width:42px;height:42px;border:0;border-radius:50%;background:#eef1f6;color:#102d60;font-size:28px;cursor:pointer;z-index:2}
 .daily-devotion-modal h2{clear:both;margin:4px 0 14px;color:#102d60;font:700 clamp(22px,4vw,30px)/1.3 Georgia,serif}
 .daily-devotion-modal .daily-devotion-type{font-size:15px}
@@ -76,8 +76,8 @@
 .daily-hymn-audio audio{display:block;width:100%;max-width:100%;min-height:48px}
 .daily-hymn-author{font-size:14px;color:#657087}
 .daily-devotion-modal .button{margin-top:18px}
-body.daily-devotion-modal-open{overflow:hidden}
-@media(max-width:650px){.daily-devotion-open{padding:16px 19px}.daily-devotion-type{font-size:17px}.daily-devotion-preview{font-size:22px}.daily-devotion-modal{padding:16px;align-items:center}.daily-devotion-modal-panel{width:100%;max-width:560px;max-height:78vh;border-radius:15px;padding:18px 18px 22px}.daily-hymn-audio{padding:14px}.daily-devotion-modal h2{font-size:25px}}
+body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{display:none!important}\n.daily-devotion-modal.is-open .daily-devotion-modal-panel{visibility:visible!important;opacity:1!important}\n.daily-devotion-modal-panel>*{visibility:visible}
+@media(max-width:650px){.daily-devotion-open{padding:16px 19px}.daily-devotion-type{font-size:17px}.daily-devotion-preview{font-size:22px}.daily-devotion-modal{padding:16px;align-items:center}.daily-devotion-modal-panel{display:block;width:100%;max-width:560px;min-height:220px;max-height:76vh;border-radius:15px;padding:18px 18px 22px}.daily-hymn-audio{padding:14px}.daily-devotion-modal h2{font-size:25px}}
 </style>
 
 </head>
@@ -397,7 +397,7 @@ body.daily-devotion-modal-open{overflow:hidden}
   <div class="homepage-video-grid">
     {% for video in homepage_video_items %}
     <article class="homepage-video-card">
-      <video controls playsinline preload="metadata"
+      <video controls playsinline webkit-playsinline preload="metadata" width="1280" height="720"
              aria-label="{{ video.title }}"
              src="{{ video.signed_url or url_for('media_document_view', media_id=video.id, raw=1) }}"></video>
       <div class="homepage-video-copy">
@@ -665,6 +665,18 @@ body.daily-devotion-modal-open{overflow:hidden}
   const submenu = document.getElementById("fellowshipsSubmenu");
   const saveOffline = document.getElementById("saveOfflineApp");
   const staffSignIn = document.getElementById("nativeStaffSignIn");
+  const isAndroidApp = navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1;
+  if (isAndroidApp) {
+    document.documentElement.classList.add("mcn-android-app");
+    const quickActions = document.createElement("div");
+    quickActions.id = "mcnAppQuickActions";
+    quickActions.innerHTML = '<a href="mcn-app://offline" aria-label="Save offline">Offline</a><a href="mcn-app://staff-login" aria-label="Staff sign in">Staff</a>';
+    document.body.appendChild(quickActions);
+    quickActions.querySelector('a[href="mcn-app://offline"]').addEventListener("click", event => { event.preventDefault(); window.location.href = "mcn-app://offline"; });
+    quickActions.querySelector('a[href="mcn-app://staff-login"]').addEventListener("click", event => { event.preventDefault(); window.location.href = "mcn-app://staff-login"; });
+    if (saveOffline) saveOffline.style.display = "none";
+    if (staffSignIn) staffSignIn.style.display = "none";
+  }
 
   if (saveOffline) {
     saveOffline.addEventListener("click", event => {
