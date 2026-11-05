@@ -13408,6 +13408,7 @@ def api_offline_devotional_resources():
     collection = (request.args.get("collection") or "").strip()
     if collection not in allowed:
         return jsonify({"error": "Unknown devotional collection."}), 400
+    include_audio = request.args.get("include_audio", "0").strip() == "1"
     page = max(1, min(request.args.get("page", 1, type=int) or 1, 10000))
     per_page = max(1, min(request.args.get("per_page", 100, type=int) or 100, 100))
     total_row = db().execute(
@@ -13433,11 +13434,12 @@ def api_offline_devotional_resources():
         except Exception:
             payload = {}
         item["payload"] = payload
-        item["audio_url"] = _dc_signed(item.get("audio_path"))
-        item["author_url"] = _dc_signed(item.get("author_path"))
-        for tune in payload.get("otherTunes") or []:
-            tune_path = tune.get("musicFilePath") or tune.get("audio_path") or ""
-            tune["signed_url"] = _dc_signed(tune_path)
+        item["audio_url"] = _dc_signed(item.get("audio_path")) if include_audio else ""
+        item["author_url"] = ""
+        if include_audio:
+            for tune in payload.get("otherTunes") or []:
+                tune_path = tune.get("musicFilePath") or tune.get("audio_path") or ""
+                tune["signed_url"] = _dc_signed(tune_path)
         items.append(item)
     return jsonify({
         "collection": collection,
@@ -13513,6 +13515,104 @@ def api_offline_media_catalogue():
         app.logger.exception("Offline media catalogue could not be loaded")
         return jsonify({"error": "Offline media catalogue is temporarily unavailable."}), 503
 
+
+
+
+@app.post("/api/offline/sync")
+@login_required
+def api_offline_sync():
+    """Idempotent synchronization for queued attendance records only."""
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    operation = data.get("operation") or {}
+    operation_id = str(operation.get("operation_id") or "").strip()
+    if not operation_id or len(operation_id) > 100:
+        return jsonify({"error": "A valid operation_id is required."}), 400
+    if operation.get("type") != "attendance":
+        return jsonify({"error": "Unsupported offline operation."}), 400
+    allowed_roles = {
+        "Admin", "Evangelism Minister", "Planting Officer",
+        "Circuit Coordinator", "Local Church Evangelism Officer"
+    }
+    if user["role"] not in allowed_roles:
+        return jsonify({"error": "Attendance recording access denied."}), 403
+
+    conn = db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS offline_sync_receipts (
+            operation_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    existing = conn.execute(
+        "SELECT username,result_json FROM offline_sync_receipts WHERE operation_id=?",
+        (operation_id,)
+    ).fetchone()
+    if existing:
+        if existing["username"] != user["username"]:
+            return jsonify({"error": "Operation ID already belongs to another account."}), 409
+        return jsonify(json.loads(existing["result_json"]))
+
+    payload = operation.get("data") or {}
+    try:
+        member_id = int(payload.get("member_id"))
+    except (TypeError, ValueError):
+        return jsonify({"error": "A valid member_id is required."}), 400
+    attendance_date = str(payload.get("attendance_date") or "").strip()
+    meeting_type = str(payload.get("meeting_type") or "").strip()
+    status = str(payload.get("status") or "Present").strip().title()
+    if not attendance_date:
+        return jsonify({"error": "attendance_date is required."}), 400
+    if status not in {"Present", "Absent"}:
+        return jsonify({"error": "Status must be Present or Absent."}), 400
+    try:
+        datetime.strptime(attendance_date, "%Y-%m-%d")
+    except ValueError:
+        return jsonify({"error": "attendance_date must use YYYY-MM-DD."}), 400
+
+    member = conn.execute(
+        "SELECT id,circuit,church_name FROM members WHERE id=?",
+        (member_id,)
+    ).fetchone()
+    if not member:
+        return jsonify({"error": "Member record not found."}), 404
+    if user["role"] == "Circuit Coordinator" and user["circuit"] and member["circuit"] != user["circuit"]:
+        return jsonify({"error": "Member is outside your circuit."}), 403
+    if user["role"] == "Local Church Evangelism Officer" and (
+        member["circuit"] != user["circuit"] or member["church_name"] != user["church_name"]
+    ):
+        return jsonify({"error": "Member is outside your local church."}), 403
+
+    try:
+        inserted = conn.execute(
+            """INSERT INTO member_attendance
+               (member_id,attendance_date,meeting_type,status,circuit,church_name,recorded_by,notes)
+               VALUES(?,?,?,?,?,?,?,?) RETURNING id""",
+            (member_id, attendance_date, meeting_type, status, member["circuit"],
+             member["church_name"], user["username"], str(payload.get("notes") or "").strip())
+        ).fetchone()
+        result = {
+            "ok": True, "status": "synced",
+            "operation_id": operation_id, "id": inserted["id"]
+        }
+        conn.execute(
+            "INSERT INTO offline_sync_receipts(operation_id,username,result_json) VALUES(?,?,?)",
+            (operation_id, user["username"], json.dumps(result))
+        )
+        conn.commit()
+        return jsonify(result), 201
+    except Exception:
+        conn.rollback()
+        existing = conn.execute(
+            "SELECT username,result_json FROM offline_sync_receipts WHERE operation_id=?",
+            (operation_id,)
+        ).fetchone()
+        if existing and existing["username"] == user["username"]:
+            return jsonify(json.loads(existing["result_json"]))
+        app.logger.exception("Offline attendance synchronization failed")
+        return jsonify({"error": "Offline attendance could not be synchronized."}), 500
 
 
 if __name__ == "__main__":
