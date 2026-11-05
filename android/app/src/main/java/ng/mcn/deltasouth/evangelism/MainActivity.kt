@@ -40,13 +40,14 @@ class MainActivity : ComponentActivity() {
         android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
             object : android.webkit.ServiceWorkerClient() {
                 override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                    if (!networkAvailable(applicationContext) && request.url.host == "bible-api.com") {
-                        val cachedChapter = OfflineModuleManager.cachedWebBibleChapter(applicationContext, request.url.toString())
-                        if (cachedChapter != null) {
+                    if (!networkAvailable(applicationContext)) {
+                        val cachedBible = OfflineModuleManager.cachedWebBibleBooks(applicationContext, request.url.toString())
+                            ?: OfflineModuleManager.cachedWebBibleChapter(applicationContext, request.url.toString())
+                        if (cachedBible != null) {
                             return android.webkit.WebResourceResponse(
                                 "application/json", "UTF-8", 200, "OK",
                                 mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Methods" to "GET, OPTIONS"),
-                                cachedChapter.inputStream()
+                                cachedBible.inputStream()
                             )
                         }
                     }
@@ -1829,13 +1830,14 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             return super.shouldOverrideUrlLoading(view, request)
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                            if (!online && request.url.host == "bible-api.com") {
-                                val cachedChapter = OfflineModuleManager.cachedWebBibleChapter(ctx, request.url.toString())
-                                if (cachedChapter != null) {
+                            if (!online) {
+                                val cachedBible = OfflineModuleManager.cachedWebBibleBooks(ctx, request.url.toString())
+                                    ?: OfflineModuleManager.cachedWebBibleChapter(ctx, request.url.toString())
+                                if (cachedBible != null) {
                                     return android.webkit.WebResourceResponse(
                                         "application/json", "UTF-8", 200, "OK",
                                         mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Methods" to "GET, OPTIONS"),
-                                        cachedChapter.inputStream()
+                                        cachedBible.inputStream()
                                     )
                                 }
                             }
