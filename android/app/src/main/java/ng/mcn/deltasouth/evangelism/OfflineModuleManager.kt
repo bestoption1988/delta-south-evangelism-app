@@ -169,10 +169,20 @@ object OfflineModuleManager {
             }
         }
         try {
-            downloadAllDevotionalResources(context)
+            val devotionalCount = downloadAllDevotionalResources(context)
+            if (devotionalCount > 0) downloaded++
+        } catch (_: Exception) {
+            failed++
+        }
+        try {
             downloadDailyDevotion(context)
+            downloaded++
+        } catch (_: Exception) {
+            failed++
+        }
+        try {
             downloadLectionary(context)
-            downloaded += 10
+            downloaded++
         } catch (_: Exception) {
             failed++
         }
