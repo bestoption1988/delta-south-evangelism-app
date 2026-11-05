@@ -158,6 +158,18 @@ private fun NativeDioceseApp() {
             runCatching { withContext(Dispatchers.IO) { Backend.api.dashboard() } }
                 .onSuccess { dashboard = it }
                 .onFailure { message = it.message ?: "Dashboard will load when the connection is available." }
+            if (online) {
+                val prefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+                if (!prefs.getBoolean("initial_download_complete", false)) {
+                    downloadBusy = true
+                    downloadMessage = "Preparing your offline modules…"
+                    val result = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAll(appContext) }
+                    downloadedModules = result.downloaded
+                    if (result.downloaded > 0) prefs.edit().putBoolean("initial_download_complete", true).apply()
+                    downloadMessage = "Initial download: ${result.downloaded} saved, ${result.unavailable} not available for this account, ${result.failed} failed."
+                    downloadBusy = false
+                }
+            }
         }
     }
     BackHandler(enabled = signedIn && selected != "Home") { selected = "Home"; message = "" }
