@@ -3,6 +3,7 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <application
         android:allowBackup="false"
+        android:hardwareAccelerated="true"
         android:label="Delta South Evangelism"
         android:icon="@drawable/app_logo"
         android:usesCleartextTraffic="false"
