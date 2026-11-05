@@ -803,11 +803,61 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
   // Open the full daily Scripture and hymn in an accessible, scrollable popup.
   const dailyModals = Array.from(document.querySelectorAll(".daily-devotion-modal"));
   dailyModals.forEach(modal => modal.setAttribute("aria-hidden", "true"));
+
+  // Android System WebView can report an incorrect/very small CSS vh value
+  // while the app is running edge-to-edge. Size the dialog from the actual
+  // visible viewport in pixels so the full Scripture/hymn body is scrollable.
+  function sizeDailyModal(modal) {
+    if (!modal || !modal.classList.contains("is-open")) return;
+    const panel = modal.querySelector(".daily-devotion-modal-panel");
+    if (!panel) return;
+    const viewportHeight = Math.max(
+      document.documentElement.clientHeight || 0,
+      window.innerHeight || 0
+    );
+    const viewportWidth = Math.max(
+      document.documentElement.clientWidth || 0,
+      window.innerWidth || 0
+    );
+    const panelHeight = Math.max(240, Math.round(viewportHeight * 0.70));
+    modal.style.setProperty("position", "fixed", "important");
+    modal.style.setProperty("inset", "0", "important");
+    modal.style.setProperty("display", "block", "important");
+    modal.style.setProperty("width", viewportWidth + "px", "important");
+    modal.style.setProperty("height", viewportHeight + "px", "important");
+    modal.style.setProperty("padding", "0", "important");
+    modal.style.setProperty("overflow", "hidden", "important");
+    modal.style.setProperty("z-index", "30000", "important");
+    panel.style.setProperty("position", "fixed", "important");
+    panel.style.setProperty("display", "block", "important");
+    panel.style.setProperty("box-sizing", "border-box", "important");
+    panel.style.setProperty("left", Math.round(viewportWidth * 0.04) + "px", "important");
+    panel.style.setProperty("top", Math.round(viewportHeight * 0.15) + "px", "important");
+    panel.style.setProperty("width", Math.round(viewportWidth * 0.92) + "px", "important");
+    panel.style.setProperty("height", panelHeight + "px", "important");
+    panel.style.setProperty("min-height", panelHeight + "px", "important");
+    panel.style.setProperty("max-height", panelHeight + "px", "important");
+    panel.style.setProperty("max-width", "none", "important");
+    panel.style.setProperty("margin", "0", "important");
+    panel.style.setProperty("overflow-x", "hidden", "important");
+    panel.style.setProperty("overflow-y", "auto", "important");
+    panel.style.setProperty("-webkit-overflow-scrolling", "touch");
+    panel.style.setProperty("padding", "18px 16px 28px", "important");
+    panel.style.setProperty("background", "#fff", "important");
+    panel.style.setProperty("color", "#172b4d", "important");
+    panel.style.setProperty("visibility", "visible", "important");
+    panel.style.setProperty("opacity", "1", "important");
+    panel.style.setProperty("z-index", "30001", "important");
+  }
+
   function closeDailyModal(modal) {
     if (!modal) return;
     modal.classList.remove("is-open");
     modal.hidden = true;
     modal.setAttribute("aria-hidden", "true");
+    modal.removeAttribute("style");
+    const panel = modal.querySelector(".daily-devotion-modal-panel");
+    panel?.removeAttribute("style");
     document.body.classList.remove("daily-devotion-modal-open");
     modal.querySelectorAll("audio").forEach(player => { player.pause(); });
   }
@@ -819,14 +869,19 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
       modal.hidden = false;
       modal.classList.add("is-open");
       document.body.classList.add("daily-devotion-modal-open");
-      const panel = modal.querySelector(".daily-devotion-modal-panel");
-      // Keep the dialog's size in CSS so Android WebView and normal browsers
-      // use the same stable 70%-viewport layout (no competing inline vh values).
-      panel?.scrollTo(0, 0);
+      sizeDailyModal(modal);
+      requestAnimationFrame(() => {
+        sizeDailyModal(modal);
+        const panel = modal.querySelector(".daily-devotion-modal-panel");
+        panel?.scrollTo(0, 0);
+      });
       modal.setAttribute("aria-hidden", "false");
       const closeButton = modal.querySelector("[data-daily-close]");
       closeButton?.focus({preventScroll:true});
     });
+  });
+  window.addEventListener("resize", () => {
+    dailyModals.forEach(modal => sizeDailyModal(modal));
   });
   dailyModals.forEach(modal => {
     modal.querySelector("[data-daily-close]")?.addEventListener("click", () => closeDailyModal(modal));
