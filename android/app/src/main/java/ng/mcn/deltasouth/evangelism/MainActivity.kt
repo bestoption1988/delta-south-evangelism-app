@@ -1877,16 +1877,12 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
                             pageLoading = false
-                            // Android WebView touch fallback for the public mobile menu.
+                            // Mark the native WebView for Android-specific layout only.
+                            // Do NOT add a second touch handler: the page's click handler
+                            // already toggles the menu, and touchend + click caused a
+                            // double-toggle (open immediately followed by close).
                             view.evaluateJavascript(
-                                "(function(){document.documentElement.classList.add('mcn-android-app');" +
-                                "var t=document.getElementById('menuToggle'),n=document.getElementById('navLinks');" +
-                                "if(t&&n&&!t.dataset.mcnTouchReady){t.dataset.mcnTouchReady='1';" +
-                                "t.addEventListener('touchend',function(e){e.preventDefault();" +
-                                "var o=!n.classList.contains('open');n.classList.toggle('open',o);" +
-                                "t.setAttribute('aria-expanded',o?'true':'false');" +
-                                "t.setAttribute('aria-label',o?'Close navigation':'Open navigation');" +
-                                "},{passive:false});}})();",
+                                "document.documentElement.classList.add('mcn-android-app');",
                                 null
                             )
                         }
