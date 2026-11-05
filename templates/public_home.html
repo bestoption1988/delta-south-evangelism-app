@@ -726,7 +726,25 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
       modal.hidden = false;
       modal.classList.add("is-open");
       document.body.classList.add("daily-devotion-modal-open");
-      modal.querySelector(".daily-devotion-modal-panel")?.scrollTo(0, 0);
+      const panel = modal.querySelector(".daily-devotion-modal-panel");
+      if (panel && isAndroidApp) {
+        // Set dimensions directly at open time: some Android WebViews ignore
+        // the flex item's CSS height and collapse the dialog to its heading.
+        panel.style.setProperty("display", "block", "important");
+        panel.style.setProperty("box-sizing", "border-box", "important");
+        panel.style.setProperty("flex", "0 0 70vh", "important");
+        panel.style.setProperty("width", "calc(100vw - 28px)", "important");
+        panel.style.setProperty("height", "70vh", "important");
+        panel.style.setProperty("min-height", "70vh", "important");
+        panel.style.setProperty("max-height", "70vh", "important");
+        panel.style.setProperty("max-width", "620px", "important");
+        panel.style.setProperty("overflow-x", "hidden", "important");
+        panel.style.setProperty("overflow-y", "auto", "important");
+        panel.style.setProperty("-webkit-overflow-scrolling", "touch", "important");
+        panel.style.setProperty("background", "#fff", "important");
+        panel.style.setProperty("padding", "18px 16px 28px", "important");
+      }
+      panel?.scrollTo(0, 0);
     });
   });
   dailyModals.forEach(modal => {
