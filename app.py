@@ -1186,7 +1186,7 @@ def login_required(fn):
         u = current_user()
         if not u or not u["active"]:
             return jsonify({"error": "Authentication required"}), 401
-        if u["must_change_password"] and request.endpoint not in {"member_change_password", "api_change_password", "logout"}:
+        if u["must_change_password"] and request.endpoint not in {"member_change_password", "api_change_password", "api_me", "logout"}:
             return jsonify({"error": "Password change required", "code": "PASSWORD_CHANGE_REQUIRED"}), 403
         return fn(*args, **kwargs)
     return wrapper
@@ -5123,6 +5123,35 @@ def api_me():
         "member_id",
     )
     return jsonify({key: u[key] for key in safe_fields if key in u.keys()})
+
+
+
+@app.post("/api/change-password")
+@login_required
+def api_change_password():
+    """Authenticated password update for native clients and forced first-login changes."""
+    user = current_user()
+    data = request.get_json(silent=True) or {}
+    current = str(data.get("current_password") or "")
+    new = str(data.get("new_password") or "")
+    confirm = str(data.get("confirm_password") or "")
+    if not current or not new or not confirm:
+        return jsonify({"error": "Current password, new password and confirmation are required."}), 400
+    if not check_password_hash(user["password"], current):
+        return jsonify({"error": "Current password is incorrect."}), 400
+    if len(new) < 8:
+        return jsonify({"error": "New password must be at least 8 characters."}), 400
+    if new != confirm:
+        return jsonify({"error": "New passwords do not match."}), 400
+    db().execute(
+        "UPDATE users SET password=?,must_change_password=0 WHERE id=?",
+        (generate_password_hash(new), user["id"])
+    )
+    db().commit()
+    audit("PASSWORD_CHANGE", "users", user["id"], "Password changed through native client")
+    return jsonify({"success": True, "message": "Password changed successfully."})
+
+
 
 
 def get_connection_url():
