@@ -96,7 +96,8 @@ private object OfflineResponseCache {
   // endpoints are deliberately excluded. Sensitive payloads remain encrypted and session-scoped.
   return path.startsWith("/api/") &&
    !path.contains("/typing") &&
-   !path.contains("/presence")
+   !path.contains("/presence") &&
+   path != "/api/offline/media-catalogue"
  }
  private fun key(request: okhttp3.Request): String {
   val session = Backend.cookies.sessionFingerprint()
