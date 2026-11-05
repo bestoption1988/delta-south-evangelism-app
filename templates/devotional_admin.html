@@ -11,9 +11,9 @@
 <section class="panel"><h2>Complete Holy Bible (WEB)</h2>
 <p class="muted">The Devotional Centre now provides the complete 66-book World English Bible (WEB), a public-domain translation. Members can read books, chapters and verses in the diocesan website without uploading a CSB PDF.</p>
 <p><a class="button" href="/devotional-centre/holy-bible">Open the Complete Bible Reader</a></p>
-<p class="muted">Bible text is supplied by the WEB public-domain text service and displayed in the MCN Delta South Diocese Bible reader.</p></section>
+<p class="muted">The uploaded World English Bible MyBible database is installed in Naijacloud Object Storage and read directly by the offline Bible reader. No external Bible API or web-rendered scripture is used.</p></section>
 <section class="panel"><h2>Import Devotional Kits</h2>
-<p class="muted">Choose the prepared ZIP package. Do not extract it first. Upload progress will be shown first, followed by unpacking, media upload and database import stages.</p>
+<p class="muted">Choose the prepared Devotional Kits ZIP or the Bible package ZIP. Do not extract it first. For the Bible, the ZIP must include bibles/web.bbl.mybible. Upload progress will be shown first, followed by unpacking, media upload and database import stages.</p>
 <form id="devotional-upload-form" method="post" enctype="multipart/form-data">
 <input type="file" name="package" accept=".zip,application/zip" required>
 <p class="muted">Includes hymn books, Bible verses, canticles, Communion materials, creeds, music recordings and author photographs.</p>
@@ -81,9 +81,9 @@
    const done=await fetch("/admin/devotional-centre/upload/"+id+"/complete",{method:"POST"});
    const doneData=await done.json().catch(()=>({}));if(!done.ok)throw new Error(doneData.error||"Could not process ZIP (HTTP "+done.status+").");
    if(doneData.bible_uploaded){
-    showUpload(100,"Success! The CSB Bible PDF was extracted from your ZIP and saved. Opening the Bible reader…");
+    showUpload(100,"Success! The World English Bible database was extracted from your ZIP and installed for offline reading. Opening the Bible reader…");
     label.classList.add("success");
-    window.location.href=doneData.redirect||"/devotional-centre/bible";
+    window.location.href=doneData.redirect||"/devotional-centre/holy-bible";
     return;
    }
    showUpload(100,"Devotional Kits ZIP received and saved securely. The background worker will process it; see the progress panel below.");
