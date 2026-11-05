@@ -1371,6 +1371,80 @@ def record_member_attendance():
     db().commit()
     return jsonify({"ok":True,"id":cur.lastrowid}),201
 
+@app.post("/api/offline/sync")
+@login_required
+def api_offline_sync():
+    """Idempotent synchronization for explicitly queued offline attendance records."""
+    u = current_user()
+    data = request.get_json(silent=True) or {}
+    operation = data.get("operation") or {}
+    operation_id = str(operation.get("operation_id") or "").strip()
+    if not operation_id or len(operation_id) > 100:
+        return jsonify({"error": "A valid operation_id is required."}), 400
+    if operation.get("type") != "attendance":
+        return jsonify({"error": "Unsupported offline operation."}), 400
+    if u["role"] not in {"Admin", "Evangelism Minister", "Planting Officer", "Circuit Coordinator", "Local Church Evangelism Officer"}:
+        return jsonify({"error": "Attendance recording access denied."}), 403
+
+    conn = db()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS offline_sync_receipts (
+            operation_id TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            result_json TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+    existing = conn.execute(
+        "SELECT username,result_json FROM offline_sync_receipts WHERE operation_id=?",
+        (operation_id,)
+    ).fetchone()
+    if existing:
+        if existing["username"] != u["username"]:
+            return jsonify({"error": "Operation ID already belongs to another account."}), 409
+        return jsonify(json.loads(existing["result_json"]))
+
+    payload = operation.get("data") or {}
+    member_id = payload.get("member_id")
+    attendance_date = (payload.get("attendance_date") or "").strip()
+    meeting_type = (payload.get("meeting_type") or "").strip()
+    status = (payload.get("status") or "Present").strip().title()
+    if not member_id or not attendance_date:
+        return jsonify({"error": "member_id and attendance_date are required."}), 400
+    if status not in {"Present", "Absent"}:
+        return jsonify({"error": "Status must be Present or Absent."}), 400
+    member = conn.execute(
+        "SELECT id,circuit,church_name FROM members WHERE id=?",
+        (member_id,)
+    ).fetchone()
+    if not member:
+        return jsonify({"error": "Member record not found."}), 404
+    if u["role"] == "Circuit Coordinator" and u["circuit"] and member["circuit"] != u["circuit"]:
+        return jsonify({"error": "Member is outside your circuit."}), 403
+    if u["role"] == "Local Church Evangelism Officer" and (
+        member["circuit"] != u["circuit"] or member["church_name"] != u["church_name"]
+    ):
+        return jsonify({"error": "Member is outside your local church."}), 403
+
+    try:
+        cur = conn.execute(
+            "INSERT INTO member_attendance(member_id,attendance_date,meeting_type,status,circuit,church_name,recorded_by,notes) VALUES(?,?,?,?,?,?,?,?)",
+            (member_id, attendance_date, meeting_type, status, member["circuit"],
+             member["church_name"], u["username"], (payload.get("notes") or "").strip())
+        )
+        result = {"ok": True, "status": "synced", "operation_id": operation_id, "id": cur.lastrowid}
+        conn.execute(
+            "INSERT INTO offline_sync_receipts(operation_id,username,result_json) VALUES(?,?,?)",
+            (operation_id, u["username"], json.dumps(result))
+        )
+        conn.commit()
+        return jsonify(result), 201
+    except Exception:
+        conn.rollback()
+        app.logger.exception("Offline attendance synchronization failed")
+        return jsonify({"error": "Offline attendance could not be synchronized."}), 500
+
+
 @app.post("/api/member-attendance/bulk")
 @login_required
 def record_bulk_attendance():
