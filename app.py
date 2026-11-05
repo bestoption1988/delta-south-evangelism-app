@@ -13462,12 +13462,19 @@ def api_offline_devotional_resources():
             payload = json.loads(item.get("content_json") or "{}")
         except Exception:
             payload = {}
+        audio_path = item.pop("audio_path", "") or ""
+        item.pop("author_path", None)
+        item.pop("content_json", None)
         item["payload"] = payload
-        item["audio_url"] = _dc_signed(item.get("audio_path")) if include_audio else ""
+        item["audio_extension"] = os.path.splitext(audio_path)[1].lower()
+        item["audio_url"] = _dc_signed(audio_path) if include_audio else ""
         item["author_url"] = ""
         if include_audio:
             for tune in payload.get("otherTunes") or []:
                 tune_path = tune.get("musicFilePath") or tune.get("audio_path") or ""
+                tune["audio_extension"] = os.path.splitext(tune_path)[1].lower()
+                tune["musicFilePath"] = ""
+                tune.pop("audio_path", None)
                 tune["signed_url"] = _dc_signed(tune_path)
         items.append(item)
     return jsonify({
