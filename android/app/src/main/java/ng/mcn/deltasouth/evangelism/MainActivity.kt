@@ -250,6 +250,7 @@ private fun NativeDioceseApp() {
     if (!signedIn && !showStaffLogin && !showOfflineLibrary) {
         PublicDiocesanHomepage(
             online = online,
+            offlineDownloadBusy = downloadBusy,
             onStaffLogin = { showStaffLogin = true },
             onOfflineDownload = {
                 if (online && !downloadBusy) {
@@ -1742,7 +1743,7 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -1771,6 +1772,19 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
                     overScrollMode = android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS
                     setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                     webViewClient = object : WebViewClient() {
+                        override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
+                            if (!online && request.url.host == "bible-api.com") {
+                                val cachedChapter = OfflineModuleManager.cachedWebBibleChapter(ctx, request.url.toString())
+                                if (cachedChapter != null) {
+                                    return android.webkit.WebResourceResponse(
+                                        "application/json", "UTF-8", 200, "OK",
+                                        mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Methods" to "GET, OPTIONS"),
+                                        cachedChapter.inputStream()
+                                    )
+                                }
+                            }
+                            return super.shouldInterceptRequest(view, request)
+                        }
                         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                             pageLoading = true
                             pageError = false
@@ -1823,10 +1837,10 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
                         webView?.evaluateJavascript("window.mcnCacheEntireApp && window.mcnCacheEntireApp()", null)
                         onOfflineDownload()
                     },
-                    enabled = online,
+                    enabled = online && !offlineDownloadBusy,
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
                 ) {
-                    Text("Save app offline")
+                    Text(if (offlineDownloadBusy) "Saving offline…" else "Save app offline")
                 }
                 TextButton(onClick = onStaffLogin, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
                     Text("Staff sign in")
