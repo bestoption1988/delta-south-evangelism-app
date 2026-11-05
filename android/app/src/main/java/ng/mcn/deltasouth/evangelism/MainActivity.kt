@@ -187,7 +187,7 @@ private fun NativeDioceseApp() {
             }
         }
     }
-    LaunchedEffect(selected) {
+    LaunchedEffect(selected, devotionalResourceCount, devotionalAudioCount) {
         if (selected == "Downloads") {
             offlineMediaRows = withContext(Dispatchers.IO) {
                 runCatching {
@@ -246,6 +246,7 @@ private fun NativeDioceseApp() {
 
     if (!signedIn && !showStaffLogin) {
         PublicDiocesanHomepage(
+            online = online,
             onStaffLogin = { showStaffLogin = true },
             onBackPressed = { }
         )
@@ -347,9 +348,14 @@ private fun NativeDioceseApp() {
                             downloadBusy = true
                             downloadMessage = "Downloading hymns, Scripture, canticles, Communion and creeds…"
                             scope.launch {
-                                val count = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAllDevotionalResources(appContext) }
+                                val count = withContext(Dispatchers.IO) {
+                                    val saved = OfflineModuleManager.downloadAllDevotionalResources(appContext)
+                                    OfflineModuleManager.downloadDailyDevotion(appContext)
+                                    OfflineModuleManager.downloadLectionary(appContext)
+                                    saved
+                                }
                                 devotionalResourceCount = count
-                                downloadMessage = "$count devotional resources saved for offline reading."
+                                downloadMessage = "$count devotional resources, today's Scripture and hymn, and the 2027 lectionary saved for offline use."
                                 downloadBusy = false
                             }
                         },
@@ -382,6 +388,18 @@ private fun NativeDioceseApp() {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Download Uploaded CSB Bible") }
+                    val savedCsbBible = File(appContext.filesDir, "offline_devotional/csb_pew_bible.pdf")
+                    if (savedCsbBible.exists() && savedCsbBible.length() > 0L) {
+                        OutlinedButton(
+                            onClick = {
+                                runCatching {
+                                    val uri = FileProvider.getUriForFile(appContext, appContext.packageName + ".fileprovider", savedCsbBible)
+                                    appContext.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
+                                }.onFailure { downloadMessage = it.message ?: "No PDF viewer is installed." }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Open Saved CSB Bible Offline") }
+                    }
                     Text("Download published media by module", style = MaterialTheme.typography.titleMedium)
                     val downloadMediaModule: (String, String) -> Unit = { mediaType, label ->
                         downloadBusy = true
@@ -1457,7 +1475,7 @@ private fun KeyValueList(values: Map<String, Any?>) {
 
 
 @Composable
-private fun PublicDiocesanHomepage(onStaffLogin: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -1477,7 +1495,7 @@ private fun PublicDiocesanHomepage(onStaffLogin: () -> Unit, onBackPressed: () -
                     settings.loadWithOverviewMode = false
                     settings.allowFileAccess = false
                     settings.allowContentAccess = true
-                    settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    settings.cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
                     isFocusable = true
                     isFocusableInTouchMode = true
                     isVerticalScrollBarEnabled = true
@@ -1504,7 +1522,14 @@ private fun PublicDiocesanHomepage(onStaffLogin: () -> Unit, onBackPressed: () -
                     webView = this
                 }
             },
-            update = { view -> if (view.url.isNullOrBlank()) view.loadUrl(BuildConfig.API_BASE_URL) }
+            update = { view ->
+                val cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                if (view.settings.cacheMode != cacheMode) {
+                    view.settings.cacheMode = cacheMode
+                    if (!view.url.isNullOrBlank()) view.reload()
+                }
+                if (view.url.isNullOrBlank()) view.loadUrl(BuildConfig.API_BASE_URL)
+            }
         )
         if (pageLoading) {
             LinearProgressIndicator(Modifier.fillMaxWidth().align(androidx.compose.ui.Alignment.TopCenter))
