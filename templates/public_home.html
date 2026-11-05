@@ -172,7 +172,7 @@
     <a href="#resources">Resources</a>
     <a href="#contact">Contact</a>
     <a href="#" id="saveOfflineApp">Save app offline</a>
-    <a href="#" id="nativeStaffSignIn">Staff sign in</a>
+    <a href="/login" id="nativeStaffSignIn">Staff sign in</a>
   </div>
 </nav>
 
@@ -664,8 +664,6 @@
       if (navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1) {
         event.preventDefault();
         window.location.href = "mcn-app://staff-login";
-      } else {
-        staffSignIn.href = "/login";
       }
     });
   }
