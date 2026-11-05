@@ -13397,6 +13397,124 @@ def devotional_holy_bible():
     return render_template("devotional_holy_bible.html")
 
 
+
+# Public read-only endpoints used by the native app's offline resource modules.
+@app.get("/api/offline/devotional-resources")
+def api_offline_devotional_resources():
+    allowed = {
+        "english_hymns", "yoruba_hymns", "akokun", "bible_verses",
+        "canticles", "communion_english", "communion_yoruba", "creeds"
+    }
+    collection = (request.args.get("collection") or "").strip()
+    if collection not in allowed:
+        return jsonify({"error": "Unknown devotional collection."}), 400
+    page = max(1, min(request.args.get("page", 1, type=int) or 1, 10000))
+    per_page = max(1, min(request.args.get("per_page", 100, type=int) or 100, 100))
+    total_row = db().execute(
+        "SELECT COUNT(*) AS total FROM devotional_resources WHERE collection=? AND published=1",
+        (collection,)
+    ).fetchone()
+    total = int(total_row["total"] or 0)
+    rows = db().execute(
+        """SELECT resource_id,collection,item_number,title,content_json,audio_path,author_path
+           FROM devotional_resources
+           WHERE collection=? AND published=1
+           ORDER BY CASE WHEN ? IN ('english_hymns','yoruba_hymns','akokun')
+                         THEN CAST(item_number AS INTEGER) ELSE 0 END,
+                    item_number,title
+           LIMIT ? OFFSET ?""",
+        (collection, collection, per_page, (page - 1) * per_page)
+    ).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        try:
+            payload = json.loads(item.get("content_json") or "{}")
+        except Exception:
+            payload = {}
+        item["payload"] = payload
+        item["audio_url"] = _dc_signed(item.get("audio_path"))
+        item["author_url"] = _dc_signed(item.get("author_path"))
+        for tune in payload.get("otherTunes") or []:
+            tune_path = tune.get("musicFilePath") or tune.get("audio_path") or ""
+            tune["signed_url"] = _dc_signed(tune_path)
+        items.append(item)
+    return jsonify({
+        "collection": collection,
+        "page": page,
+        "per_page": per_page,
+        "total": total,
+        "pages": max(1, (total + per_page - 1) // per_page),
+        "items": items
+    })
+
+
+@app.get("/api/offline/daily-devotion")
+def api_offline_daily_devotion():
+    try:
+        return jsonify(_daily_scripture_and_hymn())
+    except Exception:
+        app.logger.exception("Daily offline devotion could not be prepared")
+        return jsonify({"error": "Daily devotion is temporarily unavailable."}), 503
+
+
+@app.get("/api/offline/csb-bible")
+def api_offline_csb_bible():
+    try:
+        signed_url = _dc_signed(_CSB_BIBLE_OBJECT_KEY)
+        if not signed_url:
+            return jsonify({"available": False, "error": "The uploaded CSB Bible is not available."}), 404
+        return jsonify({"available": True, "download_url": signed_url, "title": "Christian Standard Bible — 2017 Pew Bible"})
+    except Exception:
+        app.logger.exception("Offline CSB Bible link could not be created")
+        return jsonify({"available": False, "error": "The CSB Bible is temporarily unavailable."}), 503
+
+
+@app.get("/api/offline/lectionary")
+def api_offline_lectionary():
+    source_path = Path(ROOT) / "data" / "yearly_lectionary_2027.txt"
+    try:
+        return jsonify({"title": "2027 Methodist Lectionary", "content": source_path.read_text(encoding="utf-8")})
+    except OSError:
+        return jsonify({"error": "The yearly lectionary is temporarily unavailable."}), 503
+
+
+@app.get("/api/offline/media-catalogue")
+def api_offline_media_catalogue():
+    """Public, published-only media catalogue for offline audio/video/document downloads."""
+    try:
+        rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,created_at",
+                "published": "eq.true",
+                "order": "created_at.desc",
+                "limit": "1000",
+            },
+        )
+        items = []
+        for row in rows:
+            try:
+                signed_url = _ml_signed(row["storage_path"])
+            except Exception:
+                app.logger.warning("Could not sign published offline media item %s", row.get("id"))
+                continue
+            items.append({
+                "id": row.get("id"),
+                "title": row.get("title") or "Church media",
+                "description": row.get("description") or "",
+                "mime_type": row.get("mime_type") or "application/octet-stream",
+                "media_type": row.get("media_type") or "document",
+                "created_at": row.get("created_at"),
+                "download_url": signed_url,
+            })
+        return jsonify({"items": items, "count": len(items)})
+    except Exception:
+        app.logger.exception("Offline media catalogue could not be loaded")
+        return jsonify({"error": "Offline media catalogue is temporarily unavailable."}), 503
+
+
+
 if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
