@@ -1,77 +1,107 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Holy Bible | MCN Delta South Diocese</title>
+<title>Holy Bible Library | MCN Delta South Diocese</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:15px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}
-header{background:linear-gradient(125deg,#071b48,#153c78 65%,#0d684c);color:#fff;padding:26px 16px}
+header{background:linear-gradient(125deg,#071b48,#153c78 65%,#0d684c);color:#fff;padding:24px 16px}
 .wrap{max-width:1000px;margin:auto}header a{color:#f4d36e;text-decoration:none;font-weight:700}h1{font:800 clamp(28px,5vw,42px)/1.1 Georgia,serif;margin:12px 0 5px}
 main{max-width:1000px;margin:22px auto;padding:0 14px 45px}.controls,.reader,.install{background:#fff;border:1px solid #e1e7ef;border-radius:16px;padding:17px;box-shadow:0 5px 18px #102b5509}
-.controls{display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end}
+.controls{display:grid;grid-template-columns:1.4fr 1fr auto;gap:12px;align-items:end}
 label{display:block;font-size:12px;font-weight:800;color:#52627b;margin-bottom:5px}
-select,button{width:100%;min-height:44px;border:1px solid #cbd5e1;border-radius:9px;padding:9px 11px;font:inherit;background:#fff;color:#172b4d}
+select,button,input{width:100%;min-height:44px;border:1px solid #cbd5e1;border-radius:9px;padding:9px 11px;font:inherit;background:#fff;color:#172b4d}
 button{background:#123767;color:#fff;border:0;font-weight:800;cursor:pointer}.nav{display:flex;gap:10px;margin-top:12px}.nav button{flex:1}
 .reader{margin-top:16px;min-height:300px}.reader h2{font:700 27px Georgia,serif;margin:0 0 5px}.note{color:#6b778b;font-size:12px}.verse{font:18px/1.85 Georgia,serif;padding:9px 0;border-bottom:1px solid #edf0f4}.verse b{font:700 12px system-ui;color:#a77b13;margin-right:8px}
-.status{padding:20px;text-align:center;color:#64748b}.error{color:#a11b1b}.install{margin-top:18px;background:#fff8e8;border-color:#ead7a6}.install a{color:#12664b;font-weight:800}
+.status{padding:20px;text-align:center;color:#64748b}.error{color:#a11b1b}.install{margin-top:18px;background:#fff8e8;border-color:#ead7a6}
+.admin{margin-top:18px;background:#fff;border:1px solid #d9e2ee;border-radius:14px;padding:17px}.admin h2{margin:0 0 6px;font-size:19px}.admin p{margin:4px 0 12px;color:#5b6678}.progress{height:9px;background:#e8edf4;border-radius:20px;overflow:hidden;margin-top:10px}.progress span{display:block;height:100%;width:0;background:#0b8058;transition:width .2s}.success{color:#087443;font-weight:700}.errorText{color:#a11b1b;font-weight:700}
 @media(max-width:600px){.controls{grid-template-columns:1fr 1fr}.controls .go{grid-column:1/-1}.verse{font-size:17px}}
 </style></head><body>
-<header><div class="wrap"><a href="/devotional-centre">← Devotional & Worship Centre</a><h1>📖 Holy Bible</h1><div>World English Bible (WEB) · Offline edition · 66 books</div></div></header>
+<header><div class="wrap"><a href="/devotional-centre">← Devotional & Worship Centre</a><h1>📖 Holy Bible Library</h1><div>Offline Bible translations · Downloaded into the diocesan app</div></div></header>
 <main>
-{% if bible_available %}
+{% if translations %}
 <section class="controls">
+<div><label for="translation">BIBLE TRANSLATION</label><select id="translation">{% for t in translations %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}</select></div>
 <div><label for="book">BOOK</label><select id="book" disabled><option>Loading books…</option></select></div>
 <div><label for="chapter">CHAPTER</label><select id="chapter" disabled></select></div>
 <div class="go"><button id="load" type="button">Read Chapter</button></div>
 </section>
 <div class="nav"><button id="prev" type="button">← Previous</button><button id="next" type="button">Next →</button></div>
-<section class="reader" id="reader"><div class="status">Opening the offline Bible…</div></section>
+<section class="reader" id="reader"><div class="status">Opening the offline Bible library…</div></section>
 {% else %}
-<section class="install"><h2>Offline WEB Bible not installed yet</h2><p>The uploaded MyBible package must be imported once by a diocesan administrator. The reader will then work from the installed Bible database and will not call an external Bible API.</p><p><a href="/admin/devotional-centre">Open Devotional Centre administration</a> and upload <strong>bibles.zip</strong> using the ZIP uploader.</p></section>
+<section class="install"><h2>No Bible modules installed yet</h2><p>A diocesan administrator must import the supplied Bible ZIP package below. After import, the translations will appear here.</p></section>
 {% endif %}
-<p class="note">Scripture text: World English Bible (WEB). The Bible chapters are served from the diocesan offline database; no online Bible rendering service is used.</p>
+{% if is_admin %}
+<section class="admin">
+<h2>Administrator: install Bible package</h2>
+<p>Select the original <strong>bibles.zip</strong> file. The app will import every recognised MyBible module in it, not just WEB. Upload is split into small chunks for mobile reliability.</p>
+<input id="bibleZip" type="file" accept=".zip,application/zip">
+<button id="uploadBibles" type="button" style="margin-top:10px">Install all Bible translations</button>
+<div class="progress"><span id="progressBar"></span></div>
+<div id="uploadStatus" class="note" aria-live="polite"></div>
+</section>
+{% endif %}
+<p class="note">Bible modules are read from the diocesan private Object Storage after installation. Some uploaded modules may contain only selected books (for example, a New Testament-only edition); the reader shows the books actually present in each module.</p>
 </main>
-{% if bible_available %}
 <script>
-const bookNames=["Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","Judges","Ruth","1 Samuel","2 Samuel","1 Kings","2 Kings","1 Chronicles","2 Chronicles","Ezra","Nehemiah","Esther","Job","Psalms","Proverbs","Ecclesiastes","Song of Solomon","Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel","Hosea","Joel","Amos","Obadiah","Jonah","Micah","Nahum","Habakkuk","Zephaniah","Haggai","Zechariah","Malachi","Matthew","Mark","Luke","John","Acts","Romans","1 Corinthians","2 Corinthians","Galatians","Ephesians","Philippians","Colossians","1 Thessalonians","2 Thessalonians","1 Timothy","2 Timothy","Titus","Philemon","Hebrews","James","1 Peter","2 Peter","1 John","2 John","3 John","Jude","Revelation"];
-const book=document.getElementById("book"),chapter=document.getElementById("chapter"),reader=document.getElementById("reader");
+const bookNames=["","Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","Judges","Ruth","1 Samuel","2 Samuel","1 Kings","2 Kings","1 Chronicles","2 Chronicles","Ezra","Nehemiah","Esther","Job","Psalms","Proverbs","Ecclesiastes","Song of Solomon","Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel","Hosea","Joel","Amos","Obadiah","Jonah","Micah","Nahum","Habakkuk","Zephaniah","Haggai","Zechariah","Malachi","Matthew","Mark","Luke","John","Acts","Romans","1 Corinthians","2 Corinthians","Galatians","Ephesians","Philippians","Colossians","1 Thessalonians","2 Thessalonians","1 Timothy","2 Timothy","Titus","Philemon","Hebrews","James","1 Peter","2 Peter","1 John","2 John","3 John","Jude","Revelation"];
+const translation=document.getElementById("translation"),book=document.getElementById("book"),chapter=document.getElementById("chapter"),reader=document.getElementById("reader");
 let availableBooks=[];
+function escapeHtml(v){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function bookTitle(id){return bookNames[id]||("Bible Book "+id)}
 async function loadBooks(){
  try{
-  const r=await fetch("/devotional-centre/holy-bible/books",{cache:"no-store"});
+  const r=await fetch("/devotional-centre/holy-bible/books?translation="+encodeURIComponent(translation.value),{cache:"no-store"});
   const d=await r.json();if(!r.ok)throw new Error(d.error||"Bible books unavailable");
   availableBooks=d.books||[];book.innerHTML="";
-  availableBooks.forEach(b=>{const o=document.createElement("option");o.value=b.id;o.textContent=bookNames[b.id-1]||("Book "+b.id);book.appendChild(o)});
-  book.disabled=false;fillChapters();await loadChapter();
+  availableBooks.forEach(b=>{const o=document.createElement("option");o.value=b.id;o.textContent=bookTitle(b.id);book.appendChild(o)});
+  book.disabled=!availableBooks.length;fillChapters();await loadChapter();
  }catch(e){reader.innerHTML='<div class="status error">'+escapeHtml(e.message||e)+'</div>'}
 }
-function escapeHtml(v){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function fillChapters(){
  const b=availableBooks.find(x=>x.id===Number(book.value));chapter.innerHTML="";
  for(let n=1;n<=(b?b.chapters:0);n++){const o=document.createElement("option");o.value=n;o.textContent="Chapter "+n;chapter.appendChild(o)}
  chapter.disabled=!b;
 }
 async function loadChapter(){
- if(!book.value||!chapter.value)return;
- const b=Number(book.value),c=Number(chapter.value),name=bookNames[b-1]||("Book "+b);
- reader.innerHTML='<div class="status">Loading '+name+' '+c+' from the offline Bible…</div>';
+ if(!translation||!book.value||!chapter.value)return;
+ const code=translation.value,b=Number(book.value),c=Number(chapter.value),name=bookTitle(b);
+ reader.innerHTML='<div class="status">Loading '+escapeHtml(name)+' '+c+' offline…</div>';
  try{
-  const r=await fetch("/devotional-centre/holy-bible/chapter?book="+b+"&chapter="+c,{cache:"no-store"});
-  const d=await r.json();if(!r.ok)throw new Error(d.error||"Chapter unavailable");
+  const url="/devotional-centre/holy-bible/chapter?translation="+encodeURIComponent(code)+"&book="+b+"&chapter="+c;
+  const r=await fetch(url,{cache:"no-store"}),d=await r.json();if(!r.ok)throw new Error(d.error||"Chapter unavailable");
   const h=document.createElement("h2");h.textContent=name+" "+c;reader.replaceChildren(h);
   (d.verses||[]).forEach(v=>{const p=document.createElement("p");p.className="verse";const n=document.createElement("b");n.textContent=v.verse;p.append(n,document.createTextNode(" "+v.text));reader.appendChild(p)});
-  const note=document.createElement("div");note.className="note";note.textContent="World English Bible · Offline diocesan library";reader.appendChild(note);
+  const note=document.createElement("div");note.className="note";note.textContent=translation.options[translation.selectedIndex].text+" · Offline diocesan library";reader.appendChild(note);
  }catch(e){reader.innerHTML='<div class="status error">'+escapeHtml(e.message||e)+'</div>'}
 }
 function move(delta){
- let b=Number(book.value),c=Number(chapter.value)+delta;
- const current=availableBooks.find(x=>x.id===b);
+ let b=Number(book.value),c=Number(chapter.value)+delta;const current=availableBooks.find(x=>x.id===b);
  if(c<1){const prev=availableBooks.find(x=>x.id===b-1);if(!prev)return;b=prev.id;c=prev.chapters}
  else if(c>(current?current.chapters:0)){const next=availableBooks.find(x=>x.id===b+1);if(!next)return;b=next.id;c=1}
  book.value=b;fillChapters();chapter.value=c;loadChapter();
 }
-book.addEventListener("change",()=>{fillChapters();loadChapter()});chapter.addEventListener("change",loadChapter);
-document.getElementById("load").addEventListener("click",loadChapter);
-document.getElementById("prev").addEventListener("click",()=>move(-1));document.getElementById("next").addEventListener("click",()=>move(1));
-loadBooks();
+if(translation){translation.addEventListener("change",loadBooks);book.addEventListener("change",()=>{fillChapters();loadChapter()});chapter.addEventListener("change",loadChapter);document.getElementById("load").addEventListener("click",loadChapter);document.getElementById("prev").addEventListener("click",()=>move(-1));document.getElementById("next").addEventListener("click",()=>move(1));loadBooks();}
+const uploadButton=document.getElementById("uploadBibles");
+if(uploadButton)uploadButton.addEventListener("click",async()=>{
+ const file=document.getElementById("bibleZip").files[0],status=document.getElementById("uploadStatus"),bar=document.getElementById("progressBar");
+ if(!file){status.className="errorText";status.textContent="Choose bibles.zip first.";return}
+ if(file.size>100*1024*1024){status.className="errorText";status.textContent="ZIP exceeds the 100 MB limit.";return}
+ uploadButton.disabled=true;status.className="note";status.textContent="Preparing secure upload…";bar.style.width="0%";
+ try{
+  let r=await fetch("/admin/devotional-centre/bibles/upload/init",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({filename:file.name,size:file.size})});
+  let d=await r.json();if(!r.ok)throw new Error(d.error||"Could not start upload");
+  const id=d.upload_id,chunkSize=d.chunk_size||2097152;
+  for(let offset=0;offset<file.size;offset+=chunkSize){
+   const chunk=file.slice(offset,Math.min(file.size,offset+chunkSize));
+   r=await fetch("/admin/devotional-centre/bibles/upload/"+id+"/chunk",{method:"POST",headers:{"Content-Type":"application/octet-stream"},body:chunk});
+   d=await r.json();if(!r.ok)throw new Error(d.error||"Upload chunk failed");
+   const pct=Math.round((d.received/file.size)*100);bar.style.width=pct+"%";status.textContent="Uploading Bible package: "+pct+"%";
+  }
+  status.textContent="Upload complete. Validating and installing every Bible module…";
+  r=await fetch("/admin/devotional-centre/bibles/upload/"+id+"/complete",{method:"POST"});d=await r.json();if(!r.ok)throw new Error(d.error||"Bible import failed");
+  status.className="success";status.textContent="Successfully installed "+d.count+" Bible modules: "+d.installed.map(x=>x.id.toUpperCase()).join(", ")+". Reloading the reader…";
+  bar.style.width="100%";setTimeout(()=>location.reload(),1200);
+ }catch(e){status.className="errorText";status.textContent=e.message||String(e)}
+ finally{uploadButton.disabled=false}
+});
 </script>
-{% endif %}
 </body></html>
