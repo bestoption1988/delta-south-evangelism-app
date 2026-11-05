@@ -8861,6 +8861,41 @@ def media_library_public():
         )
 
 
+@app.get("/api/offline/media-catalogue")
+def api_offline_media_catalogue():
+    """Public, published-only catalogue for native offline media downloads."""
+    try:
+        rows = _ml_supabase_request(
+            "GET",
+            params={
+                "select": "id,title,description,storage_path,mime_type,media_type,created_at",
+                "published": "eq.true",
+                "order": "created_at.desc",
+                "limit": "1000",
+            },
+        )
+        items = []
+        for row in rows:
+            try:
+                signed_url = _ml_signed(row["storage_path"])
+            except Exception:
+                app.logger.warning("Could not sign published offline media item %s", row.get("id"))
+                continue
+            items.append({
+                "id": row.get("id"),
+                "title": row.get("title") or "Church media",
+                "description": row.get("description") or "",
+                "mime_type": row.get("mime_type") or "application/octet-stream",
+                "media_type": row.get("media_type") or "document",
+                "created_at": row.get("created_at"),
+                "download_url": signed_url,
+            })
+        return jsonify({"items": items, "count": len(items)})
+    except Exception:
+        app.logger.exception("Offline media catalogue could not be loaded")
+        return jsonify({"error": "Offline media catalogue is temporarily unavailable."}), 503
+
+
 @app.route("/admin/media-library", methods=["GET", "POST"])
 @page_login_required
 def media_library_admin():
