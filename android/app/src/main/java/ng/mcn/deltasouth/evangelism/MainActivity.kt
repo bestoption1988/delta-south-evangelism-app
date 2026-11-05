@@ -1819,7 +1819,6 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 TextButton(onClick = onOfflineLibrary, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
                     Text("Offline Library")
-                }
                 TextButton(onClick = onStaffLogin, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
                     Text("Staff sign in")
                 }
