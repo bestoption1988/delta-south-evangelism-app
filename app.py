@@ -13530,8 +13530,6 @@ def register_mcn_offline_worker(response):
 
 # Offline MyBible library: all modules supplied in the diocesan bibles.zip package.
 _BIBLE_MODULES = {
-    "hisb": ("HiSB.bbl.mybible", "HiSB Hebrew Interpolated Study Bible"),
-    "abp": ("abp.bbl.mybible", "Apostolic Bible Polyglot"),
     "bbe": ("bbe.bbl.mybible", "Bible in Basic English"),
     "bsb": ("berean-bsb.bbl.mybible", "Berean Standard Bible"),
     "bishops": ("bishops.bbl.mybible", "Bishops' Bible"),
