@@ -1826,23 +1826,6 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
             }
         }
     }
-            },
-            confirmButton = {
-                Row {
-                    val audioName = item["audio_file"].orEmpty()
-                    if (audioName.isNotBlank()) {
-                        TextButton(onClick = {
-                            runCatching {
-                                val file = File(appContext.filesDir, "offline_devotional/" + audioName)
-                                val uri = FileProvider.getUriForFile(appContext, appContext.packageName + ".fileprovider", file)
-                                appContext.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "audio/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
-                            }.onFailure { downloadMessage = it.message ?: "Could not open saved hymn audio." }
-                        }) { Text("Play audio") }
-                    }
-                    TextButton(onClick = { selectedDevotional = null }) { Text("Close") }
-                }
-            }
-        )
     }
 
 }
