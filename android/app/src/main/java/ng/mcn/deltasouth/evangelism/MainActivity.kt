@@ -76,6 +76,7 @@ private fun NativeDioceseApp() {
     var password by remember { mutableStateOf("") }
     var signedIn by remember { mutableStateOf(false) }
     var showStaffLogin by remember { mutableStateOf(false) }
+    var mustChangePassword by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var profile by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
@@ -250,8 +251,44 @@ private fun NativeDioceseApp() {
             onStaffLogin = { showStaffLogin = true },
             onBackPressed = { }
         )
+    } else if (!signedIn && mustChangePassword) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
+            Text("Password update required", style = MaterialTheme.typography.headlineSmall)
+            Text("Your account must have a new password before you can open staff records.")
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(currentPassword, { currentPassword = it }, label = { Text("Current / temporary password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(newPassword, { newPassword = it }, label = { Text("New password (at least 8 characters)") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(confirmPassword, { confirmPassword = it }, label = { Text("Confirm new password") }, visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            Spacer(Modifier.height(12.dp))
+            Button(enabled = !busy, onClick = {
+                busy = true
+                message = "Updating password…"
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        Backend.api.forceChangePassword(mapOf(
+                            "current_password" to currentPassword,
+                            "new_password" to newPassword,
+                            "confirm_password" to confirmPassword
+                        ))
+                    }
+                    result.onSuccess {
+                        mustChangePassword = false
+                        signedIn = true
+                        profile = profile + ("must_change_password" to false)
+                        selected = "Home"
+                        password = ""
+                        currentPassword = ""
+                        newPassword = ""
+                        confirmPassword = ""
+                        message = "Password changed successfully."
+                    }.onFailure { message = it.message ?: "Password could not be changed." }
+                    busy = false
+                }
+            }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait…" else "Save new password") }
+            if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
+        }
     } else if (!signedIn) {
-        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
             TextButton(onClick = { showStaffLogin = false; message = "" }) { Text("← Back to public homepage") }
             Text("METHODIST CHURCH NIGERIA", style = MaterialTheme.typography.titleLarge)
             Text("DELTA SOUTH DIOCESE", style = MaterialTheme.typography.titleMedium)
@@ -267,7 +304,18 @@ private fun NativeDioceseApp() {
                     val result = withContext(Dispatchers.IO) { Backend.login(username.trim(), password) }
                     result.onSuccess {
                         runCatching { withContext(Dispatchers.IO) { Backend.api.me() } }
-                            .onSuccess { profile = it; signedIn = true; selected = "Home"; message = "" }
+                            .onSuccess {
+                                profile = it
+                                if (it["must_change_password"] == true || it["must_change_password"].toString() == "1") {
+                                    currentPassword = password
+                                    mustChangePassword = true
+                                    message = "Please set a new password to continue."
+                                } else {
+                                    signedIn = true
+                                    selected = "Home"
+                                    message = ""
+                                }
+                            }
                             .onFailure { message = it.message ?: "Could not load account profile." }
                     }.onFailure { message = it.message ?: "Sign in failed." }
                     busy = false
