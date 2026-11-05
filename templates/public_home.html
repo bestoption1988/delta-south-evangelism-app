@@ -171,6 +171,8 @@
     <a href="#online">Online Services</a>
     <a href="#resources">Resources</a>
     <a href="#contact">Contact</a>
+    <a href="#" id="saveOfflineApp">Save app offline</a>
+    <a href="#" id="nativeStaffSignIn">Staff sign in</a>
   </div>
 </nav>
 
@@ -643,6 +645,30 @@
   const dropdown = document.getElementById("fellowshipsDropdown");
   const dropToggle = dropdown?.querySelector(".nav-drop-toggle");
   const submenu = document.getElementById("fellowshipsSubmenu");
+  const saveOffline = document.getElementById("saveOfflineApp");
+  const staffSignIn = document.getElementById("nativeStaffSignIn");
+
+  if (saveOffline) {
+    saveOffline.addEventListener("click", event => {
+      event.preventDefault();
+      if (window.mcnCacheEntireApp) window.mcnCacheEntireApp();
+      if (window.MCNOfflineBridge && window.MCNOfflineBridge.downloadOffline) {
+        window.MCNOfflineBridge.downloadOffline();
+      } else {
+        saveOffline.textContent = "Offline pages are being saved…";
+      }
+    });
+  }
+  if (staffSignIn) {
+    staffSignIn.addEventListener("click", event => {
+      if (window.MCNOfflineBridge && window.MCNOfflineBridge.openStaffSignIn) {
+        event.preventDefault();
+        window.MCNOfflineBridge.openStaffSignIn();
+      } else {
+        staffSignIn.href = "/login";
+      }
+    });
+  }
 
   if (toggle && links) {
     toggle.addEventListener("click", (event) => {
