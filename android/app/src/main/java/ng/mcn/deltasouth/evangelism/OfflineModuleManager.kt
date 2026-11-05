@@ -236,15 +236,26 @@ object OfflineModuleManager {
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
                 if (includeAudio) {
+                    val id = item.optString("resource_id").replace(Regex("[^A-Za-z0-9_-]"), "_")
                     val audioUrl = item.optString("audio_url")
                     if (audioUrl.isNotBlank()) {
-                        val id = item.optString("resource_id").replace(Regex("[^A-Za-z0-9_-]"), "_")
                         val ext = mediaExtension(item.optString("audio_path"), "audio")
                         val target = File(directory, "hymn_" + id + ext)
-                        if (downloadSignedFile(longClient, audioUrl, target)) {
-                            item.put("audio_file", target.name)
+                        if (downloadSignedFile(longClient, audioUrl, target)) item.put("audio_file", target.name)
+                    }
+                    val payload = item.optJSONObject("payload") ?: JSONObject()
+                    val tunes = payload.optJSONArray("otherTunes")
+                    if (tunes != null) {
+                        for (tuneIndex in 0 until tunes.length()) {
+                            val tune = tunes.optJSONObject(tuneIndex) ?: continue
+                            val tuneUrl = tune.optString("signed_url")
+                            if (tuneUrl.isBlank()) continue
+                            val tuneExt = mediaExtension(tune.optString("musicFilePath"), "audio")
+                            val tuneFile = File(directory, "hymn_" + id + "_tune" + tuneIndex + tuneExt)
+                            if (downloadSignedFile(longClient, tuneUrl, tuneFile)) tune.put("offline_file", tuneFile.name)
                         }
                     }
+                    item.put("payload", payload)
                 }
                 allItems.put(item)
             }
