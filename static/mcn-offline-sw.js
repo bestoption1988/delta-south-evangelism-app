@@ -199,7 +199,7 @@ self.addEventListener("fetch", event => {
       const live = await fetch(request);
       if (live.ok && (url.pathname.startsWith("/static/") ||
           url.pathname.startsWith("/api/offline/") ||
-          url.pathname.startsWith("/api/public/"))) {
+          url.pathname.startsWith("/api/public/") || url.pathname.startsWith("/media-library/document/"))) {
         await cache.put(request, live.clone());
       }
       return live;
