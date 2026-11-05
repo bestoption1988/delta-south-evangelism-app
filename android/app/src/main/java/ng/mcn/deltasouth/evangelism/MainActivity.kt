@@ -182,12 +182,33 @@ private fun NativeDioceseApp() {
     var appointmentEditingId by remember { mutableStateOf<Int?>(null) }
     var selected by remember { mutableStateOf("Home") }
     val scope = rememberCoroutineScope()
-    // Always start on the public diocesan homepage. Authentication is optional and
-    // is requested only when a visitor opens a protected staff feature.
+    // Restore a previously authenticated, encrypted staff session before showing
+    // the public screen. The cached /api/me response permits read-only offline access.
+    LaunchedEffect(Unit) {
+        if (Backend.cookies.hasSession()) {
+            val restored = withContext(Dispatchers.IO) { runCatching { Backend.api.me() } }
+            restored.onSuccess { account ->
+                profile = account
+                if (account["must_change_password"] == true || account["must_change_password"].toString() == "1") {
+                    mustChangePassword = true
+                    showStaffLogin = true
+                } else {
+                    signedIn = true
+                    selected = "Home"
+                }
+            }.onFailure { error ->
+                if (online) message = error.message ?: "Your saved staff session could not be restored."
+            }
+        }
+    }
+    // Reuse encrypted, session-scoped API snapshots when offline; only refresh and
+    // synchronize server changes when a validated connection is available.
     LaunchedEffect(signedIn, online) {
-        if (signedIn && online) {
-            runCatching { withContext(Dispatchers.IO) { OfflineAttendanceQueue.syncPending(appContext) } }
-                .onSuccess { pendingAttendanceCount = OfflineAttendanceQueue.pendingCount(appContext) }
+        if (signedIn) {
+            if (online) {
+                runCatching { withContext(Dispatchers.IO) { OfflineAttendanceQueue.syncPending(appContext) } }
+                    .onSuccess { pendingAttendanceCount = OfflineAttendanceQueue.pendingCount(appContext) }
+            }
             runCatching { withContext(Dispatchers.IO) { Backend.api.dashboard() } }
                 .onSuccess { dashboard = it }
                 .onFailure { message = it.message ?: "Dashboard will load when the connection is available." }
