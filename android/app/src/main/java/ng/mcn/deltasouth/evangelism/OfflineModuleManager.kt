@@ -174,6 +174,12 @@ object OfflineModuleManager {
         } catch (_: Exception) {
             failed++
         }
+        // Save published hymn recordings as part of the same whole-app package.
+        try {
+            downloadHymnAudio(context)
+        } catch (_: Exception) {
+            failed++
+        }
         try {
             downloadDailyDevotion(context)
             downloaded++
