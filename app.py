@@ -3053,7 +3053,15 @@ def public_home():
                 "limit": "3",
             },
         )
-        homepage_video_items = [dict(item) for item in video_rows]
+        homepage_video_items = []
+        for video_row in video_rows:
+            video_item = dict(video_row)
+            try:
+                video_item["signed_url"] = _ml_signed(video_item["storage_path"])
+            except Exception:
+                video_item["signed_url"] = ""
+                app.logger.warning("Could not prepare a published homepage video URL.")
+            homepage_video_items.append(video_item)
     except Exception:
         app.logger.exception("Homepage published videos could not be loaded")
 
@@ -3068,10 +3076,17 @@ def public_home():
                 "limit": "100",
             },
         )
-        homepage_gallery_items = [
-            dict(item) for item in gallery_rows
-            if str(item.get("mime_type") or "").lower().startswith("image/")
-        ]
+        homepage_gallery_items = []
+        for gallery_row in gallery_rows:
+            if not str(gallery_row.get("mime_type") or "").lower().startswith("image/"):
+                continue
+            gallery_item = dict(gallery_row)
+            try:
+                gallery_item["signed_url"] = _ml_signed(gallery_item["storage_path"])
+            except Exception:
+                gallery_item["signed_url"] = ""
+                app.logger.warning("Could not prepare a published homepage gallery image URL.")
+            homepage_gallery_items.append(gallery_item)
     except Exception:
         app.logger.exception("Homepage photo gallery could not be loaded")
 
