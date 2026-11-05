@@ -276,7 +276,7 @@ private fun NativeDioceseApp() {
                             "confirm_password" to confirmPassword
                         ))
                     }
-                    result.onSuccess {
+                    if (result["success"] == true) {
                         mustChangePassword = false
                         signedIn = true
                         profile = profile + ("must_change_password" to false)
@@ -285,8 +285,10 @@ private fun NativeDioceseApp() {
                         currentPassword = ""
                         newPassword = ""
                         confirmPassword = ""
-                        message = "Password changed successfully."
-                    }.onFailure { message = it.message ?: "Password could not be changed." }
+                        message = result["message"]?.toString() ?: "Password changed successfully."
+                    } else {
+                        message = result["message"]?.toString() ?: "Password could not be changed."
+                    }
                     busy = false
                 }
             }, modifier = Modifier.fillMaxWidth()) { Text(if (busy) "Please wait…" else "Save new password") }
@@ -1824,14 +1826,6 @@ private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, on
             }
         }
     }
-    selectedDevotional?.let { item ->
-        AlertDialog(
-            onDismissRequest = { selectedDevotional = null },
-            title = { Text(item["title"] ?: "Church resource") },
-            text = {
-                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    Text(item["content"].orEmpty().ifBlank { "This resource is saved. Its full text will appear after the collection has downloaded." })
-                }
             },
             confirmButton = {
                 Row {
