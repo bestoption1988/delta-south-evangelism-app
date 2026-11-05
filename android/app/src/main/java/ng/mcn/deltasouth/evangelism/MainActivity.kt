@@ -1,6 +1,10 @@
 package ng.mcn.deltasouth.evangelism
 
 import android.os.Bundle
+import android.content.Intent
+import java.io.File
+import org.json.JSONArray
+import androidx.core.content.FileProvider
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -39,6 +43,8 @@ private fun NativeDioceseApp() {
     var downloadBusy by remember { mutableStateOf(false) }
     var downloadMessage by remember { mutableStateOf("") }
     var downloadedModules by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_downloaded_count", 0)) }
+    var mediaDownloadedCount by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_media_downloaded_count", 0)) }
+    var offlineMediaRows by remember { mutableStateOf(emptyList<Map<String, String>>()) }
     DisposableEffect(appContext) {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val callback = object : ConnectivityManager.NetworkCallback() {
@@ -174,6 +180,26 @@ private fun NativeDioceseApp() {
             }
         }
     }
+    LaunchedEffect(selected) {
+        if (selected == "Downloads") {
+            offlineMediaRows = withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = File(OfflineModuleManager.offlineMediaDirectory(appContext), "index.json")
+                    val array = if (file.exists()) JSONArray(file.readText()) else JSONArray()
+                    (0 until array.length()).mapNotNull { index ->
+                        val item = array.optJSONObject(index) ?: return@mapNotNull null
+                        mapOf(
+                            "title" to item.optString("title"),
+                            "description" to item.optString("description"),
+                            "mime_type" to item.optString("mime_type"),
+                            "media_type" to item.optString("media_type"),
+                            "file" to item.optString("file")
+                        )
+                    }
+                }.getOrDefault(emptyList())
+            }
+        }
+    }
     BackHandler(enabled = signedIn && selected != "Home") { selected = "Home"; message = "" }
     val role = (profile["role"] ?: "").toString()
     val financeRoles = setOf("Admin", "Finance Officer", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")
@@ -239,6 +265,7 @@ private fun NativeDioceseApp() {
                     Text("Download the information your account is permitted to access. Saved API data is encrypted on this phone and remains available when you are offline.")
                     Spacer(Modifier.height(8.dp))
                     Text("Downloaded data sets: $downloadedModules")
+                    Text("Offline media files: $mediaDownloadedCount")
                     Text(if (online) "Internet connection available" else "Offline — saved information remains available")
                     Button(
                         enabled = online && !downloadBusy,
@@ -248,7 +275,18 @@ private fun NativeDioceseApp() {
                             scope.launch {
                                 val result = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAll(appContext) }
                                 downloadedModules = result.downloaded
-                                downloadMessage = "Completed: ${result.downloaded} downloaded, ${result.unavailable} not available for this account, ${result.failed} failed. Existing saved data was retained."
+                                mediaDownloadedCount = result.mediaDownloaded
+                                offlineMediaRows = withContext(Dispatchers.IO) {
+                                    runCatching {
+                                        val file = File(OfflineModuleManager.offlineMediaDirectory(appContext), "index.json")
+                                        val array = if (file.exists()) JSONArray(file.readText()) else JSONArray()
+                                        (0 until array.length()).mapNotNull { index ->
+                                            val item = array.optJSONObject(index) ?: return@mapNotNull null
+                                            mapOf("title" to item.optString("title"), "description" to item.optString("description"), "mime_type" to item.optString("mime_type"), "media_type" to item.optString("media_type"), "file" to item.optString("file"))
+                                        }
+                                    }.getOrDefault(emptyList())
+                                }
+                                downloadMessage = "Completed: ${result.downloaded} data sets, ${result.mediaDownloaded} media files downloaded, ${result.unavailable} unavailable to this account, ${result.failed} failed."
                                 downloadBusy = false
                             }
                         },
@@ -256,6 +294,28 @@ private fun NativeDioceseApp() {
                     ) { Text(if (downloadBusy) "Downloading…" else "Download All Modules") }
                     Text("Automatic updates run every 6 hours whenever Wi-Fi or mobile data is available. You can also download updates now.")
                     if (downloadMessage.isNotBlank()) Text(downloadMessage, style = MaterialTheme.typography.bodySmall)
+                    Text("Saved media — available without internet", style = MaterialTheme.typography.titleMedium)
+                    if (offlineMediaRows.isEmpty()) Text("No published media has been downloaded yet.")
+                    offlineMediaRows.forEach { item ->
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(item["title"] ?: "Church media", style = MaterialTheme.typography.bodyLarge)
+                                    Text(item["media_type"] ?: "Media", style = MaterialTheme.typography.bodySmall)
+                                }
+                                Button(onClick = {
+                                    runCatching {
+                                        val file = File(OfflineModuleManager.offlineMediaDirectory(appContext), item["file"] ?: "")
+                                        require(file.exists()) { "This media file is not saved on this phone." }
+                                        val uri = FileProvider.getUriForFile(appContext, appContext.packageName + ".fileprovider", file)
+                                        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, item["mime_type"] ?: "*/*")
+                                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        appContext.startActivity(intent)
+                                    }.onFailure { downloadMessage = it.message ?: "No compatible viewer is installed." }
+                                }) { Text("Open") }
+                            }
+                        }
+                    }
                     Text("For security, financial actions, approvals, messages and other changes still need a live connection. Offline mode does not invent or replay transactions.")
                 }
                 "Profile" -> {
