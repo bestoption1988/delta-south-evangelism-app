@@ -38,7 +38,7 @@ private fun NativeDioceseApp() {
     var online by remember { mutableStateOf(networkAvailable(appContext)) }
     var downloadBusy by remember { mutableStateOf(false) }
     var downloadMessage by remember { mutableStateOf("") }
-    var downloadedModules by remember { mutableIntStateOf(0) }
+    var downloadedModules by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_downloaded_count", 0)) }
     DisposableEffect(appContext) {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val callback = object : ConnectivityManager.NetworkCallback() {
@@ -153,14 +153,16 @@ private fun NativeDioceseApp() {
             busy = false
         }
     }
-    LaunchedEffect(signedIn) {
-        if (signedIn) {
+    LaunchedEffect(signedIn, online) {
+        if (signedIn && online) {
             runCatching { withContext(Dispatchers.IO) { Backend.api.dashboard() } }
                 .onSuccess { dashboard = it }
                 .onFailure { message = it.message ?: "Dashboard will load when the connection is available." }
             if (online) {
                 val prefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-                if (!prefs.getBoolean("initial_download_complete", false)) {
+                if (prefs.getBoolean("initial_download_complete", false)) {
+                    OfflineModuleManager.scheduleImmediateUpdate(appContext)
+                } else {
                     downloadBusy = true
                     downloadMessage = "Preparing your offline modules…"
                     val result = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAll(appContext) }
