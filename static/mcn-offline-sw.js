@@ -96,7 +96,7 @@ async function cacheEntireApp() {
   let count = 0;
   while (queue.length && visited.size < 4000) {
     const batch = [];
-    while (queue.length && batch.length < 6 && visited.size + batch.length < 4000) {
+    while (queue.length && batch.length < 6 && visited.size < 4000) {
       const candidate = queue.shift();
       if (!candidate || visited.has(candidate.href) || !safePage(candidate)) continue;
       visited.add(candidate.href);
