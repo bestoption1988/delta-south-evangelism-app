@@ -261,7 +261,7 @@ private fun NativeDioceseApp() {
                         runCatching { withContext(Dispatchers.IO) { Backend.api.dashboard() } }
                             .onSuccess { dashboard = it }.onFailure { message = it.message ?: "Dashboard could not load." }
                     }
-                    KeyValueList(dashboard)
+                    DashboardCards(dashboard)
                 }
                 "Downloads" -> {
                     Text("Offline Download Centre", style = MaterialTheme.typography.titleLarge)
@@ -1312,6 +1312,64 @@ private fun KeyValueList(values: Map<String, Any?>) {
         }
     }
 }
+
+@Composable
+private fun DashboardCards(values: Map<String, Any?>) {
+    val labels = mapOf(
+        "active_plants" to "Active Church Plants",
+        "appreciations" to "Appreciations",
+        "balance" to "Available Balance",
+        "calendar" to "Calendar & Events",
+        "churches" to "Local Churches",
+        "contact_followups" to "Contact Follow-ups",
+        "expenses" to "Total Expenses",
+        "income" to "Total Income",
+        "incomes" to "Total Income",
+        "members" to "Registered Members",
+        "outreach" to "Outreach Activities",
+        "commitments" to "Commitments",
+        "testimonies" to "Testimonies",
+        "trust_fund" to "Evangelism Trust Fund"
+    )
+    fun prettyValue(key: String, value: Any?): String {
+        if (value == null) return "—"
+        if (value is Number) {
+            val amountMetric = key.contains("balance", true) || key.contains("income", true) ||
+                key.contains("expense", true) || key.contains("fund", true) ||
+                key.contains("amount", true) || key.contains("donation", true)
+            val number = value.toDouble()
+            return if (amountMetric) "₦" + String.format("%,.2f", number)
+            else if (number % 1.0 == 0.0) String.format("%,.0f", number)
+            else String.format("%,.1f", number)
+        }
+        return value.toString()
+    }
+    val entries = values.entries.filter { it.value !is Map<*, *> && it.value !is List<*> }
+    if (entries.isEmpty()) {
+        Text("Your diocesan dashboard is ready. Pull down or tap Refresh dashboard to load the latest figures.")
+        return
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        entries.chunked(2).forEach { pair ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                pair.forEach { entry ->
+                    ElevatedCard(Modifier.weight(1f), colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                labels[entry.key] ?: entry.key.replace('_', ' ').split(' ').joinToString(" ") { word -> word.replaceFirstChar { it.uppercase() } },
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(prettyValue(entry.key, entry.value), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
+                }
+                if (pair.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
 
 @Composable
 private fun RecordList(rows: List<Map<String, Any?>>, fields: List<String>) {
