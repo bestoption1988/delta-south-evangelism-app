@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Backend.initialize(applicationContext)
+        OfflineModuleManager.scheduleAutomaticUpdates(applicationContext)
         setContent { MaterialTheme { NativeDioceseApp() } }
     }
 }
@@ -35,6 +36,9 @@ class MainActivity : ComponentActivity() {
 private fun NativeDioceseApp() {
     val appContext = LocalContext.current
     var online by remember { mutableStateOf(networkAvailable(appContext)) }
+    var downloadBusy by remember { mutableStateOf(false) }
+    var downloadMessage by remember { mutableStateOf("") }
+    var downloadedModules by remember { mutableIntStateOf(0) }
     DisposableEffect(appContext) {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val callback = object : ConnectivityManager.NetworkCallback() {
@@ -186,7 +190,7 @@ private fun NativeDioceseApp() {
         }
     } else {
         val tabs = buildList {
-            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Updates", "Member Care", "Directory"))
+            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Updates", "Member Care", "Directory", "Downloads"))
             if (role == "Member") add("ID Card")
             if (role in setOf("Admin", "Evangelism Minister", "Planting Officer", "Circuit Coordinator", "Local Church Evangelism Officer")) add("Attendance Register")
             if (role in setOf("Admin", "Bishop / Diocesan Executive", "Evangelism Minister", "Planting Officer", "Diocesan Secretary", "Circuit Coordinator", "Local Church Evangelism Officer", "Auditor")) add("Members")
@@ -215,6 +219,30 @@ private fun NativeDioceseApp() {
                             .onSuccess { dashboard = it }.onFailure { message = it.message ?: "Dashboard could not load." }
                     }
                     KeyValueList(dashboard)
+                }
+                "Downloads" -> {
+                    Text("Offline Download Centre", style = MaterialTheme.typography.titleLarge)
+                    Text("Download the information your account is permitted to access. Saved API data is encrypted on this phone and remains available when you are offline.")
+                    Spacer(Modifier.height(8.dp))
+                    Text("Downloaded data sets: $downloadedModules")
+                    Text(if (online) "Internet connection available" else "Offline — saved information remains available")
+                    Button(
+                        enabled = online && !downloadBusy,
+                        onClick = {
+                            downloadBusy = true
+                            downloadMessage = "Downloading available modules…"
+                            scope.launch {
+                                val result = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAll(appContext) }
+                                downloadedModules = result.downloaded
+                                downloadMessage = "Completed: ${result.downloaded} downloaded, ${result.unavailable} not available for this account, ${result.failed} failed. Existing saved data was retained."
+                                downloadBusy = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (downloadBusy) "Downloading…" else "Download All Modules") }
+                    Text("Automatic updates run every 6 hours whenever Wi-Fi or mobile data is available. You can also download updates now.")
+                    if (downloadMessage.isNotBlank()) Text(downloadMessage, style = MaterialTheme.typography.bodySmall)
+                    Text("For security, financial actions, approvals, messages and other changes still need a live connection. Offline mode does not invent or replay transactions.")
                 }
                 "Profile" -> {
                     Text("My Membership Profile", style = MaterialTheme.typography.titleLarge)
