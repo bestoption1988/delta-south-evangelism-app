@@ -434,28 +434,17 @@ private fun NativeDioceseApp() {
                     Button(
                         enabled = online && !downloadBusy,
                         onClick = {
-                            downloadBusy = true
-                            downloadMessage = "Downloading the uploaded CSB Bible…"
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) { runCatching { OfflineModuleManager.downloadCsbBible(appContext) } }
-                                downloadMessage = result.fold({ "The uploaded CSB Bible is saved for offline use." }, { it.message ?: "The CSB Bible is not available." })
-                                downloadBusy = false
-                            }
+                            runCatching {
+                                val bibleUrl = BuildConfig.API_BASE_URL + "devotional-centre/holy-bible"
+                                appContext.startActivity(
+                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(bibleUrl))
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                )
+                                downloadMessage = "Opening the World English Bible (WEB) reader."
+                            }.onFailure { downloadMessage = it.message ?: "Could not open the WEB Bible reader." }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Download Uploaded CSB Bible") }
-                    val savedCsbBible = File(appContext.filesDir, "offline_devotional/csb_pew_bible.pdf")
-                    if (savedCsbBible.exists() && savedCsbBible.length() > 0L) {
-                        OutlinedButton(
-                            onClick = {
-                                runCatching {
-                                    val uri = FileProvider.getUriForFile(appContext, appContext.packageName + ".fileprovider", savedCsbBible)
-                                    appContext.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
-                                }.onFailure { downloadMessage = it.message ?: "No PDF viewer is installed." }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("Open Saved CSB Bible Offline") }
-                    }
+                    ) { Text("Open World English Bible (WEB)") }
                     Text("Download published media by module", style = MaterialTheme.typography.titleMedium)
                     val downloadMediaModule: (String, String) -> Unit = { mediaType, label ->
                         downloadBusy = true
@@ -1641,14 +1630,15 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
             }
         }, modifier = Modifier.fillMaxWidth()) { Text("Download Hymn Audio") }
         Button(enabled = online && !busy, onClick = {
-            busy = true
-            message = "Downloading the uploaded CSB Bible…"
-            scope.launch {
-                val result = withContext(Dispatchers.IO) { runCatching { OfflineModuleManager.downloadCsbBible(context) } }
-                message = result.fold({ "The uploaded CSB Bible is saved for offline reading." }, { it.message ?: "The CSB Bible is not available." })
-                busy = false
-            }
-        }, modifier = Modifier.fillMaxWidth()) { Text("Download Uploaded CSB Bible") }
+            runCatching {
+                val bibleUrl = BuildConfig.API_BASE_URL + "devotional-centre/holy-bible"
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(bibleUrl))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+                message = "Opening the World English Bible (WEB) reader. Scripture text loads from the WEB public-domain Bible service."
+            }.onFailure { message = it.message ?: "Could not open the WEB Bible reader." }
+        }, modifier = Modifier.fillMaxWidth()) { Text("Open World English Bible (WEB)") }
         Text("Church Media Library", style = MaterialTheme.typography.titleMedium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("audio", "video", "document").forEach { type ->
@@ -1703,15 +1693,6 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
                     }) { Text("Open") }
                 }
             }
-        }
-        val bible = File(context.filesDir, "offline_devotional/csb_pew_bible.pdf")
-        if (bible.exists() && bible.length() > 0L) {
-            OutlinedButton(onClick = {
-                runCatching {
-                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", bible)
-                    context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/pdf").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
-                }.onFailure { message = it.message ?: "Could not open the saved CSB Bible." }
-            }, modifier = Modifier.fillMaxWidth()) { Text("Open Saved CSB Bible") }
         }
     }
     selected?.let { item ->
