@@ -250,7 +250,6 @@ private fun NativeDioceseApp() {
     if (!signedIn && !showStaffLogin && !showOfflineLibrary) {
         PublicDiocesanHomepage(
             online = online,
-            offlineDownloadBusy = downloadBusy,
             onStaffLogin = { showStaffLogin = true },
             onOfflineDownload = {
                 if (online && !downloadBusy) {
@@ -1743,7 +1742,7 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
     var pageLoading by remember { mutableStateOf(true) }
@@ -1764,6 +1763,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     settings.loadWithOverviewMode = false
                     settings.allowFileAccess = false
                     settings.allowContentAccess = true
+                    addJavascriptInterface(object {
+                        @android.webkit.JavascriptInterface
+                        fun downloadOffline() {
+                            android.os.Handler(android.os.Looper.getMainLooper()).post { onOfflineDownload() }
+                        }
+                        @android.webkit.JavascriptInterface
+                        fun openStaffSignIn() {
+                            android.os.Handler(android.os.Looper.getMainLooper()).post { onStaffLogin() }
+                        }
+                    }, "MCNOfflineBridge")
                     settings.cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
                     isFocusable = true
                     isFocusableInTouchMode = true
@@ -1825,28 +1834,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 }
             }
         }
-        Surface(
-            modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(8.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            shape = MaterialTheme.shapes.large,
-            shadowElevation = 3.dp
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                TextButton(
-                    onClick = {
-                        webView?.evaluateJavascript("window.mcnCacheEntireApp && window.mcnCacheEntireApp()", null)
-                        onOfflineDownload()
-                    },
-                    enabled = online && !offlineDownloadBusy,
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(if (offlineDownloadBusy) "Saving offline…" else "Save app offline")
-                }
-                TextButton(onClick = onStaffLogin, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)) {
-                    Text("Staff sign in")
-                }
-            }
-        }
+
     }
 
 }
