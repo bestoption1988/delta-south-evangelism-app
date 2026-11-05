@@ -161,6 +161,7 @@ interface DioceseApi {
  @GET("api/member/attendance-summary") suspend fun attendanceSummary(): Map<String, Any?>
  @GET("api/member/attendance") suspend fun memberAttendance(): List<Map<String, Any?>>
  @POST("api/member-attendance") suspend fun recordMemberAttendance(@Body body: Map<String, String>): Map<String, Any?>
+ @POST("api/offline/sync") suspend fun syncOfflineAttendance(@Body body: Map<String, Any?>): Map<String, Any?>
  @GET("api/member/giving-history") suspend fun givingHistory(): List<Map<String, Any?>>
  @GET("api/member/announcements") suspend fun announcements(): List<Map<String, Any?>>
  @GET("api/member/events") suspend fun events(): List<Map<String, Any?>>
