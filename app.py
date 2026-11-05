@@ -2990,17 +2990,17 @@ def _daily_scripture_and_hymn():
 def public_home():
     """Public diocesan homepage; no login required."""
     profiles = db().execute(
-        "SELECT * FROM leadership_profiles WHERE active=1 ORDER BY display_order,title"
+        "SELECT * FROM leadership_profiles WHERE LOWER(CAST(active AS TEXT)) IN ('1','true','t') ORDER BY display_order,title"
     ).fetchall()
     rows = db().execute(
         "SELECT content_key, content_value FROM homepage_content"
     ).fetchall()
     homepage_content = {row["content_key"]: row["content_value"] for row in rows}
     sermons = db().execute(
-        "SELECT * FROM homepage_sermons WHERE published=1 ORDER BY display_order,id DESC"
+        "SELECT * FROM homepage_sermons WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t') ORDER BY display_order,id DESC"
     ).fetchall()
     events = db().execute(
-        "SELECT * FROM homepage_events WHERE published=1 ORDER BY event_date DESC,id DESC"
+        "SELECT * FROM homepage_events WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t') ORDER BY event_date DESC,id DESC"
     ).fetchall()
     churches = db().execute(
         """SELECT * FROM churches
