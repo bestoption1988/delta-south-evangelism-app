@@ -67,13 +67,16 @@ async function cachePage(url, pageCache, assetCache) {
     while ((match = assetPattern.exec(html)) !== null) {
       try {
         const asset = new URL(match[1], url.href);
-        if (asset.origin === self.location.origin &&
-            (/\.(css|js|png|jpe?g|webp|gif|svg|woff2?|ttf)(\?|$)/i.test(asset.href))) {
+        const localAsset = asset.origin === self.location.origin;
+        const approvedMediaHost = /(^|\.)supabase\.co$/i.test(asset.hostname) ||
+          /(^|\.)supabase\.in$/i.test(asset.hostname);
+        const supportedAsset = /\.(css|js|png|jpe?g|webp|gif|svg|woff2?|ttf|pdf|mp3|m4a|ogg|wav|mp4|webm)(\?|$)/i.test(asset.href);
+        if ((localAsset || (asset.protocol === "https:" && approvedMediaHost)) && supportedAsset) {
           const cached = await caches.match(asset.href);
           if (!cached) {
             try {
-              const file = await fetch(asset.href, { credentials: "same-origin" });
-              if (file.ok) await assetCache.put(asset.href, file.clone());
+              const file = await fetch(asset.href, { credentials: localAsset ? "same-origin" : "omit" });
+              if (file.ok || file.type === "opaque") await assetCache.put(asset.href, file.clone());
             } catch (_) {}
           }
         }
@@ -135,7 +138,22 @@ self.addEventListener("fetch", event => {
     return;
   }
 
-  if (url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin) {
+    if (url.protocol === "https:" && (/\.supabase\.co$/i.test(url.hostname) || url.hostname === "bible-api.com")) {
+      event.respondWith((async () => {
+        const cache = await caches.open(ASSET_CACHE);
+        const cached = await cache.match(request);
+        try {
+          const live = await fetch(request);
+          if (live.ok || live.type === "opaque") await cache.put(request, live.clone());
+          return live;
+        } catch (_) {
+          return cached || Response.error();
+        }
+      })());
+    }
+    return;
+  }
 
   if (request.mode === "navigate") {
     event.respondWith((async () => {
