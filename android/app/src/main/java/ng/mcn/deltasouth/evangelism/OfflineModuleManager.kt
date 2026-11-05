@@ -1,4 +1,5 @@
 package ng.mcn.deltasouth.evangelism
+import java.util.Locale
 
 import android.content.Context
 import android.text.Html
