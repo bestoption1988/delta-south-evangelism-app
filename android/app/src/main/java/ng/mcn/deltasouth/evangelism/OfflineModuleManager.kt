@@ -353,7 +353,17 @@ object OfflineModuleManager {
         }.getOrDefault(false)
     }
 
-    fun downloadMediaCategory(context: Context, mediaType: String): Int {\n        require(mediaType in setOf("audio", "video", "document"))\n        val count = downloadPublishedMedia(context, setOf(mediaType))\n        val directory = offlineMediaDirectory(context)\n        val index = runCatching { JSONArray(File(directory, "index.json").readText()) }.getOrDefault(JSONArray())\n        context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)\n            .edit().putInt("last_media_downloaded_count", index.length()).apply()\n        return count\n    }\n\n    private fun downloadPublishedMedia(context: Context, filterTypes: Set<String>?): Int {
+    fun downloadMediaCategory(context: Context, mediaType: String): Int {
+        require(mediaType in setOf("audio", "video", "document"))
+        val count = downloadPublishedMedia(context, setOf(mediaType))
+        val directory = offlineMediaDirectory(context)
+        val index = runCatching { JSONArray(File(directory, "index.json").readText()) }.getOrDefault(JSONArray())
+        context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+            .edit().putInt("last_media_downloaded_count", index.length()).apply()
+        return count
+    }
+
+    private fun downloadPublishedMedia(context: Context, filterTypes: Set<String>?): Int {
         val catalogueRequest = Request.Builder()
             .url(BuildConfig.API_BASE_URL + "api/offline/media-catalogue")
             .get()
