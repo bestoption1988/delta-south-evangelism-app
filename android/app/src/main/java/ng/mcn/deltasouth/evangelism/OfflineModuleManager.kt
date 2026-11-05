@@ -212,11 +212,19 @@ object OfflineModuleManager {
 
     fun downloadAllDevotionalResources(context: Context): Int {
         var total = 0
+        val failures = mutableListOf<String>()
         devotionalCollections.forEach { collection ->
-            runCatching { total += downloadDevotionalCollection(context, collection, includeAudio = false) }
+            try {
+                total += downloadDevotionalCollection(context, collection, includeAudio = false)
+            } catch (error: Exception) {
+                failures += "$collection: ${error.message ?: "download failed"}"
+            }
         }
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
             .edit().putInt("last_devotional_resources_count", total).apply()
+        if (failures.isNotEmpty()) {
+            throw IllegalStateException("Downloaded $total resources. Some collections failed: " + failures.joinToString("; "))
+        }
         return total
     }
 
@@ -229,6 +237,7 @@ object OfflineModuleManager {
             .callTimeout(10, TimeUnit.MINUTES)
             .build()
         val allItems = JSONArray()
+        var audioDownloaded = 0
         var page = 1
         var pages = 1
         do {
@@ -251,7 +260,10 @@ object OfflineModuleManager {
                     if (audioUrl.isNotBlank()) {
                         val ext = mediaExtension(item.optString("audio_extension"), "audio")
                         val target = File(directory, "hymn_" + id + ext)
-                        if (downloadSignedFile(longClient, audioUrl, target)) item.put("audio_file", target.name)
+                        if (downloadSignedFile(longClient, audioUrl, target)) {
+                            item.put("audio_file", target.name)
+                            audioDownloaded++
+                        }
                     }
                     val payload = item.optJSONObject("payload") ?: JSONObject()
                     val tunes = payload.optJSONArray("otherTunes")
@@ -262,7 +274,10 @@ object OfflineModuleManager {
                             if (tuneUrl.isBlank()) continue
                             val tuneExt = mediaExtension(tune.optString("audio_extension"), "audio")
                             val tuneFile = File(directory, "hymn_" + id + "_tune" + tuneIndex + tuneExt)
-                            if (downloadSignedFile(longClient, tuneUrl, tuneFile)) tune.put("offline_file", tuneFile.name)
+                            if (downloadSignedFile(longClient, tuneUrl, tuneFile)) {
+                                tune.put("offline_file", tuneFile.name)
+                                audioDownloaded++
+                            }
                         }
                     }
                     item.put("payload", payload)
@@ -279,16 +294,25 @@ object OfflineModuleManager {
             temporary.copyTo(target, overwrite = true)
             temporary.delete()
         }
-        return allItems.length()
+        return if (includeAudio) audioDownloaded else allItems.length()
     }
 
     fun downloadHymnAudio(context: Context): Int {
         var total = 0
+        val failures = mutableListOf<String>()
         listOf("english_hymns", "yoruba_hymns", "akokun").forEach { collection ->
-            runCatching { total += downloadDevotionalCollection(context, collection, includeAudio = true) }
+            try {
+                total += downloadDevotionalCollection(context, collection, includeAudio = true)
+            } catch (error: Exception) {
+                failures += "$collection: ${error.message ?: "download failed"}"
+            }
         }
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
             .edit().putInt("last_devotional_audio_count", total).apply()
+        if (failures.isNotEmpty()) {
+            throw IllegalStateException("Saved $total audio files. Some hymn collections failed: " + failures.joinToString("; "))
+        }
+        if (total == 0) throw IllegalStateException("No hymn recordings were downloaded. Please check that the audio files are published.")
         return total
     }
 
