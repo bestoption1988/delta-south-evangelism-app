@@ -13,7 +13,7 @@ const PUBLIC_ROUTES = [
   "/devotional-centre/creeds", "/devotional-centre/holy-bible",
   "/devotional-centre/lectionary", "/media-library"
 ];
-const BLOCKED = /(^|\/)(admin|login|logout|register|payment|checkout|dashboard|staff)(\/|$)/i;
+const BLOCKED = /(^|\/)(admin|login|logout|register|payment|checkout|dashboard|staff|member|account|finance|giving|security)(\/|$)/i;
 
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
@@ -156,6 +156,10 @@ self.addEventListener("fetch", event => {
   }
 
   if (request.mode === "navigate") {
+    if (!safePage(url)) {
+      event.respondWith(fetch(request));
+      return;
+    }
     event.respondWith((async () => {
       const cache = await caches.open(PAGE_CACHE);
       try {
