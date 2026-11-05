@@ -45,6 +45,7 @@ private fun NativeDioceseApp() {
     var downloadedModules by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_downloaded_count", 0)) }
     var mediaDownloadedCount by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_media_downloaded_count", 0)) }
     var offlineMediaRows by remember { mutableStateOf(emptyList<Map<String, String>>()) }
+    var pendingAttendanceCount by remember { mutableIntStateOf(OfflineAttendanceQueue.pendingCount(appContext)) }
     DisposableEffect(appContext) {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
         val callback = object : ConnectivityManager.NetworkCallback() {
@@ -161,6 +162,8 @@ private fun NativeDioceseApp() {
     }
     LaunchedEffect(signedIn, online) {
         if (signedIn && online) {
+            runCatching { withContext(Dispatchers.IO) { OfflineAttendanceQueue.syncPending(appContext) } }
+                .onSuccess { pendingAttendanceCount = OfflineAttendanceQueue.pendingCount(appContext) }
             runCatching { withContext(Dispatchers.IO) { Backend.api.dashboard() } }
                 .onSuccess { dashboard = it }
                 .onFailure { message = it.message ?: "Dashboard will load when the connection is available." }
@@ -266,6 +269,7 @@ private fun NativeDioceseApp() {
                     Spacer(Modifier.height(8.dp))
                     Text("Downloaded data sets: $downloadedModules")
                     Text("Offline media files: $mediaDownloadedCount")
+                    Text("Attendance records waiting to sync: $pendingAttendanceCount")
                     Text(if (online) "Internet connection available" else "Offline — saved information remains available")
                     Button(
                         enabled = online && !downloadBusy,
@@ -292,6 +296,19 @@ private fun NativeDioceseApp() {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(if (downloadBusy) "Downloading…" else "Download All Modules") }
+                    Button(
+                        enabled = online && pendingAttendanceCount > 0 && !downloadBusy,
+                        onClick = {
+                            downloadBusy = true
+                            scope.launch {
+                                val synced = withContext(Dispatchers.IO) { OfflineAttendanceQueue.syncPending(appContext) }
+                                pendingAttendanceCount = OfflineAttendanceQueue.pendingCount(appContext)
+                                downloadMessage = "$synced queued attendance records synchronized. $pendingAttendanceCount remain pending."
+                                downloadBusy = false
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Synchronize Queued Attendance") }
                     Text("Automatic updates run every 6 hours whenever Wi-Fi or mobile data is available. You can also download updates now.")
                     if (downloadMessage.isNotBlank()) Text(downloadMessage, style = MaterialTheme.typography.bodySmall)
                     Text("Saved media — available without internet", style = MaterialTheme.typography.titleMedium)
@@ -396,7 +413,13 @@ private fun NativeDioceseApp() {
                                             busy = true
                                             runCatching { withContext(Dispatchers.IO) { Backend.api.recordMemberAttendance(mapOf("member_id" to id.toString(), "attendance_date" to attendanceRegisterDate.trim(), "meeting_type" to attendanceMeetingType.trim(), "status" to "Present")) } }
                                                 .onSuccess { message = "Present recorded for ${member["full_name"] ?: "member"}." }
-                                                .onFailure { message = it.message ?: "Could not record attendance." }
+                                                .onFailure {
+                                                    if (!online) {
+                                                        OfflineAttendanceQueue.enqueueAttendance(appContext, mapOf("member_id" to id.toString(), "attendance_date" to attendanceRegisterDate.trim(), "meeting_type" to attendanceMeetingType.trim(), "status" to "Present"))
+                                                        pendingAttendanceCount = OfflineAttendanceQueue.pendingCount(appContext)
+                                                        message = "Attendance saved securely on this phone. It will synchronize when internet returns."
+                                                    } else message = it.message ?: "Could not record attendance."
+                                                }
                                             busy = false
                                         }
                                     }) { Text("Present") }
@@ -406,7 +429,13 @@ private fun NativeDioceseApp() {
                                             busy = true
                                             runCatching { withContext(Dispatchers.IO) { Backend.api.recordMemberAttendance(mapOf("member_id" to id.toString(), "attendance_date" to attendanceRegisterDate.trim(), "meeting_type" to attendanceMeetingType.trim(), "status" to "Absent")) } }
                                                 .onSuccess { message = "Absent recorded for ${member["full_name"] ?: "member"}." }
-                                                .onFailure { message = it.message ?: "Could not record attendance." }
+                                                .onFailure {
+                                                    if (!online) {
+                                                        OfflineAttendanceQueue.enqueueAttendance(appContext, mapOf("member_id" to id.toString(), "attendance_date" to attendanceRegisterDate.trim(), "meeting_type" to attendanceMeetingType.trim(), "status" to "Absent"))
+                                                        pendingAttendanceCount = OfflineAttendanceQueue.pendingCount(appContext)
+                                                        message = "Attendance saved securely on this phone. It will synchronize when internet returns."
+                                                    } else message = it.message ?: "Could not record attendance."
+                                                }
                                             busy = false
                                         }
                                     }) { Text("Absent") }
