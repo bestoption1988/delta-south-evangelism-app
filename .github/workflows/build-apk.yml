@@ -43,6 +43,9 @@ jobs:
         with:
           gradle-version: "8.10"
 
+      - name: Verify backend Python syntax
+        run: python -m py_compile ../app.py
+
       - name: Verify toolchain
         run: |
           java -version
