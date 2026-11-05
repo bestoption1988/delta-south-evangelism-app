@@ -1015,3 +1015,57 @@ white-space:normal;border-bottom:1px solid #ffffff20}
 .daily-devotion-full .button { display:inline-block; margin-top:10px; }
 audio,video { display:block; width:100%; max-width:100%; }
 video { height:auto; max-height:70vh; background:#071331; object-fit:contain; }
+
+/* Android WebView refinements: compact actions, dependable menu, and reserved video player size */
+#menuToggle{position:relative;z-index:1002;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+@media(max-width:700px){
+  .navbar #navLinks.open{display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;z-index:1001}
+  .navbar #navLinks.open a,.navbar #navLinks.open button{pointer-events:auto!important;touch-action:manipulation}
+}
+#publicMemberCareButton{z-index:900!important}
+#featured-videos .homepage-video-card video{
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:190px;
+  aspect-ratio:16/9;
+  object-fit:contain;
+  background:#071331;
+}
+@media(max-width:480px){
+  #featured-videos .homepage-video-card video{min-height:190px;max-height:none;aspect-ratio:16/9}
+}
+#mcnAppQuickActions{display:none}
+.mcn-android-app #mcnAppQuickActions{
+  position:fixed;
+  left:8px;
+  bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
+  z-index:950;
+  display:flex;
+  align-items:center;
+  gap:5px;
+  padding:4px;
+  border:1px solid #ffffffb8;
+  border-radius:22px;
+  background:#071b50eF;
+  box-shadow:0 2px 9px #0003;
+}
+.mcn-android-app #mcnAppQuickActions a{
+  display:flex;
+  min-height:28px;
+  align-items:center;
+  justify-content:center;
+  padding:0 9px;
+  border-radius:16px;
+  background:#ffffff;
+  color:#10285a;
+  font:700 10px/1 Arial, sans-serif;
+  text-decoration:none;
+  white-space:nowrap;
+  touch-action:manipulation;
+}
+.mcn-android-app .daily-devotion-open{touch-action:manipulation}
+.mcn-android-app .daily-devotion-preview{font-size:clamp(18px,5vw,23px);line-height:1.4}
+.mcn-android-app .daily-devotion-marquee{animation-duration:38s;gap:3rem}
+.mcn-android-app .daily-devotion-modal{z-index:30000}
+.mcn-android-app .daily-devotion-modal-panel{width:calc(100vw - 36px);max-width:560px;min-height:220px;max-height:76vh;overflow-y:auto;display:block}
