@@ -1116,3 +1116,37 @@ html.mcn-android-app .daily-devotion-modal-panel{
     padding:20px 18px 26px!important;
   }
 }
+
+
+/* Android WebView: keep the full daily Scripture/Hymn dialog expanded.
+   A fixed flex basis prevents WebView from shrinking the panel to its heading. */
+html.mcn-android-app .daily-devotion-modal.is-open{
+  position:fixed!important; inset:0!important; z-index:30000!important;
+  display:flex!important; align-items:center!important; justify-content:center!important;
+  padding:12px!important; box-sizing:border-box!important;
+}
+html.mcn-android-app .daily-devotion-modal.is-open > .daily-devotion-modal-panel{
+  position:relative!important; display:block!important; flex:0 0 auto!important;
+  box-sizing:border-box!important; width:calc(100vw - 24px)!important;
+  max-width:720px!important; height:82vh!important; min-height:65vh!important;
+  max-height:88vh!important; overflow-x:hidden!important; overflow-y:auto!important;
+  padding:22px 18px 30px!important; border-radius:18px!important;
+  background:#fff!important; color:#172b4d!important;
+  visibility:visible!important; opacity:1!important;
+}
+html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-modal-panel > *{
+  visibility:visible!important; opacity:1!important;
+}
+html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-modal-close{
+  position:sticky!important; top:0!important; z-index:5!important;
+  float:right!important; margin:0 0 8px 12px!important;
+}
+html.mcn-android-app .daily-devotion-modal.is-open .daily-hymn-lyrics,
+html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-full-text{
+  display:block!important; visibility:visible!important;
+  white-space:pre-wrap!important; overflow-wrap:anywhere!important;
+  font-size:clamp(18px,4.6vw,24px)!important; line-height:1.75!important;
+}
+html.mcn-android-app .daily-devotion-modal.is-open .daily-hymn-audio audio{
+  display:block!important; width:100%!important; min-height:48px!important;
+}
