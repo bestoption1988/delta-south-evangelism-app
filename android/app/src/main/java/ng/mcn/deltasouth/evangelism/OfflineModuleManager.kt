@@ -353,53 +353,73 @@ object OfflineModuleManager {
         return true
     }
 
-    private val webBibleBooks = listOf(
-        "Genesis" to 50, "Exodus" to 40, "Leviticus" to 27, "Numbers" to 36,
-        "Deuteronomy" to 34, "Joshua" to 24, "Judges" to 21, "Ruth" to 4,
-        "1 Samuel" to 31, "2 Samuel" to 24, "1 Kings" to 22, "2 Kings" to 25,
-        "1 Chronicles" to 29, "2 Chronicles" to 36, "Ezra" to 10, "Nehemiah" to 13,
-        "Esther" to 10, "Job" to 42, "Psalms" to 150, "Proverbs" to 31,
-        "Ecclesiastes" to 12, "Song of Solomon" to 8, "Isaiah" to 66,
-        "Jeremiah" to 52, "Lamentations" to 5, "Ezekiel" to 48, "Daniel" to 12,
-        "Hosea" to 14, "Joel" to 3, "Amos" to 9, "Obadiah" to 1, "Jonah" to 4,
-        "Micah" to 7, "Nahum" to 3, "Habakkuk" to 3, "Zephaniah" to 3,
-        "Haggai" to 2, "Zechariah" to 14, "Malachi" to 4,
-        "Matthew" to 28, "Mark" to 16, "Luke" to 24, "John" to 21, "Acts" to 28,
-        "Romans" to 16, "1 Corinthians" to 16, "2 Corinthians" to 13, "Galatians" to 6,
-        "Ephesians" to 6, "Philippians" to 4, "Colossians" to 4,
-        "1 Thessalonians" to 5, "2 Thessalonians" to 3, "1 Timothy" to 6,
-        "2 Timothy" to 4, "Titus" to 3, "Philemon" to 1, "Hebrews" to 13,
-        "James" to 5, "1 Peter" to 5, "2 Peter" to 3, "1 John" to 5,
-        "2 John" to 1, "3 John" to 1, "Jude" to 1, "Revelation" to 22
-    )
-
-    private fun webBibleFileName(book: String, chapter: Int): String =
-        book.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "_").trim('_') + "_" + chapter + ".json"
+    private fun webBibleChapterFileName(bookId: Int, chapter: Int): String = "${bookId}_${chapter}.json"
 
     fun downloadWebBible(context: Context): Int {
         val directory = File(context.filesDir, "offline_web_bible").apply { mkdirs() }
+        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
         val client = Backend.client.newBuilder()
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .callTimeout(40, TimeUnit.SECONDS)
             .build()
-        val tasks = webBibleBooks.flatMap { (book, chapters) -> (1..chapters).map { chapter -> book to chapter } }
+        val prefs = context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+        prefs.edit().putInt("last_web_bible_missing_count", 0).apply()
+
+        val booksRequest = Request.Builder()
+            .url("$baseUrl/devotional-centre/holy-bible/books")
+            .header("Accept", "application/json")
+            .get()
+            .build()
+        val booksJson = client.newCall(booksRequest).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                val detail = runCatching { JSONObject(body).optString("error") }.getOrDefault("")
+                throw IllegalStateException(detail.ifBlank { "The uploaded WEB Bible database is not installed on the server. Upload the WEB bibles.zip package in Devotional Centre administration first." })
+            }
+            JSONObject(body)
+        }
+        val books = booksJson.optJSONArray("books")
+            ?: throw IllegalStateException("The installed WEB Bible returned no book list.")
+        if (books.length() != 66) {
+            throw IllegalStateException("The installed WEB Bible is incomplete: expected 66 books but found ${books.length()}.")
+        }
+        val booksFile = File(directory, "books.json")
+        val booksTemporary = File(directory, "books.json.part")
+        booksTemporary.writeText(booksJson.toString())
+        if (booksFile.exists()) booksFile.delete()
+        if (!booksTemporary.renameTo(booksFile)) {
+            booksTemporary.copyTo(booksFile, overwrite = true)
+            booksTemporary.delete()
+        }
+
+        val tasks = mutableListOf<Pair<Int, Int>>()
+        for (index in 0 until books.length()) {
+            val book = books.getJSONObject(index)
+            val bookId = book.optInt("id")
+            val chapters = book.optInt("chapters")
+            if (bookId in 1..66 && chapters > 0) {
+                for (chapter in 1..chapters) tasks += bookId to chapter
+            }
+        }
+        if (tasks.isEmpty()) throw IllegalStateException("The installed WEB Bible contains no chapters.")
+
         val executor = Executors.newFixedThreadPool(3)
         try {
-            val futures = tasks.map { (book, chapter) ->
+            val futures = tasks.map { (bookId, chapter) ->
                 executor.submit<Boolean> {
-                    val target = File(directory, webBibleFileName(book, chapter))
+                    val target = File(directory, webBibleChapterFileName(bookId, chapter))
                     if (target.exists() && target.length() > 0L) return@submit true
-                    val encoded = android.net.Uri.encode("$book $chapter")
-                    val url = "https://bible-api.com/$encoded?translation=web"
                     runCatching {
-                        val request = Request.Builder().url(url).header("Accept", "application/json").get().build()
+                        val request = Request.Builder()
+                            .url("$baseUrl/devotional-centre/holy-bible/chapter?book=$bookId&chapter=$chapter")
+                            .header("Accept", "application/json")
+                            .get()
+                            .build()
                         client.newCall(request).execute().use { response ->
                             if (!response.isSuccessful) return@use false
                             val body = response.body?.string().orEmpty()
-                            if (body.isBlank()) return@use false
-                            val parsed = JSONObject(body)
-                            if (parsed.optJSONArray("verses")?.length() == 0) return@use false
+                            if (body.isBlank() || JSONObject(body).optJSONArray("verses")?.length() == 0) return@use false
                             val temporary = File(directory, target.name + ".part")
                             temporary.writeText(body)
                             if (target.exists()) target.delete()
@@ -414,29 +434,35 @@ object OfflineModuleManager {
             }
             val saved = futures.count { future -> runCatching { future.get() }.getOrDefault(false) }
             val missing = tasks.size - saved
-            context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-                .edit()
+            prefs.edit()
                 .putInt("last_web_bible_chapter_count", saved)
                 .putInt("last_web_bible_missing_count", missing)
                 .apply()
-            if (saved == 0) throw IllegalStateException("The WEB Bible could not be downloaded. Please check your internet connection.")
+            if (saved == 0) throw IllegalStateException("No WEB Bible chapters could be downloaded from the installed diocesan Bible database.")
             return saved
         } finally {
             executor.shutdownNow()
         }
     }
 
+    fun cachedWebBibleBooks(context: Context, requestUrl: String): File? {
+        return runCatching {
+            val uri = android.net.Uri.parse(requestUrl)
+            if (uri.path != "/devotional-centre/holy-bible/books") return null
+            File(File(context.filesDir, "offline_web_bible"), "books.json")
+                .takeIf { it.isFile && it.length() > 0L }
+        }.getOrNull()
+    }
+
     fun cachedWebBibleChapter(context: Context, requestUrl: String): File? {
         return runCatching {
             val uri = android.net.Uri.parse(requestUrl)
-            if (uri.host != "bible-api.com") return null
-            val decoded = android.net.Uri.decode(uri.lastPathSegment.orEmpty())
-            val split = decoded.lastIndexOf(' ')
-            if (split <= 0) return null
-            val book = decoded.substring(0, split)
-            val chapter = decoded.substring(split + 1).toIntOrNull() ?: return null
-            val file = File(File(context.filesDir, "offline_web_bible"), webBibleFileName(book, chapter))
-            file.takeIf { it.isFile && it.length() > 0L }
+            if (uri.path != "/devotional-centre/holy-bible/chapter") return null
+            val bookId = uri.getQueryParameter("book")?.toIntOrNull() ?: return null
+            val chapter = uri.getQueryParameter("chapter")?.toIntOrNull() ?: return null
+            if (bookId !in 1..66 || chapter < 1) return null
+            File(File(context.filesDir, "offline_web_bible"), webBibleChapterFileName(bookId, chapter))
+                .takeIf { it.isFile && it.length() > 0L }
         }.getOrNull()
     }
 
