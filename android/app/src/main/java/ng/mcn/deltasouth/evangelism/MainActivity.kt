@@ -1876,15 +1876,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             pageError = false
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
+                            // Match the working mobile-browser page layout exactly.
+                            // Android-only quick actions are still enabled by the
+                            // MCNDeltaSouthAndroid user-agent marker in the page.
                             pageLoading = false
-                            // Mark the native WebView for Android-specific layout only.
-                            // Do NOT add a second touch handler: the page's click handler
-                            // already toggles the menu, and touchend + click caused a
-                            // double-toggle (open immediately followed by close).
-                            view.evaluateJavascript(
-                                "document.documentElement.classList.add('mcn-android-app');",
-                                null
-                            )
                         }
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
                             if (request.isForMainFrame) {

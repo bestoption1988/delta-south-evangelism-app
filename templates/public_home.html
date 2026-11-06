@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261106-menu-modal-fix4">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261106-browser-layout-parity1">
 
 <style>
 .pdf-book-preview {
@@ -726,7 +726,8 @@ body.daily-devotion-modal-open{overflow:hidden}
   const staffSignIn = document.getElementById("nativeStaffSignIn");
   const isAndroidApp = navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1;
   if (isAndroidApp) {
-    document.documentElement.classList.add("mcn-android-app");
+    // Keep the APK on the same responsive layout as the working mobile browser.
+    // Native-only quick actions remain available without enabling Android CSS overrides.
     const quickActions = document.createElement("div");
     quickActions.id = "mcnAppQuickActions";
     quickActions.innerHTML = '<a href="mcn-app://offline" aria-label="Save offline">Offline</a><a href="mcn-app://staff-login" aria-label="Staff sign in">Staff</a>';
