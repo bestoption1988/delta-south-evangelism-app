@@ -1354,3 +1354,49 @@ html.mcn-android-app .navbar #navLinks.open button {
 /* Ensure mobile menu and daily devotion dialogs stay above page controls. */
 @media(max-width:700px){.navbar{z-index:1000}.navbar #navLinks.open{z-index:1005;visibility:visible;opacity:1;pointer-events:auto}.navbar #menuToggle{touch-action:manipulation;pointer-events:auto}}
 .daily-devotion-modal.is-open{z-index:30000}
+
+
+/* Android WebView final override: large readable devotional panel and reliable mobile menu. */
+html.mcn-android-app .daily-devotion-modal.is-open{
+  position:fixed!important;inset:0!important;display:block!important;
+  width:100%!important;height:100%!important;margin:0!important;padding:0!important;
+  overflow:hidden!important;z-index:30000!important;
+  background:rgba(4,16,43,.68)!important;
+}
+html.mcn-android-app .daily-devotion-modal.is-open > .daily-devotion-modal-panel{
+  position:fixed!important;top:9vh!important;left:4vw!important;
+  display:block!important;flex:none!important;transform:none!important;
+  box-sizing:border-box!important;width:92vw!important;max-width:620px!important;
+  height:82vh!important;min-height:82vh!important;max-height:82vh!important;
+  margin:0!important;padding:20px 18px 30px!important;
+  overflow-x:hidden!important;overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;
+  background:#fff!important;color:#172b4d!important;
+  border:1px solid #dce3ed!important;border-radius:16px!important;
+  box-shadow:0 14px 42px #0007!important;visibility:visible!important;opacity:1!important;
+}
+html.mcn-android-app .navbar{
+  display:block!important;position:relative!important;width:100%!important;
+  min-height:54px!important;z-index:1000!important;isolation:isolate!important;
+  background:#071b50!important;visibility:visible!important;opacity:1!important;
+}
+html.mcn-android-app .navbar #menuToggle{
+  display:flex!important;align-items:center!important;width:100%!important;
+  min-height:54px!important;position:relative!important;z-index:1001!important;
+  color:#fff!important;background:#071b50!important;pointer-events:auto!important;
+  touch-action:manipulation!important;
+}
+html.mcn-android-app .navbar #navLinks{display:none!important;visibility:hidden!important;pointer-events:none!important}
+html.mcn-android-app .navbar #navLinks.open{
+  display:flex!important;visibility:visible!important;opacity:1!important;
+  pointer-events:auto!important;position:absolute!important;top:100%!important;
+  left:0!important;right:0!important;z-index:1005!important;
+  max-height:65vh!important;overflow-y:auto!important;flex-direction:column!important;
+  align-items:stretch!important;background:#08245b!important;
+  -webkit-overflow-scrolling:touch!important;
+}
+html.mcn-android-app .navbar #navLinks.open a,
+html.mcn-android-app .navbar #navLinks.open button{
+  display:flex!important;align-items:center!important;min-height:46px!important;
+  padding:11px 16px!important;color:#fff!important;pointer-events:auto!important;
+}

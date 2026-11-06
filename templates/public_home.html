@@ -771,6 +771,7 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     toggle.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
+      event.stopImmediatePropagation();
       setNavigationOpen(toggle.getAttribute("aria-expanded") !== "true");
     }, true);
     links.addEventListener("click", event => {
@@ -811,15 +812,29 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     if (!modal || !modal.classList.contains("is-open")) return;
     const panel = modal.querySelector(".daily-devotion-modal-panel");
     if (!panel) return;
-    const viewportHeight = Math.max(
-      document.documentElement.clientHeight || 0,
-      window.innerHeight || 0
+    // visualViewport is the most reliable measurement in Android WebView,
+    // especially when the status/navigation bars and edge-to-edge mode change.
+    const viewportHeight = Math.round(
+      window.visualViewport?.height ||
+      window.innerHeight ||
+      document.documentElement.clientHeight ||
+      document.body.clientHeight ||
+      screen.availHeight ||
+      screen.height ||
+      700
     );
-    const viewportWidth = Math.max(
-      document.documentElement.clientWidth || 0,
-      window.innerWidth || 0
+    const viewportWidth = Math.round(
+      window.visualViewport?.width ||
+      window.innerWidth ||
+      document.documentElement.clientWidth ||
+      document.body.clientWidth ||
+      screen.availWidth ||
+      screen.width ||
+      360
     );
-    const panelHeight = Math.max(240, Math.round(viewportHeight * 0.70));
+    // Give the reading panel enough vertical room; leave a small margin
+    // above and below, while keeping the content independently scrollable.
+    const panelHeight = Math.max(320, Math.round(viewportHeight * 0.82));
     modal.style.setProperty("position", "fixed", "important");
     modal.style.setProperty("inset", "0", "important");
     modal.style.setProperty("display", "block", "important");
@@ -832,7 +847,7 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     panel.style.setProperty("display", "block", "important");
     panel.style.setProperty("box-sizing", "border-box", "important");
     panel.style.setProperty("left", Math.round(viewportWidth * 0.04) + "px", "important");
-    panel.style.setProperty("top", Math.round(viewportHeight * 0.15) + "px", "important");
+    panel.style.setProperty("top", Math.round(viewportHeight * 0.09) + "px", "important");
     panel.style.setProperty("width", Math.round(viewportWidth * 0.92) + "px", "important");
     panel.style.setProperty("height", panelHeight + "px", "important");
     panel.style.setProperty("min-height", panelHeight + "px", "important");
@@ -881,6 +896,9 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     });
   });
   window.addEventListener("resize", () => {
+    dailyModals.forEach(modal => sizeDailyModal(modal));
+  });
+  window.visualViewport?.addEventListener("resize", () => {
     dailyModals.forEach(modal => sizeDailyModal(modal));
   });
   dailyModals.forEach(modal => {
