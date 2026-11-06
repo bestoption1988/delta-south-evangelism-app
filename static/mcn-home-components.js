@@ -1,19 +1,13 @@
 /* MCN Delta South — rebuilt homepage menu and daily Scripture/Hymn interactions. */
 (() => {
   "use strict";
-  const menuButton=document.getElementById("mcnMenuToggle");
+  const menuShell=document.getElementById("mcnMenuShell");
   const menu=document.getElementById("mcnMenuLinks");
   const nav=document.querySelector(".mcn-primary-nav");
   const fellowship=document.getElementById("mcnFellowshipsDropdown");
   const fellowshipButton=fellowship?.querySelector(".mcn-nav-drop-toggle");
 
-  const setMenuOpen=(open)=>{
-    if(!menuButton||!menu)return;
-    menu.classList.toggle("is-open",!!open);
-    menuButton.setAttribute("aria-expanded",String(!!open));
-    menuButton.setAttribute("aria-label",open?"Close navigation":"Open navigation");
-    menuButton.textContent=open?"✕ Close Menu":"☰ Menu";
-  };
+  const setMenuOpen=(open)=>{ if(menuShell) menuShell.open=!!open; };
   fellowshipButton?.addEventListener("click",(event)=>{
     event.preventDefault();
     event.stopPropagation();

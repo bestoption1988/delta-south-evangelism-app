@@ -48,7 +48,7 @@
 
 
 
-<link rel="stylesheet" href="{{ url_for('static', filename='mcn-home-components.css') }}?v=20261106-menu-fix2">
+<link rel="stylesheet" href="{{ url_for('static', filename='mcn-home-components.css') }}?v=20261106-native-menu1">
 </head>
 <body>
 
@@ -72,7 +72,9 @@
 </div>
 
 <nav class="navbar mcn-primary-nav" aria-label="Main navigation">
-  <button id="mcnMenuToggle" class="mcn-menu-toggle" type="button" aria-label="Open navigation" aria-controls="mcnMenuLinks" aria-expanded="false" onclick="return window.mcnToggleHomeMenu(this)">☰ Menu</button>
+  <details id="mcnMenuShell" class="mcn-menu-shell">
+    <summary class="mcn-menu-toggle" aria-controls="mcnMenuLinks">☰ Menu</summary>
+  
   <div id="mcnMenuLinks" class="mcn-menu-links">
     <a href="#home">⌂ Home</a><a href="#about">About Us</a><a href="#diocese">Our Diocese</a>
     <div class="mcn-nav-dropdown" id="mcnFellowshipsDropdown">
@@ -84,20 +86,8 @@
     <a href="#ministries">Ministries</a><a href="#watch">Sermons &amp; Media</a><a href="/devotional-centre">Devotional Centre</a><a href="#photo-gallery">Photo Gallery</a><a href="#events">Events</a><a href="#online">Online Services</a><a href="#resources">Resources</a><a href="#contact">Contact</a>
     <a href="#" id="saveOfflineApp">Save app offline</a><a href="/login" id="nativeStaffSignIn">Staff sign in</a>
   </div>
+  </details>
 </nav>
-<script>
-/* Direct in-template fallback for Android WebView menu taps. */
-window.mcnToggleHomeMenu = function(button) {
-  var menu = document.getElementById("mcnMenuLinks");
-  if (!button || !menu) return false;
-  var open = !menu.classList.contains("is-open");
-  menu.classList.toggle("is-open", open);
-  button.setAttribute("aria-expanded", String(open));
-  button.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
-  button.textContent = open ? "✕ Close Menu" : "☰ Menu";
-  return false;
-};
-</script>
 
 {% set day_verse = daily_devotion.get("verse", {}) %}
 {% set day_hymn = daily_devotion.get("hymn", {}) %}
@@ -695,7 +685,7 @@ window.mcnToggleHomeMenu = function(button) {
   if (year) year.textContent = new Date().getFullYear();
 })();
 </script>
-<script src="{{ url_for('static', filename='mcn-home-components.js') }}?v=20261106-menu-fix2" defer></script>
+<script src="{{ url_for('static', filename='mcn-home-components.js') }}?v=20261106-native-menu1" defer></script>
 
 <script type="module">
 (async function () {
