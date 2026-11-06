@@ -123,3 +123,5 @@ jobs:
           path: android/app/build/outputs/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
+
+# Rebuild trigger: refresh Android packages after the clean-slate homepage menu update.

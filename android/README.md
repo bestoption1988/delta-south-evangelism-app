@@ -57,3 +57,10 @@ No local Android Studio installation is required to produce CI artifacts. Open t
 ## Protected production boundary
 
 All native client work is isolated on native-android-development. The production main branch, Flask application and live diocesan database are not modified by this Android client workflow. Test all role-specific screens on real devices before public release.
+
+
+## Android 1.4.1 menu repair
+
+- Version: 1.4.1 (versionCode 6).
+- Fixed the Android WebView public-menu double-toggle by removing the duplicate native touch handler. The homepage click handler is now the sole menu toggle controller.
+- The Android APK build workflow packages an installable debug APK for on-device verification.

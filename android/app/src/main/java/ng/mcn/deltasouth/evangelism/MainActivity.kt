@@ -1827,7 +1827,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
             factory = { ctx ->
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
-                    settings.userAgentString = settings.userAgentString + " MCNDeltaSouthAndroid"
+                    // Use the standard Android WebView user agent so the site follows its normal mobile-browser path.
                     settings.domStorageEnabled = true
                     settings.loadsImagesAutomatically = true
                     settings.javaScriptCanOpenWindowsAutomatically = true
@@ -1876,19 +1876,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             pageError = false
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
+                            // Homepage navigation uses native HTML details/summary controls.
+                            // No injected click handlers are attached from the Android WebView.
                             pageLoading = false
-                            // Android WebView touch fallback for the public mobile menu.
-                            view.evaluateJavascript(
-                                "(function(){document.documentElement.classList.add('mcn-android-app');" +
-                                "var t=document.getElementById('menuToggle'),n=document.getElementById('navLinks');" +
-                                "if(t&&n&&!t.dataset.mcnTouchReady){t.dataset.mcnTouchReady='1';" +
-                                "t.addEventListener('touchend',function(e){e.preventDefault();" +
-                                "var o=!n.classList.contains('open');n.classList.toggle('open',o);" +
-                                "t.setAttribute('aria-expanded',o?'true':'false');" +
-                                "t.setAttribute('aria-label',o?'Close navigation':'Open navigation');" +
-                                "},{passive:false});}})();",
-                                null
-                            )
                         }
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
                             if (request.isForMainFrame) {

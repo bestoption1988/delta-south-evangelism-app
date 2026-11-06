@@ -13,8 +13,8 @@ android {
         applicationId = "ng.mcn.deltasouth.evangelism"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4.0"
+        versionCode = 6
+        versionName = "1.4.1"
         buildConfigField("String", "API_BASE_URL", "\"https://mcn-delta-south.naijacloud.app/\"")
     }
     buildFeatures { compose = true; buildConfig = true }
