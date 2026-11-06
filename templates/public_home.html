@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261105-menu-modal-fix2">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261106-menu-modal-fix3">
 
 <style>
 .pdf-book-preview {
@@ -109,13 +109,13 @@ body.daily-devotion-modal-open{overflow:hidden!important}
 .daily-devotion-open:focus-visible{outline:3px solid #d8aa25;outline-offset:-3px}
 .daily-devotion-type{display:block;margin:0 0 8px;color:#102d60;font:800 clamp(16px,2.2vw,21px)/1.3 Arial,Helvetica,sans-serif}
 .daily-devotion-reference{display:block;margin:0 0 7px;color:#102d60;font-weight:800;font-size:clamp(16px,2vw,20px)}
-.daily-devotion-preview{display:block;width:100%;min-width:0;overflow:hidden;white-space:nowrap;color:#25314a;font:italic clamp(19px,3vw,27px)/1.45 Georgia,serif}
-.daily-devotion-marquee{display:flex;width:max-content;min-width:200%;max-width:none;align-items:center;gap:4rem;animation:dailyDevotionRightToLeft 38s linear infinite;will-change:transform}
-.daily-devotion-marquee span{display:block;flex:0 0 auto;white-space:nowrap}
+.daily-devotion-preview{display:block;width:100%;min-width:0;overflow:visible;white-space:normal;overflow-wrap:anywhere;color:#25314a;font:italic clamp(19px,3vw,27px)/1.45 Georgia,serif}
+.daily-devotion-marquee{display:block;width:100%;min-width:0;max-width:100%;align-items:initial;gap:0;animation:none;transform:none;white-space:normal;overflow-wrap:anywhere}
+.daily-devotion-marquee span{display:block;flex:none;white-space:normal;overflow-wrap:anywhere}.daily-devotion-marquee span:nth-child(2){display:none!important}
 @keyframes dailyDevotionRightToLeft{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-.daily-devotion-open:hover .daily-devotion-marquee,.daily-devotion-open:focus-visible .daily-devotion-marquee{animation-play-state:paused}
+.daily-devotion-open:hover .daily-devotion-marquee,.daily-devotion-open:focus-visible .daily-devotion-marquee{animation:none}
 @media(prefers-reduced-motion:reduce){.daily-devotion-marquee{display:block;width:auto;min-width:0;animation:none;white-space:normal}.daily-devotion-marquee span:nth-child(2){display:none}}
-.daily-devotion-hymn-preview{padding-left:8px}
+.daily-devotion-hymn-preview{padding-left:0}
 .daily-devotion-tap{display:none}
 .daily-devotion-modal{position:fixed;inset:0;z-index:20000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(4,16,43,.38)}
 .daily-devotion-modal.is-open{display:flex!important}
@@ -771,8 +771,8 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     toggle.addEventListener("click", event => {
       event.preventDefault();
       event.stopPropagation();
-      event.stopImmediatePropagation();
-      setNavigationOpen(toggle.getAttribute("aria-expanded") !== "true");
+      const shouldOpen = toggle.getAttribute("aria-expanded") !== "true";
+      setNavigationOpen(shouldOpen);
     }, true);
     links.addEventListener("click", event => {
       if (event.target.closest("a") && !event.target.closest(".nav-submenu")) {
@@ -834,7 +834,7 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     );
     // Give the reading panel enough vertical room; leave a small margin
     // above and below, while keeping the content independently scrollable.
-    const panelHeight = Math.max(320, Math.round(viewportHeight * 0.82));
+    const panelHeight = Math.max(240, Math.round(viewportHeight * 0.70));
     modal.style.setProperty("position", "fixed", "important");
     modal.style.setProperty("inset", "0", "important");
     modal.style.setProperty("display", "block", "important");
@@ -847,7 +847,7 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     panel.style.setProperty("display", "block", "important");
     panel.style.setProperty("box-sizing", "border-box", "important");
     panel.style.setProperty("left", Math.round(viewportWidth * 0.04) + "px", "important");
-    panel.style.setProperty("top", Math.round(viewportHeight * 0.09) + "px", "important");
+    const viewportOffsetTop = Math.round(window.visualViewport?.offsetTop || 0);\n    panel.style.setProperty("top", (viewportOffsetTop + Math.round((viewportHeight - panelHeight) / 2)) + "px", "important");
     panel.style.setProperty("width", Math.round(viewportWidth * 0.92) + "px", "important");
     panel.style.setProperty("height", panelHeight + "px", "important");
     panel.style.setProperty("min-height", panelHeight + "px", "important");
