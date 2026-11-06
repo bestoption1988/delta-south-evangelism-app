@@ -1,0 +1,25 @@
+/* MCN Delta South — clean, isolated homepage navigation. No legacy navbar selectors. */
+.ds-home-navigation{position:relative;z-index:50;width:100%;background:#071b50;color:#fff;font-family:Arial,Helvetica,sans-serif}
+.ds-nav-root{position:relative;width:100%;margin:0 auto}
+.ds-nav-trigger{display:flex;align-items:center;min-height:58px;padding:14px clamp(18px,4vw,42px);box-sizing:border-box;list-style:none;cursor:pointer;color:#fff;background:#071b50;font-size:19px;font-weight:700;line-height:1.4;user-select:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.ds-nav-trigger::-webkit-details-marker,.ds-nav-group>summary::-webkit-details-marker{display:none}
+.ds-nav-trigger::marker,.ds-nav-group>summary::marker{content:""}
+.ds-nav-root[open]>.ds-nav-trigger{background:#0a245c}
+.ds-nav-panel{display:none;position:absolute;top:100%;left:0;right:0;z-index:51;box-sizing:border-box;max-height:72vh;overflow-y:auto;overscroll-behavior:contain;padding:8px 12px 14px;background:#08245b;border-top:1px solid #ffffff30;box-shadow:0 12px 24px rgba(0,0,0,.24)}
+.ds-nav-root[open]>.ds-nav-panel{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.ds-nav-panel>a,.ds-nav-group>summary{display:flex;align-items:center;box-sizing:border-box;min-height:48px;padding:12px 14px;color:#fff;text-decoration:none;font-size:14px;font-weight:600;line-height:1.35;background:transparent;border:0;border-bottom:1px solid rgba(255,255,255,.13);cursor:pointer;touch-action:manipulation}
+.ds-nav-panel>a:focus-visible,.ds-nav-group>summary:focus-visible,.ds-nav-trigger:focus-visible{outline:3px solid #f5c21b;outline-offset:-3px}
+.ds-nav-panel>a:active,.ds-nav-group>summary:active{background:rgba(255,255,255,.12)}
+.ds-nav-group{min-width:0}
+.ds-nav-group>summary{list-style:none}
+.ds-nav-group[open]>summary{background:rgba(255,255,255,.1)}
+.ds-nav-subpanel{display:grid;grid-template-columns:1fr;gap:0;padding:3px 0 5px;background:#061a48}
+.ds-nav-subpanel>a{display:flex;align-items:center;min-height:43px;padding:10px 16px 10px 28px;color:#fff;text-decoration:none;font-size:13px;border-bottom:1px solid rgba(255,255,255,.1)}
+.ds-nav-panel a:hover,.ds-nav-subpanel a:hover{background:rgba(255,255,255,.12)}
+@media(max-width:700px){
+ .ds-nav-trigger{min-height:60px;padding:14px 18px;font-size:19px}
+ .ds-nav-panel{position:relative;top:auto;left:auto;right:auto;max-height:68vh;padding:6px 0 10px;border-top:1px solid rgba(255,255,255,.2);box-shadow:none}
+ .ds-nav-root[open]>.ds-nav-panel{display:flex;flex-direction:column;gap:0}
+ .ds-nav-panel>a,.ds-nav-group>summary{width:100%;min-height:49px;padding:13px 18px;font-size:15px}
+ .ds-nav-subpanel>a{min-height:45px;padding:12px 32px;font-size:14px}
+}
