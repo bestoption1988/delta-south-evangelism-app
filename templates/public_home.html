@@ -847,7 +847,8 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     panel.style.setProperty("display", "block", "important");
     panel.style.setProperty("box-sizing", "border-box", "important");
     panel.style.setProperty("left", Math.round(viewportWidth * 0.04) + "px", "important");
-    const viewportOffsetTop = Math.round(window.visualViewport?.offsetTop || 0);\n    panel.style.setProperty("top", (viewportOffsetTop + Math.round((viewportHeight - panelHeight) / 2)) + "px", "important");
+    const viewportOffsetTop = Math.round(window.visualViewport?.offsetTop || 0);
+    panel.style.setProperty("top", (viewportOffsetTop + Math.round((viewportHeight - panelHeight) / 2)) + "px", "important");
     panel.style.setProperty("width", Math.round(viewportWidth * 0.92) + "px", "important");
     panel.style.setProperty("height", panelHeight + "px", "important");
     panel.style.setProperty("min-height", panelHeight + "px", "important");
