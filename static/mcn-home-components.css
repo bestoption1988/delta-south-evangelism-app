@@ -1,15 +1,4 @@
-/* MCN Delta South — rebuilt homepage navigation and daily reading components.
-   These components use isolated class names and do not depend on legacy navbar/devotion selectors. */
-.mcn-primary-nav{position:relative;z-index:1000;background:#071b50;color:#fff;padding:0 clamp(12px,4vw,50px);isolation:isolate}
-.mcn-menu-toggle{display:none;appearance:none;border:0;background:#071b50;color:#fff;font:700 17px/1.4 Arial,sans-serif;cursor:pointer;touch-action:manipulation}
-.mcn-menu-links{display:flex;align-items:center;justify-content:space-between;gap:5px}
-.mcn-menu-links>a,.mcn-menu-links .mcn-nav-drop-toggle{display:block;padding:15px 9px;color:#fff;font:700 12px/1.4 Arial,sans-serif;text-decoration:none;border:0;border-bottom:3px solid transparent;background:transparent;cursor:pointer}
-.mcn-menu-links>a:hover,.mcn-menu-links .mcn-nav-drop-toggle:hover{background:#ffffff12;border-color:#f5c21b}
-.mcn-nav-dropdown{position:relative}
-.mcn-nav-submenu{display:none;position:absolute;top:100%;left:0;min-width:210px;max-height:65vh;overflow-y:auto;background:#08245b;border:1px solid #ffffff30;box-shadow:0 12px 28px #0005;z-index:1003}
-.mcn-nav-dropdown.is-open>.mcn-nav-submenu{display:block}
-.mcn-nav-submenu a{display:block;padding:12px 16px;color:#fff;text-decoration:none;font:600 14px/1.4 Arial,sans-serif}
-.mcn-nav-submenu a:hover{background:#ffffff18}
+/* Scripture and Hymn of the Day — isolated component styles */
 .mcn-daily{width:100%;background:#f5f7fc;border-bottom:1px solid #d6dce8}
 .mcn-daily-grid{width:100%;max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr}
 .mcn-daily-card{min-width:0;margin:0;border:0;border-bottom:1px solid #d6dce8;background:#f5f7fc;overflow:hidden}
@@ -32,40 +21,10 @@
 .mcn-reading-panel .button{display:inline-block;margin-top:18px}
 body.mcn-reading-open{overflow:hidden}
 @media(max-width:700px){
- .mcn-primary-nav{display:block;width:100%;min-height:58px;padding:0;overflow:visible}
- .mcn-menu-toggle{display:flex!important;align-items:center;justify-content:flex-start;width:100%;min-height:58px;padding:14px 18px;position:relative;z-index:1002}
- .mcn-menu-links{display:none!important;position:absolute;top:100%;left:0;right:0;z-index:1003;max-height:70vh;overflow-x:hidden;overflow-y:auto;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:0;padding:6px 0;background:#08245b;border:1px solid #ffffff35;box-shadow:0 12px 28px #0005;visibility:hidden;opacity:0;pointer-events:none;-webkit-overflow-scrolling:touch}
- .mcn-menu-links.is-open{display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important}
- .mcn-menu-links>a,.mcn-menu-links .mcn-nav-drop-toggle{display:flex;align-items:center;width:100%;min-height:48px;padding:12px 18px;color:#fff;font-size:15px;text-align:left;border-bottom:1px solid #ffffff20;touch-action:manipulation}
- .mcn-nav-dropdown{width:100%}
- .mcn-nav-submenu{position:static;width:100%;max-height:45vh;box-shadow:none;border:0;border-radius:0}
- .mcn-nav-submenu a{min-height:44px;padding:11px 30px}
  .mcn-daily-trigger{min-height:112px;padding:16px 19px}
  .mcn-daily-label{font-size:17px}
  .mcn-daily-preview{font-size:22px}
  .mcn-reading-dialog{padding:0}
  .mcn-reading-panel{width:92vw;height:70vh;height:70dvh;max-height:70vh;max-height:70dvh;padding:16px 16px 24px;border-radius:16px}
  .mcn-reading-text,.mcn-reading-lyrics{font-size:19px;line-height:1.7}
-}
-@media(prefers-reduced-motion:reduce){.mcn-primary-nav *{scroll-behavior:auto}}
-
-
-/* Fresh native-details navigation: no JavaScript is required to open the mobile menu.
-   The browser/WebView owns the summary tap, avoiding click-handler and event-order failures. */
-.mcn-primary-nav{position:relative!important;z-index:12000!important;overflow:visible!important;isolation:isolate!important}
-.mcn-menu-shell{position:relative!important;width:100%!important}
-.mcn-menu-shell>summary{list-style:none!important}
-.mcn-menu-shell>summary::-webkit-details-marker{display:none!important}
-.mcn-menu-toggle{display:none!important}
-.mcn-menu-links{display:flex!important;position:static!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important}
-@media(max-width:700px){
- .mcn-primary-nav{display:block!important;min-height:58px!important;padding:0!important;background:#071b50!important}
- .mcn-menu-shell{display:block!important}
- .mcn-menu-shell>.mcn-menu-toggle{display:flex!important;align-items:center!important;justify-content:flex-start!important;box-sizing:border-box!important;width:100%!important;min-height:58px!important;padding:14px 18px!important;background:#071b50!important;color:#fff!important;border:0!important;cursor:pointer!important;font:700 18px/1.4 Arial,Helvetica,sans-serif!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent!important}
- .mcn-menu-shell:not([open])>.mcn-menu-links{display:none!important}
- .mcn-menu-shell[open]>.mcn-menu-links{display:flex!important;position:absolute!important;top:100%!important;left:0!important;right:0!important;z-index:12005!important;box-sizing:border-box!important;width:100%!important;max-height:70vh!important;overflow-x:hidden!important;overflow-y:auto!important;flex-direction:column!important;align-items:stretch!important;justify-content:flex-start!important;gap:0!important;padding:6px 0!important;margin:0!important;background:#08245b!important;border:1px solid #ffffff35!important;box-shadow:0 12px 28px #0007!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;-webkit-overflow-scrolling:touch!important}
- .mcn-menu-links>a,.mcn-menu-links .mcn-nav-drop-toggle{display:flex!important;align-items:center!important;box-sizing:border-box!important;width:100%!important;min-height:49px!important;padding:12px 18px!important;color:#fff!important;background:transparent!important;border:0!important;border-bottom:1px solid #ffffff20!important;text-align:left!important;text-decoration:none!important;font:600 15px/1.4 Arial,Helvetica,sans-serif!important;pointer-events:auto!important;touch-action:manipulation!important}
- .mcn-nav-dropdown{display:block!important;width:100%!important}
- .mcn-nav-submenu{position:static!important;width:100%!important;max-height:42vh!important;overflow-y:auto!important;background:#061943!important;border:0!important;border-radius:0!important;box-shadow:none!important}
- .mcn-nav-submenu a{display:flex!important;align-items:center!important;min-height:45px!important;padding:11px 32px!important;color:#fff!important}
 }
