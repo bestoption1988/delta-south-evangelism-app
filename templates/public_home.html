@@ -137,6 +137,172 @@ body.daily-devotion-modal-open{overflow:hidden}
 @media(max-width:650px){.daily-devotion-open{padding:16px 19px}.daily-devotion-type{font-size:17px}.daily-devotion-preview{font-size:22px}.daily-devotion-modal{padding:16px;align-items:center}.daily-devotion-modal-panel{display:block;width:100%;max-width:560px;min-height:220px;max-height:76vh;border-radius:15px;padding:18px 18px 22px}.daily-hymn-audio{padding:14px}.daily-devotion-modal h2{font-size:25px}}
 </style>
 
+
+<style id="mcn-mobile-layout-final">
+/* One authoritative mobile navigation and devotional dialog layout.
+   This deliberately avoids JavaScript inline height calculations in Android WebView. */
+@media (max-width: 700px) {
+  nav.navbar {
+    display:block!important;
+    position:relative!important;
+    width:100%!important;
+    min-height:58px!important;
+    height:auto!important;
+    padding:0!important;
+    margin:0!important;
+    background:#071b50!important;
+    color:#fff!important;
+    visibility:visible!important;
+    opacity:1!important;
+    overflow:visible!important;
+    z-index:12000!important;
+  }
+  nav.navbar > #menuToggle {
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-start!important;
+    width:100%!important;
+    min-height:58px!important;
+    padding:14px 18px!important;
+    margin:0!important;
+    border:0!important;
+    border-radius:0!important;
+    background:#071b50!important;
+    color:#fff!important;
+    font:700 17px/1.4 Arial,Helvetica,sans-serif!important;
+    text-align:left!important;
+    visibility:visible!important;
+    opacity:1!important;
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+    position:relative!important;
+    z-index:12002!important;
+  }
+  nav.navbar > #navLinks {
+    display:none!important;
+    position:absolute!important;
+    top:100%!important;
+    left:0!important;
+    right:0!important;
+    width:100%!important;
+    max-height:70vh!important;
+    overflow-x:hidden!important;
+    overflow-y:auto!important;
+    padding:6px 0!important;
+    margin:0!important;
+    flex-direction:column!important;
+    align-items:stretch!important;
+    justify-content:flex-start!important;
+    background:#08245b!important;
+    border:1px solid #ffffff35!important;
+    box-shadow:0 12px 28px #0005!important;
+    z-index:12003!important;
+    visibility:hidden!important;
+    opacity:0!important;
+    pointer-events:none!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  nav.navbar > #navLinks.open {
+    display:flex!important;
+    visibility:visible!important;
+    opacity:1!important;
+    pointer-events:auto!important;
+  }
+  nav.navbar #navLinks > a,
+  nav.navbar #navLinks .nav-drop-toggle {
+    display:flex!important;
+    align-items:center!important;
+    width:100%!important;
+    min-height:48px!important;
+    padding:12px 18px!important;
+    color:#fff!important;
+    font-size:15px!important;
+    line-height:1.4!important;
+    text-align:left!important;
+    border-bottom:1px solid #ffffff20!important;
+    pointer-events:auto!important;
+    touch-action:manipulation!important;
+  }
+  nav.navbar .nav-dropdown .nav-submenu {
+    display:none!important;
+    position:static!important;
+    width:100%!important;
+    max-height:45vh!important;
+    overflow-y:auto!important;
+    box-shadow:none!important;
+  }
+  nav.navbar .nav-dropdown.open .nav-submenu {
+    display:block!important;
+    visibility:visible!important;
+    opacity:1!important;
+  }
+}
+.daily-devotion-modal[hidden] { display:none!important; }
+.daily-devotion-modal.is-open {
+  position:fixed!important;
+  inset:0!important;
+  z-index:30000!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  box-sizing:border-box!important;
+  width:100%!important;
+  height:100vh!important;
+  margin:0!important;
+  padding:12px 4vw!important;
+  overflow:hidden!important;
+  background:rgba(4,16,43,.68)!important;
+}
+.daily-devotion-modal.is-open > .daily-devotion-modal-panel {
+  position:relative!important;
+  inset:auto!important;
+  display:block!important;
+  flex:0 1 auto!important;
+  box-sizing:border-box!important;
+  width:92vw!important;
+  max-width:680px!important;
+  height:70vh!important;
+  min-height:70vh!important;
+  max-height:70vh!important;
+  margin:0 auto!important;
+  padding:18px 16px 28px!important;
+  overflow-x:hidden!important;
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch!important;
+  background:#fff!important;
+  color:#172b4d!important;
+  border:1px solid #dce3ed!important;
+  border-radius:16px!important;
+  box-shadow:0 14px 42px #0007!important;
+  visibility:visible!important;
+  opacity:1!important;
+  transform:none!important;
+}
+.daily-devotion-modal.is-open .daily-devotion-full-text,
+.daily-devotion-modal.is-open .daily-hymn-lyrics {
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  white-space:pre-wrap!important;
+  overflow-wrap:anywhere!important;
+  font-size:clamp(18px,4.5vw,22px)!important;
+  line-height:1.65!important;
+}
+.daily-devotion-modal.is-open audio {
+  display:block!important;
+  width:100%!important;
+  max-width:100%!important;
+  min-height:48px!important;
+}
+@supports (height:70dvh) {
+  .daily-devotion-modal.is-open { height:100dvh!important; }
+  .daily-devotion-modal.is-open > .daily-devotion-modal-panel {
+    height:70dvh!important;
+    min-height:70dvh!important;
+    max-height:70dvh!important;
+  }
+}
+</style>
 </head>
 <body>
 
@@ -811,69 +977,12 @@ body.daily-devotion-modal-open{overflow:hidden}
   const dailyModals = Array.from(document.querySelectorAll(".daily-devotion-modal"));
   dailyModals.forEach(modal => modal.setAttribute("aria-hidden", "true"));
 
-  // Android System WebView can report an incorrect/very small CSS vh value
-  // while the app is running edge-to-edge. Size the dialog from the actual
-  // visible viewport in pixels so the full Scripture/hymn body is scrollable.
+  // Use the same CSS-driven dialog layout as the working mobile browser.
+  // Do not set inline viewport dimensions: WebView viewport reports can be stale.
   function sizeDailyModal(modal) {
     if (!modal || !modal.classList.contains("is-open")) return;
     const panel = modal.querySelector(".daily-devotion-modal-panel");
-    if (!panel) return;
-    // visualViewport is the most reliable measurement in Android WebView,
-    // especially when the status/navigation bars and edge-to-edge mode change.
-    const layoutHeight = Math.max(
-      window.innerHeight || 0,
-      document.documentElement.clientHeight || 0,
-      document.body.clientHeight || 0,
-      screen.availHeight || 0,
-      screen.height || 0,
-      700
-    );
-    const visualHeight = Math.round(window.visualViewport?.height || 0);
-    // Ignore WebView visualViewport values that are abnormally short.
-    const viewportHeight = visualHeight >= layoutHeight * 0.65
-      ? visualHeight
-      : layoutHeight;
-    const viewportWidth = Math.round(
-      window.visualViewport?.width ||
-      window.innerWidth ||
-      document.documentElement.clientWidth ||
-      document.body.clientWidth ||
-      screen.availWidth ||
-      screen.width ||
-      360
-    );
-    // Give the reading panel enough vertical room; leave a small margin
-    // above and below, while keeping the content independently scrollable.
-    const panelHeight = Math.max(240, Math.round(viewportHeight * 0.70));
-    modal.style.setProperty("position", "fixed", "important");
-    modal.style.setProperty("inset", "0", "important");
-    modal.style.setProperty("display", "block", "important");
-    modal.style.setProperty("width", viewportWidth + "px", "important");
-    modal.style.setProperty("height", viewportHeight + "px", "important");
-    modal.style.setProperty("padding", "0", "important");
-    modal.style.setProperty("overflow", "hidden", "important");
-    modal.style.setProperty("z-index", "30000", "important");
-    panel.style.setProperty("position", "fixed", "important");
-    panel.style.setProperty("display", "block", "important");
-    panel.style.setProperty("box-sizing", "border-box", "important");
-    panel.style.setProperty("left", Math.round(viewportWidth * 0.04) + "px", "important");
-    const viewportOffsetTop = Math.round(window.visualViewport?.offsetTop || 0);
-    panel.style.setProperty("top", (viewportOffsetTop + Math.round((viewportHeight - panelHeight) / 2)) + "px", "important");
-    panel.style.setProperty("width", Math.round(viewportWidth * 0.92) + "px", "important");
-    panel.style.setProperty("height", panelHeight + "px", "important");
-    panel.style.setProperty("min-height", panelHeight + "px", "important");
-    panel.style.setProperty("max-height", panelHeight + "px", "important");
-    panel.style.setProperty("max-width", "none", "important");
-    panel.style.setProperty("margin", "0", "important");
-    panel.style.setProperty("overflow-x", "hidden", "important");
-    panel.style.setProperty("overflow-y", "auto", "important");
-    panel.style.setProperty("-webkit-overflow-scrolling", "touch");
-    panel.style.setProperty("padding", "18px 16px 28px", "important");
-    panel.style.setProperty("background", "#fff", "important");
-    panel.style.setProperty("color", "#172b4d", "important");
-    panel.style.setProperty("visibility", "visible", "important");
-    panel.style.setProperty("opacity", "1", "important");
-    panel.style.setProperty("z-index", "30001", "important");
+    if (panel && panel.scrollTop < 0) panel.scrollTop = 0;
   }
 
   function closeDailyModal(modal) {
