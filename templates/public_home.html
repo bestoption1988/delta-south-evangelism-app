@@ -74,14 +74,14 @@
 </div>
 
 <nav class="ds-site-nav" aria-label="Main navigation">
-  <details class="ds-menu">
-    <summary class="ds-menu-trigger">☰ Menu</summary>
-    <div class="ds-menu-panel">
+  <div class="ds-menu">
+    <button class="ds-menu-trigger" type="button" aria-expanded="false" aria-controls="dsMenuPanel">☰ Menu</button>
+    <div class="ds-menu-panel" id="dsMenuPanel" hidden>
       <a href="#home">⌂ Home</a>
       <a href="#about">About Us</a>
       <a href="#diocese">Our Diocese</a>
-      <details class="ds-menu-group">
-        <summary>Our Fellowships</summary>
+      <div class="ds-menu-group">
+        <button class="ds-menu-group-trigger" type="button" aria-expanded="false" aria-controls="mcnFellowshipsSubmenu">Our Fellowships</button>
         <div class="ds-menu-submenu" id="mcnFellowshipsSubmenu">
           <a href="/fellowship/methodist-mens-fellowship">Men</a>
           <a href="/fellowship/methodist-womens-fellowship">Women</a>
@@ -89,7 +89,7 @@
           <a href="/fellowship/methodist-campus-fellowship">MCF</a>
           <a href="/fellowships">View All Fellowships</a>
         </div>
-      </details>
+      </div>
       <a href="#ministries">Ministries</a>
       <a href="#watch">Sermons &amp; Media</a>
       <a href="/devotional-centre">Devotional Centre</a>
@@ -101,7 +101,7 @@
       <a href="#" id="saveOfflineApp">Save app offline</a>
       <a href="/login" id="nativeStaffSignIn">Staff sign in</a>
     </div>
-  </details>
+  </div>
 </nav>
 
 {% set day_verse = daily_devotion.get("verse", {}) %}
