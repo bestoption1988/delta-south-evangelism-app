@@ -49,8 +49,7 @@
 
 
 <link rel="stylesheet" href="{{ url_for('static', filename='mcn-home-components.css') }}?v=20261106-daily-clean1">
-<link rel="stylesheet" href="{{ url_for('static', filename='home-menu.css') }}?v=20261106-webviewfix2">
-<script src="{{ url_for('static', filename='home-menu.js') }}?v=20261106-webviewfix2" defer></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='home-menu.css') }}?v=20261106-freshdetails1">
 </head>
 <body>
 
@@ -74,22 +73,22 @@
 </div>
 
 <nav class="ds-site-nav" aria-label="Main navigation">
-  <div class="ds-menu">
-    <button class="ds-menu-trigger" type="button" aria-expanded="false" aria-controls="dsMenuPanel">☰ Menu</button>
-    <div class="ds-menu-panel" id="dsMenuPanel" hidden>
+  <details class="ds-menu">
+    <summary class="ds-menu-trigger">☰ Menu</summary>
+    <div class="ds-menu-panel">
       <a href="#home">⌂ Home</a>
       <a href="#about">About Us</a>
       <a href="#diocese">Our Diocese</a>
-      <div class="ds-menu-group">
-        <button class="ds-menu-group-trigger" type="button" aria-expanded="false" aria-controls="mcnFellowshipsSubmenu">Our Fellowships</button>
-        <div class="ds-menu-submenu" id="mcnFellowshipsSubmenu">
+      <details class="ds-menu-group">
+        <summary>Our Fellowships</summary>
+        <div class="ds-menu-submenu">
           <a href="/fellowship/methodist-mens-fellowship">Men</a>
           <a href="/fellowship/methodist-womens-fellowship">Women</a>
           <a href="/fellowship/methodist-youth-fellowship">Youth</a>
           <a href="/fellowship/methodist-campus-fellowship">MCF</a>
           <a href="/fellowships">View All Fellowships</a>
         </div>
-      </div>
+      </details>
       <a href="#ministries">Ministries</a>
       <a href="#watch">Sermons &amp; Media</a>
       <a href="/devotional-centre">Devotional Centre</a>
@@ -101,7 +100,7 @@
       <a href="#" id="saveOfflineApp">Save app offline</a>
       <a href="/login" id="nativeStaffSignIn">Staff sign in</a>
     </div>
-  </div>
+  </details>
 </nav>
 
 {% set day_verse = daily_devotion.get("verse", {}) %}
