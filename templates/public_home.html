@@ -86,19 +86,8 @@
     <a href="#ministries">Ministries</a><a href="#watch">Sermons &amp; Media</a><a href="/devotional-centre">Devotional Centre</a><a href="#photo-gallery">Photo Gallery</a><a href="#events">Events</a><a href="#online">Online Services</a><a href="#resources">Resources</a><a href="#contact">Contact</a>
     <a href="#" id="saveOfflineApp">Save app offline</a><a href="/login" id="nativeStaffSignIn">Staff sign in</a>
   </div>
+  </details>
 </nav>
-
-window.mcnToggleHomeMenu = function(button) {
-  var menu = document.getElementById("mcnMenuLinks");
-  if (!button || !menu) return false;
-  var open = !menu.classList.contains("is-open");
-  menu.classList.toggle("is-open", open);
-  button.setAttribute("aria-expanded", String(open));
-  button.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
-  button.textContent = open ? "✕ Close Menu" : "☰ Menu";
-  return false;
-};
-</script>
 
 {% set day_verse = daily_devotion.get("verse", {}) %}
 {% set day_hymn = daily_devotion.get("hymn", {}) %}
