@@ -1876,8 +1876,68 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             pageError = false
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
-                            // Match the working mobile-browser page layout exactly.
-                            // Android-only quick actions are still enabled by the
+                            // Android WebView fallback: bind the homepage menu natively
+                            // after the document is ready, even if a cached JS asset fails.
+                            val menuFallback = """
+                                (function() {
+                                  var root = document.querySelector('.ds-menu');
+                                  if (!root) return 'menu-root-missing';
+                                  var button = root.querySelector('.ds-menu-trigger');
+                                  var panel = root.querySelector('.ds-menu-panel');
+                                  if (button && panel) {
+                                    button.setAttribute('aria-controls', panel.id || 'dsMenuPanel');
+                                    button.setAttribute('aria-expanded', 'false');
+                                    panel.hidden = true;
+                                    button.addEventListener('click', function(ev) {
+                                      ev.preventDefault();
+                                      ev.stopImmediatePropagation();
+                                      var open = button.getAttribute('aria-expanded') !== 'true';
+                                      button.setAttribute('aria-expanded', String(open));
+                                      panel.hidden = !open;
+                                      panel.style.setProperty('display', open ? 'flex' : 'none', 'important');
+                                      if (open) {
+                                        panel.style.setProperty('position', 'absolute', 'important');
+                                        panel.style.setProperty('top', '100%', 'important');
+                                        panel.style.setProperty('left', '0', 'important');
+                                        panel.style.setProperty('right', '0', 'important');
+                                        panel.style.setProperty('z-index', '12001', 'important');
+                                        panel.style.setProperty('max-height', '72vh', 'important');
+                                        panel.style.setProperty('overflow-y', 'auto', 'important');
+                                        panel.style.setProperty('flex-direction', 'column', 'important');
+                                        panel.style.setProperty('background', '#08245b', 'important');
+                                      }
+                                    }, true);
+                                    var groupButton = root.querySelector('.ds-menu-group-trigger');
+                                    var sub = root.querySelector('.ds-menu-submenu');
+                                    if (groupButton && sub) {
+                                      groupButton.setAttribute('aria-expanded', 'false');
+                                      sub.hidden = true;
+                                      groupButton.addEventListener('click', function(ev) {
+                                        ev.preventDefault();
+                                        ev.stopImmediatePropagation();
+                                        var expanded = groupButton.getAttribute('aria-expanded') !== 'true';
+                                        groupButton.setAttribute('aria-expanded', String(expanded));
+                                        sub.hidden = !expanded;
+                                        sub.style.setProperty('display', expanded ? 'block' : 'none', 'important');
+                                      }, true);
+                                    }
+                                    return 'explicit-menu-bound';
+                                  }
+                                  var legacy = document.querySelector('.ds-menu details, details.ds-menu');
+                                  if (legacy) {
+                                    var summary = legacy.querySelector(':scope > summary');
+                                    if (summary) {
+                                      summary.addEventListener('click', function(ev) {
+                                        ev.preventDefault();
+                                        legacy.open = !legacy.open;
+                                      }, true);
+                                      return 'legacy-menu-bound';
+                                    }
+                                  }
+                                  return 'menu-controls-not-found';
+                                })();
+                            """.trimIndent()
+                            view.evaluateJavascript(menuFallback, null)
                             pageLoading = false
                         }
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
