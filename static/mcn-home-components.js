@@ -14,11 +14,6 @@
     menuButton.setAttribute("aria-label",open?"Close navigation":"Open navigation");
     menuButton.textContent=open?"✕ Close Menu":"☰ Menu";
   };
-  menuButton?.addEventListener("click",(event)=>{
-    event.preventDefault();
-    event.stopPropagation();
-    setMenuOpen(menuButton.getAttribute("aria-expanded")!=="true");
-  });
   fellowshipButton?.addEventListener("click",(event)=>{
     event.preventDefault();
     event.stopPropagation();
