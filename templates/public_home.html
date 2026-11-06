@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261106-menu-modal-fix3">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261106-menu-modal-fix4">
 
 <style>
 .pdf-book-preview {
@@ -130,7 +130,10 @@ body.daily-devotion-modal-open{overflow:hidden!important}
 .daily-hymn-audio audio{display:block;width:100%;max-width:100%;min-height:48px}
 .daily-hymn-author{font-size:14px;color:#657087}
 .daily-devotion-modal .button{margin-top:18px}
-body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{display:none!important}\n.daily-devotion-modal.is-open .daily-devotion-modal-panel{visibility:visible!important;opacity:1!important}\n.daily-devotion-modal-panel>*{visibility:visible}
+body.daily-devotion-modal-open{overflow:hidden}
+.daily-devotion-modal[hidden]{display:none!important}
+.daily-devotion-modal.is-open .daily-devotion-modal-panel{visibility:visible!important;opacity:1!important}
+.daily-devotion-modal-panel>*{visibility:visible}
 @media(max-width:650px){.daily-devotion-open{padding:16px 19px}.daily-devotion-type{font-size:17px}.daily-devotion-preview{font-size:22px}.daily-devotion-modal{padding:16px;align-items:center}.daily-devotion-modal-panel{display:block;width:100%;max-width:560px;min-height:220px;max-height:76vh;border-radius:15px;padding:18px 18px 22px}.daily-hymn-audio{padding:14px}.daily-devotion-modal h2{font-size:25px}}
 </style>
 
@@ -155,6 +158,38 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     <a class="member-btn" href="{{ url_for('login') }}">♙ Member Portal / Login</a>
   </div>
 </div>
+
+<nav class="navbar">
+  <button id="menuToggle" type="button" aria-label="Open navigation" aria-controls="navLinks" aria-expanded="false">☰ Menu</button>
+  <div id="navLinks">
+    <a href="#home">⌂ Home</a>
+    <a href="#about">About Us</a>
+    <a href="#diocese">Our Diocese</a>
+    <div class="nav-dropdown" id="fellowshipsDropdown">
+      <button type="button" class="nav-drop-toggle"
+              aria-expanded="false" aria-controls="fellowshipsSubmenu">
+        Our Fellowships ▾
+      </button>
+      <div class="nav-submenu" id="fellowshipsSubmenu">
+        <a href="/fellowship/methodist-mens-fellowship">Men</a>
+        <a href="/fellowship/methodist-womens-fellowship">Women</a>
+        <a href="/fellowship/methodist-youth-fellowship">Youth</a>
+        <a href="/fellowship/methodist-campus-fellowship">MCF</a>
+        <a href="/fellowships">View All Fellowships</a>
+      </div>
+    </div>
+    <a href="#ministries">Ministries</a>
+    <a href="#watch">Sermons & Media</a>
+    <a href="/devotional-centre">Devotional Centre</a>
+    <a href="#photo-gallery">Photo Gallery</a>
+    <a href="#events">Events</a>
+    <a href="#online">Online Services</a>
+    <a href="#resources">Resources</a>
+    <a href="#contact">Contact</a>
+    <a href="#" id="saveOfflineApp">Save app offline</a>
+    <a href="/login" id="nativeStaffSignIn">Staff sign in</a>
+  </div>
+</nav>
 
 {% set day_verse = daily_devotion.get("verse", {}) %}
 {% set day_hymn = daily_devotion.get("hymn", {}) %}
@@ -216,37 +251,7 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
   </div>
 </div>
 
-<nav class="navbar">
-  <button id="menuToggle" type="button" aria-label="Open navigation" aria-controls="navLinks" aria-expanded="false">☰ Menu</button>
-  <div id="navLinks">
-    <a href="#home">⌂ Home</a>
-    <a href="#about">About Us</a>
-    <a href="#diocese">Our Diocese</a>
-    <div class="nav-dropdown" id="fellowshipsDropdown">
-      <button type="button" class="nav-drop-toggle"
-              aria-expanded="false" aria-controls="fellowshipsSubmenu">
-        Our Fellowships ▾
-      </button>
-      <div class="nav-submenu" id="fellowshipsSubmenu">
-        <a href="/fellowship/methodist-mens-fellowship">Men</a>
-        <a href="/fellowship/methodist-womens-fellowship">Women</a>
-        <a href="/fellowship/methodist-youth-fellowship">Youth</a>
-        <a href="/fellowship/methodist-campus-fellowship">MCF</a>
-        <a href="/fellowships">View All Fellowships</a>
-      </div>
-    </div>
-    <a href="#ministries">Ministries</a>
-    <a href="#watch">Sermons & Media</a>
-    <a href="/devotional-centre">Devotional Centre</a>
-    <a href="#photo-gallery">Photo Gallery</a>
-    <a href="#events">Events</a>
-    <a href="#online">Online Services</a>
-    <a href="#resources">Resources</a>
-    <a href="#contact">Contact</a>
-    <a href="#" id="saveOfflineApp">Save app offline</a>
-    <a href="/login" id="nativeStaffSignIn">Staff sign in</a>
-  </div>
-</nav>
+
 
 <main>
 <section class="hero" id="home">
@@ -814,15 +819,19 @@ body.daily-devotion-modal-open{overflow:hidden}\n.daily-devotion-modal[hidden]{d
     if (!panel) return;
     // visualViewport is the most reliable measurement in Android WebView,
     // especially when the status/navigation bars and edge-to-edge mode change.
-    const viewportHeight = Math.round(
-      window.visualViewport?.height ||
-      window.innerHeight ||
-      document.documentElement.clientHeight ||
-      document.body.clientHeight ||
-      screen.availHeight ||
-      screen.height ||
+    const layoutHeight = Math.max(
+      window.innerHeight || 0,
+      document.documentElement.clientHeight || 0,
+      document.body.clientHeight || 0,
+      screen.availHeight || 0,
+      screen.height || 0,
       700
     );
+    const visualHeight = Math.round(window.visualViewport?.height || 0);
+    // Ignore WebView visualViewport values that are abnormally short.
+    const viewportHeight = visualHeight >= layoutHeight * 0.65
+      ? visualHeight
+      : layoutHeight;
     const viewportWidth = Math.round(
       window.visualViewport?.width ||
       window.innerWidth ||
