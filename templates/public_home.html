@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261106-browser-layout-parity1">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261106-components-rebuild1">
 
 <style>
 .pdf-book-preview {
@@ -41,268 +41,14 @@
 .pdf-book-preview.pdf-preview-error .pdf-preview-loading {
   color: #9b2525;
 }
-/* Stable 70%-viewport Scripture/Hymn dialog on Android WebView and mobile browsers. */
-.daily-devotion-modal[hidden]{display:none!important}
-.daily-devotion-modal.is-open{
-  position:fixed!important;inset:0!important;z-index:30000!important;
-  display:block!important;width:100vw!important;height:100vh!important;
-  margin:0!important;padding:0!important;overflow:hidden!important;
-  background:rgba(4,16,43,.68)!important;
-}
-.daily-devotion-modal.is-open>.daily-devotion-modal-panel{
-  position:fixed!important;top:15vh!important;left:4vw!important;
-  display:block!important;flex:none!important;transform:none!important;
-  box-sizing:border-box!important;width:92vw!important;max-width:620px!important;
-  height:70vh!important;min-height:70vh!important;max-height:70vh!important;
-  margin:0!important;padding:18px 16px 28px!important;
-  overflow-x:hidden!important;overflow-y:auto!important;
-  -webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;
-  background:#fff!important;color:#172b4d!important;border:1px solid #dce3ed!important;
-  border-radius:16px!important;box-shadow:0 14px 42px #0007!important;
-  visibility:visible!important;opacity:1!important;
-}
-@supports(height:70dvh){
-  .daily-devotion-modal.is-open{height:100dvh!important}
-  .daily-devotion-modal.is-open>.daily-devotion-modal-panel{
-    top:15dvh!important;height:70dvh!important;min-height:70dvh!important;max-height:70dvh!important;
-  }
-}
-.daily-devotion-modal.is-open .daily-devotion-modal-panel>*{visibility:visible!important;opacity:1!important;max-width:100%!important}
-.daily-devotion-modal.is-open .daily-devotion-modal-close{
-  position:sticky!important;top:0!important;float:right!important;z-index:20!important;
-  width:42px!important;height:42px!important;margin:0 0 8px 10px!important;
-}
-.daily-devotion-modal.is-open h2{
-  clear:both!important;white-space:normal!important;overflow-wrap:anywhere!important;
-  font-size:clamp(21px,5.5vw,27px)!important;line-height:1.3!important;
-}
-.daily-devotion-modal.is-open .daily-devotion-full-text,
-.daily-devotion-modal.is-open .daily-hymn-lyrics{
-  display:block!important;width:100%!important;max-width:100%!important;
-  white-space:pre-wrap!important;overflow-wrap:anywhere!important;word-break:normal!important;
-  font-size:clamp(18px,4.5vw,22px)!important;line-height:1.65!important;
-}
-.daily-devotion-modal.is-open audio{display:block!important;width:100%!important;max-width:100%!important;min-height:48px!important}
-body.daily-devotion-modal-open{overflow:hidden!important}
-@media(max-width:700px){
-  .navbar{position:relative!important;z-index:1000!important;isolation:isolate!important}
-  .navbar #menuToggle{display:flex!important;align-items:center!important;width:100%!important;min-height:54px!important;touch-action:manipulation!important;pointer-events:auto!important}
-  .navbar #navLinks{display:none!important;position:absolute!important;top:100%!important;left:0!important;right:0!important;
-    max-height:65vh!important;overflow-y:auto!important;flex-direction:column!important;align-items:stretch!important;
-    background:#08245b!important;z-index:1005!important;visibility:hidden!important;pointer-events:none!important;
-    -webkit-overflow-scrolling:touch!important}
-  .navbar #navLinks.open{display:flex!important;visibility:visible!important;pointer-events:auto!important}
-  .navbar #navLinks a,.navbar #navLinks button{display:flex!important;align-items:center!important;min-height:46px!important;padding:11px 16px!important}
-}
-
 </style>
 
 
-<style>
-/* Scripture and Hymn of the Day — original compact preview with full-reading popups */
-.daily-devotion{padding:0;background:#f5f7fc;border-bottom:1px solid #d6dce8}
-.daily-devotion-heading{display:none}
-.daily-devotion-grid{width:100%;max-width:1200px;margin:0 auto;display:grid;grid-template-columns:1fr;gap:0}
-.daily-devotion-card{min-width:0;margin:0;background:#f5f7fc;border:0;border-bottom:1px solid #d6dce8;border-radius:0;box-shadow:none;overflow:hidden}
-.daily-devotion-card:nth-child(2){border-left:0}
-.daily-devotion-open{display:block;width:100%;border:0;background:transparent;color:#172b4d;text-align:left;padding:18px 20px 16px;cursor:pointer}
-.daily-devotion-open:focus-visible{outline:3px solid #d8aa25;outline-offset:-3px}
-.daily-devotion-type{display:block;margin:0 0 8px;color:#102d60;font:800 clamp(16px,2.2vw,21px)/1.3 Arial,Helvetica,sans-serif}
-.daily-devotion-reference{display:block;margin:0 0 7px;color:#102d60;font-weight:800;font-size:clamp(16px,2vw,20px)}
-.daily-devotion-preview{display:block;width:100%;min-width:0;overflow:visible;white-space:normal;overflow-wrap:anywhere;color:#25314a;font:italic clamp(19px,3vw,27px)/1.45 Georgia,serif}
-.daily-devotion-marquee{display:block;width:100%;min-width:0;max-width:100%;align-items:initial;gap:0;animation:none;transform:none;white-space:normal;overflow-wrap:anywhere}
-.daily-devotion-marquee span{display:block;flex:none;white-space:normal;overflow-wrap:anywhere}.daily-devotion-marquee span:nth-child(2){display:none!important}
-@keyframes dailyDevotionRightToLeft{from{transform:translateX(0)}to{transform:translateX(-50%)}}
-.daily-devotion-open:hover .daily-devotion-marquee,.daily-devotion-open:focus-visible .daily-devotion-marquee{animation:none}
-@media(prefers-reduced-motion:reduce){.daily-devotion-marquee{display:block;width:auto;min-width:0;animation:none;white-space:normal}.daily-devotion-marquee span:nth-child(2){display:none}}
-.daily-devotion-hymn-preview{padding-left:0}
-.daily-devotion-tap{display:none}
-.daily-devotion-modal{position:fixed;inset:0;z-index:20000;display:none;align-items:center;justify-content:center;padding:18px;background:rgba(4,16,43,.38)}
-.daily-devotion-modal.is-open{display:flex!important}
-.daily-devotion-modal-panel{position:relative;display:block;flex:0 1 auto;width:min(92vw,680px);height:auto;min-height:180px;max-height:76vh;overflow-y:auto;overflow-x:hidden;background:#fff;color:#172b4d;border:1px solid #dce3ed;border-radius:16px;padding:22px clamp(18px,4vw,30px);box-shadow:0 14px 42px #0003}
-.daily-devotion-modal-close{position:sticky;top:0;float:right;width:42px;height:42px;border:0;border-radius:50%;background:#eef1f6;color:#102d60;font-size:28px;cursor:pointer;z-index:2}
-.daily-devotion-modal h2{clear:both;margin:4px 0 14px;color:#102d60;font:700 clamp(22px,4vw,30px)/1.3 Georgia,serif}
-.daily-devotion-modal .daily-devotion-type{font-size:15px}
-.daily-devotion-full-text{font:clamp(19px,3vw,25px)/1.8 Georgia,serif;white-space:pre-line;color:#263a59}
-.daily-hymn-lyrics{white-space:pre-wrap;line-height:1.8;font:clamp(19px,3vw,25px)/1.8 Georgia,serif;color:#263a59}
-.daily-hymn-audio{margin:20px 0;padding:18px;border-radius:13px;background:#f1f5f8}
-.daily-hymn-audio p{margin:0 0 12px;font-weight:800;color:#172b4d;font-size:18px}
-.daily-hymn-audio audio{display:block;width:100%;max-width:100%;min-height:48px}
-.daily-hymn-author{font-size:14px;color:#657087}
-.daily-devotion-modal .button{margin-top:18px}
-body.daily-devotion-modal-open{overflow:hidden}
-.daily-devotion-modal[hidden]{display:none!important}
-.daily-devotion-modal.is-open .daily-devotion-modal-panel{visibility:visible!important;opacity:1!important}
-.daily-devotion-modal-panel>*{visibility:visible}
-@media(max-width:650px){.daily-devotion-open{padding:16px 19px}.daily-devotion-type{font-size:17px}.daily-devotion-preview{font-size:22px}.daily-devotion-modal{padding:16px;align-items:center}.daily-devotion-modal-panel{display:block;width:100%;max-width:560px;min-height:220px;max-height:76vh;border-radius:15px;padding:18px 18px 22px}.daily-hymn-audio{padding:14px}.daily-devotion-modal h2{font-size:25px}}
-</style>
 
 
-<style id="mcn-mobile-layout-final">
-/* One authoritative mobile navigation and devotional dialog layout.
-   This deliberately avoids JavaScript inline height calculations in Android WebView. */
-@media (max-width: 700px) {
-  nav.navbar {
-    display:block!important;
-    position:relative!important;
-    width:100%!important;
-    min-height:58px!important;
-    height:auto!important;
-    padding:0!important;
-    margin:0!important;
-    background:#071b50!important;
-    color:#fff!important;
-    visibility:visible!important;
-    opacity:1!important;
-    overflow:visible!important;
-    z-index:12000!important;
-  }
-  nav.navbar > #menuToggle {
-    display:flex!important;
-    align-items:center!important;
-    justify-content:flex-start!important;
-    width:100%!important;
-    min-height:58px!important;
-    padding:14px 18px!important;
-    margin:0!important;
-    border:0!important;
-    border-radius:0!important;
-    background:#071b50!important;
-    color:#fff!important;
-    font:700 17px/1.4 Arial,Helvetica,sans-serif!important;
-    text-align:left!important;
-    visibility:visible!important;
-    opacity:1!important;
-    pointer-events:auto!important;
-    touch-action:manipulation!important;
-    position:relative!important;
-    z-index:12002!important;
-  }
-  nav.navbar > #navLinks {
-    display:none!important;
-    position:absolute!important;
-    top:100%!important;
-    left:0!important;
-    right:0!important;
-    width:100%!important;
-    max-height:70vh!important;
-    overflow-x:hidden!important;
-    overflow-y:auto!important;
-    padding:6px 0!important;
-    margin:0!important;
-    flex-direction:column!important;
-    align-items:stretch!important;
-    justify-content:flex-start!important;
-    background:#08245b!important;
-    border:1px solid #ffffff35!important;
-    box-shadow:0 12px 28px #0005!important;
-    z-index:12003!important;
-    visibility:hidden!important;
-    opacity:0!important;
-    pointer-events:none!important;
-    -webkit-overflow-scrolling:touch!important;
-  }
-  nav.navbar > #navLinks.open {
-    display:flex!important;
-    visibility:visible!important;
-    opacity:1!important;
-    pointer-events:auto!important;
-  }
-  nav.navbar #navLinks > a,
-  nav.navbar #navLinks .nav-drop-toggle {
-    display:flex!important;
-    align-items:center!important;
-    width:100%!important;
-    min-height:48px!important;
-    padding:12px 18px!important;
-    color:#fff!important;
-    font-size:15px!important;
-    line-height:1.4!important;
-    text-align:left!important;
-    border-bottom:1px solid #ffffff20!important;
-    pointer-events:auto!important;
-    touch-action:manipulation!important;
-  }
-  nav.navbar .nav-dropdown .nav-submenu {
-    display:none!important;
-    position:static!important;
-    width:100%!important;
-    max-height:45vh!important;
-    overflow-y:auto!important;
-    box-shadow:none!important;
-  }
-  nav.navbar .nav-dropdown.open .nav-submenu {
-    display:block!important;
-    visibility:visible!important;
-    opacity:1!important;
-  }
-}
-.daily-devotion-modal[hidden] { display:none!important; }
-.daily-devotion-modal.is-open {
-  position:fixed!important;
-  inset:0!important;
-  z-index:30000!important;
-  display:flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  box-sizing:border-box!important;
-  width:100%!important;
-  height:100vh!important;
-  margin:0!important;
-  padding:12px 4vw!important;
-  overflow:hidden!important;
-  background:rgba(4,16,43,.68)!important;
-}
-.daily-devotion-modal.is-open > .daily-devotion-modal-panel {
-  position:relative!important;
-  inset:auto!important;
-  display:block!important;
-  flex:0 1 auto!important;
-  box-sizing:border-box!important;
-  width:92vw!important;
-  max-width:680px!important;
-  height:70vh!important;
-  min-height:70vh!important;
-  max-height:70vh!important;
-  margin:0 auto!important;
-  padding:18px 16px 28px!important;
-  overflow-x:hidden!important;
-  overflow-y:auto!important;
-  -webkit-overflow-scrolling:touch!important;
-  background:#fff!important;
-  color:#172b4d!important;
-  border:1px solid #dce3ed!important;
-  border-radius:16px!important;
-  box-shadow:0 14px 42px #0007!important;
-  visibility:visible!important;
-  opacity:1!important;
-  transform:none!important;
-}
-.daily-devotion-modal.is-open .daily-devotion-full-text,
-.daily-devotion-modal.is-open .daily-hymn-lyrics {
-  display:block!important;
-  width:100%!important;
-  max-width:100%!important;
-  white-space:pre-wrap!important;
-  overflow-wrap:anywhere!important;
-  font-size:clamp(18px,4.5vw,22px)!important;
-  line-height:1.65!important;
-}
-.daily-devotion-modal.is-open audio {
-  display:block!important;
-  width:100%!important;
-  max-width:100%!important;
-  min-height:48px!important;
-}
-@supports (height:70dvh) {
-  .daily-devotion-modal.is-open { height:100dvh!important; }
-  .daily-devotion-modal.is-open > .daily-devotion-modal-panel {
-    height:70dvh!important;
-    min-height:70dvh!important;
-    max-height:70dvh!important;
-  }
-}
-</style>
+
+
+<link rel="stylesheet" href="{{ url_for('static', filename='mcn-home-components.css') }}?v=1">
 </head>
 <body>
 
@@ -325,98 +71,57 @@ body.daily-devotion-modal-open{overflow:hidden}
   </div>
 </div>
 
-<nav class="navbar">
-  <button id="menuToggle" type="button" aria-label="Open navigation" aria-controls="navLinks" aria-expanded="false">☰ Menu</button>
-  <div id="navLinks">
-    <a href="#home">⌂ Home</a>
-    <a href="#about">About Us</a>
-    <a href="#diocese">Our Diocese</a>
-    <div class="nav-dropdown" id="fellowshipsDropdown">
-      <button type="button" class="nav-drop-toggle"
-              aria-expanded="false" aria-controls="fellowshipsSubmenu">
-        Our Fellowships ▾
-      </button>
-      <div class="nav-submenu" id="fellowshipsSubmenu">
-        <a href="/fellowship/methodist-mens-fellowship">Men</a>
-        <a href="/fellowship/methodist-womens-fellowship">Women</a>
-        <a href="/fellowship/methodist-youth-fellowship">Youth</a>
-        <a href="/fellowship/methodist-campus-fellowship">MCF</a>
-        <a href="/fellowships">View All Fellowships</a>
+<nav class="navbar mcn-primary-nav" aria-label="Main navigation">
+  <button id="mcnMenuToggle" class="mcn-menu-toggle" type="button" aria-label="Open navigation" aria-controls="mcnMenuLinks" aria-expanded="false">☰ Menu</button>
+  <div id="mcnMenuLinks" class="mcn-menu-links">
+    <a href="#home">⌂ Home</a><a href="#about">About Us</a><a href="#diocese">Our Diocese</a>
+    <div class="mcn-nav-dropdown" id="mcnFellowshipsDropdown">
+      <button type="button" class="mcn-nav-drop-toggle" aria-expanded="false" aria-controls="mcnFellowshipsSubmenu">Our Fellowships ▾</button>
+      <div class="mcn-nav-submenu" id="mcnFellowshipsSubmenu">
+        <a href="/fellowship/methodist-mens-fellowship">Men</a><a href="/fellowship/methodist-womens-fellowship">Women</a><a href="/fellowship/methodist-youth-fellowship">Youth</a><a href="/fellowship/methodist-campus-fellowship">MCF</a><a href="/fellowships">View All Fellowships</a>
       </div>
     </div>
-    <a href="#ministries">Ministries</a>
-    <a href="#watch">Sermons & Media</a>
-    <a href="/devotional-centre">Devotional Centre</a>
-    <a href="#photo-gallery">Photo Gallery</a>
-    <a href="#events">Events</a>
-    <a href="#online">Online Services</a>
-    <a href="#resources">Resources</a>
-    <a href="#contact">Contact</a>
-    <a href="#" id="saveOfflineApp">Save app offline</a>
-    <a href="/login" id="nativeStaffSignIn">Staff sign in</a>
+    <a href="#ministries">Ministries</a><a href="#watch">Sermons &amp; Media</a><a href="/devotional-centre">Devotional Centre</a><a href="#photo-gallery">Photo Gallery</a><a href="#events">Events</a><a href="#online">Online Services</a><a href="#resources">Resources</a><a href="#contact">Contact</a>
+    <a href="#" id="saveOfflineApp">Save app offline</a><a href="/login" id="nativeStaffSignIn">Staff sign in</a>
   </div>
 </nav>
 
 {% set day_verse = daily_devotion.get("verse", {}) %}
 {% set day_hymn = daily_devotion.get("hymn", {}) %}
-<section id="daily-devotion" class="daily-devotion" aria-label="Scripture and Hymn of the Day">
-  <div class="daily-devotion-heading">
-    <h2>Scripture &amp; Hymn of the Day</h2>
-  </div>
-  <div class="daily-devotion-grid">
-    <article class="daily-devotion-card">
-      <button type="button" class="daily-devotion-open" data-daily-open="dailyScriptureModal" aria-haspopup="dialog">
-        <span class="daily-devotion-type">SCRIPTURE OF THE DAY: {{ day_verse.get("reference", "Scripture") }}</span>
-        <span class="daily-devotion-preview"><span class="daily-devotion-marquee"><span>{{ day_verse.get("text", "The daily Scripture will appear here.")|truncate(150, True, "…") }}</span><span aria-hidden="true">{{ day_verse.get("text", "The daily Scripture will appear here.")|truncate(150, True, "…") }}</span></span></span>
-        <span class="daily-devotion-tap">Tap to read the full Scripture</span>
-      </button>
-    </article>
-    <article class="daily-devotion-card">
-      <button type="button" class="daily-devotion-open" data-daily-open="dailyHymnModal" aria-haspopup="dialog">
-        <span class="daily-devotion-type">{{ day_hymn.get("title", "HYMN OF THE DAY") }}</span>
-        <span class="daily-devotion-preview daily-devotion-hymn-preview"><span class="daily-devotion-marquee"><span>{{ day_hymn.get("lyrics", "The daily hymn will appear here.").split("\n")[0]|truncate(120, True, "…") }}</span><span aria-hidden="true">{{ day_hymn.get("lyrics", "The daily hymn will appear here.").split("\n")[0]|truncate(120, True, "…") }}</span></span></span>
-        <span class="daily-devotion-tap">Tap to read the full hymn and listen</span>
-      </button>
-    </article>
+<section id="daily-devotion" class="mcn-daily" aria-label="Scripture and Hymn of the Day">
+  {% set day_verse = daily_devotion.get("verse", {}) %}
+  {% set day_hymn = daily_devotion.get("hymn", {}) %}
+  <div class="mcn-daily-grid">
+    <article class="mcn-daily-card"><button type="button" class="mcn-daily-trigger" data-mcn-reading-open="mcnScriptureDialog" aria-haspopup="dialog" aria-controls="mcnScriptureDialog">
+      <span class="mcn-daily-label">SCRIPTURE OF THE DAY: {{ day_verse.get("reference", "Scripture") }}</span>
+      <span class="mcn-daily-preview">{{ day_verse.get("text", "The daily Scripture will appear here.")|truncate(150, True, "…") }}</span>
+      <span class="mcn-daily-hint">Tap to read the full Scripture</span>
+    </button></article>
+    <article class="mcn-daily-card"><button type="button" class="mcn-daily-trigger" data-mcn-reading-open="mcnHymnDialog" aria-haspopup="dialog" aria-controls="mcnHymnDialog">
+      <span class="mcn-daily-label">{{ day_hymn.get("title", "HYMN OF THE DAY") }}</span>
+      <span class="mcn-daily-preview">{{ day_hymn.get("lyrics", "The daily hymn will appear here.").split("\n")[0]|truncate(120, True, "…") }}</span>
+      <span class="mcn-daily-hint">Tap to read the full hymn and listen</span>
+    </button></article>
   </div>
 </section>
-
-<div class="daily-devotion-modal" id="dailyScriptureModal" role="dialog" aria-modal="true" aria-labelledby="dailyScriptureTitle" hidden>
-  <div class="daily-devotion-modal-panel">
-    <button type="button" class="daily-devotion-modal-close" data-daily-close aria-label="Close Scripture">×</button>
-    <span class="daily-devotion-type">SCRIPTURE OF THE DAY</span>
-    <h2 id="dailyScriptureTitle">{{ day_verse.get("reference", "Scripture of the Day") }}</h2>
-    <div class="daily-devotion-full-text">{{ day_verse.get("text", "") }}</div>
+<div class="mcn-reading-dialog" id="mcnScriptureDialog" role="dialog" aria-modal="true" aria-labelledby="mcnScriptureTitle" aria-hidden="true" hidden>
+  <div class="mcn-reading-panel" tabindex="-1"><button type="button" class="mcn-reading-close" aria-label="Close Scripture">×</button>
+    <span class="mcn-reading-kicker">SCRIPTURE OF THE DAY</span><h2 class="mcn-reading-title" id="mcnScriptureTitle">{{ day_verse.get("reference", "Scripture of the Day") }}</h2>
+    <div class="mcn-reading-text">{{ day_verse.get("text", "") }}</div>
     <a class="button blue-button" href="/devotional-centre/bible-verses">Browse the Scripture Library →</a>
   </div>
 </div>
-
-<div class="daily-devotion-modal" id="dailyHymnModal" role="dialog" aria-modal="true" aria-labelledby="dailyHymnTitle" hidden>
-  <div class="daily-devotion-modal-panel">
-    <button type="button" class="daily-devotion-modal-close" data-daily-close aria-label="Close hymn">×</button>
-    <span class="daily-devotion-type">HYMN OF THE DAY</span>
-    <h2 id="dailyHymnTitle">{{ day_hymn.get("title", "Hymn of the Day") }}</h2>
-    {% if day_hymn.get("meter") %}<p><b>Meter:</b> {{ day_hymn.get("meter") }}</p>{% endif %}
-    <div class="daily-hymn-lyrics">{{ day_hymn.get("lyrics", "") }}</div>
-    {% if day_hymn.get("audio_url") %}
-      <div class="daily-hymn-audio">
-        <p>{{ day_hymn.get("audio_tune_name", "Main tune") }}</p>
-        <audio controls preload="none" playsinline src="{{ day_hymn.get('audio_url') }}"></audio>
-      </div>
-    {% endif %}
-    {% for tune in day_hymn.get("other_tunes", []) %}
-      {% if tune.get("audio_url") %}
-        <div class="daily-hymn-audio">
-          <p>{{ tune.get("title", tune.get("musicTitle", "Additional hymn tune")) }}</p>
-          <audio controls preload="none" playsinline src="{{ tune.get('audio_url') }}"></audio>
-        </div>
-      {% endif %}
-    {% endfor %}
-    {% if day_hymn.get("author") %}<p class="daily-hymn-author"><b>Author:</b> {{ day_hymn.get("author") }}</p>{% endif %}
+<div class="mcn-reading-dialog" id="mcnHymnDialog" role="dialog" aria-modal="true" aria-labelledby="mcnHymnTitle" aria-hidden="true" hidden>
+  <div class="mcn-reading-panel" tabindex="-1"><button type="button" class="mcn-reading-close" aria-label="Close hymn">×</button>
+    <span class="mcn-reading-kicker">HYMN OF THE DAY</span><h2 class="mcn-reading-title" id="mcnHymnTitle">{{ day_hymn.get("title", "Hymn of the Day") }}</h2>
+    {% if day_hymn.get("meter") %}<p class="mcn-reading-meta"><b>Meter:</b> {{ day_hymn.get("meter") }}</p>{% endif %}
+    <div class="mcn-reading-lyrics">{{ day_hymn.get("lyrics", "") }}</div>
+    {% if day_hymn.get("audio_url") %}<div class="mcn-reading-audio"><p>{{ day_hymn.get("audio_tune_name", "Main tune") }}</p><audio controls preload="none" playsinline src="{{ day_hymn.get('audio_url') }}"></audio></div>{% endif %}
+    {% for tune in day_hymn.get("other_tunes", []) %}{% if tune.get("audio_url") %}<div class="mcn-reading-audio"><p>{{ tune.get("title", tune.get("musicTitle", "Additional hymn tune")) }}</p><audio controls preload="none" playsinline src="{{ tune.get('audio_url') }}"></audio></div>{% endif %}{% endfor %}
+    {% if day_hymn.get("author") %}<p class="mcn-reading-meta"><b>Author:</b> {{ day_hymn.get("author") }}</p>{% endif %}
     <a class="button blue-button" href="/devotional-centre/english-hymns">Browse English Methodist Hymns →</a>
   </div>
 </div>
-
 
 
 <main>
@@ -883,11 +588,11 @@ body.daily-devotion-modal-open{overflow:hidden}
 <script src="{{ url_for('static', filename='public-member-care.js') }}?v=20261016-guest-chat"></script>
 <script>
 (() => {
-  const toggle = document.getElementById("menuToggle");
-  const links = document.getElementById("navLinks");
-  const dropdown = document.getElementById("fellowshipsDropdown");
-  const dropToggle = dropdown?.querySelector(".nav-drop-toggle");
-  const submenu = document.getElementById("fellowshipsSubmenu");
+  const toggle = document.getElementById("mcnMenuToggle");
+  const links = document.getElementById("mcnMenuLinks");
+  const dropdown = document.getElementById("mcnFellowshipsDropdown");
+  const dropToggle = dropdown?.querySelector(".mcn-nav-drop-toggle");
+  const submenu = document.getElementById("mcnFellowshipsSubmenu");
   const saveOffline = document.getElementById("saveOfflineApp");
   const staffSignIn = document.getElementById("nativeStaffSignIn");
   const isAndroidApp = navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1;
@@ -924,115 +629,7 @@ body.daily-devotion-modal-open{overflow:hidden}
     });
   }
 
-  // Mobile navigation: use one explicit state function and close on selection/outside tap.
-  const navbar = toggle?.closest(".navbar");
-  function setNavigationOpen(open) {
-    if (!toggle || !links) return;
-    links.classList.toggle("open", !!open);
-    toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    toggle.setAttribute("aria-label", open ? "Close navigation" : "Open navigation");
-    toggle.textContent = open ? "✕ Close Menu" : "☰ Menu";
-    if (window.matchMedia("(max-width: 700px)").matches) {
-      links.style.setProperty("display", open ? "flex" : "none", "important");
-      links.style.setProperty("visibility", open ? "visible" : "hidden", "important");
-      links.style.setProperty("pointer-events", open ? "auto" : "none", "important");
-    }
-  }
-  if (toggle && links) {
-    setNavigationOpen(false);
-    toggle.addEventListener("click", event => {
-      event.preventDefault();
-      event.stopPropagation();
-      const shouldOpen = toggle.getAttribute("aria-expanded") !== "true";
-      setNavigationOpen(shouldOpen);
-    }, true);
-    links.addEventListener("click", event => {
-      if (event.target.closest("a") && !event.target.closest(".nav-submenu")) {
-        setNavigationOpen(false);
-      } else if (event.target.closest(".nav-submenu a")) {
-        setNavigationOpen(false);
-      }
-    });
-    document.addEventListener("click", event => {
-      if (navbar && !navbar.contains(event.target)) setNavigationOpen(false);
-    });
-    document.addEventListener("keydown", event => {
-      if (event.key === "Escape") setNavigationOpen(false);
-    });
-    window.addEventListener("resize", () => {
-      if (!window.matchMedia("(max-width: 700px)").matches) {
-        links.style.removeProperty("display");
-        links.style.removeProperty("visibility");
-        links.style.removeProperty("pointer-events");
-        links.classList.remove("open");
-        toggle.setAttribute("aria-expanded", "false");
-        toggle.textContent = "☰ Menu";
-      } else {
-        setNavigationOpen(toggle.getAttribute("aria-expanded") === "true");
-      }
-    });
-  }
-
-  // Open the full daily Scripture and hymn in an accessible, scrollable popup.
-  const dailyModals = Array.from(document.querySelectorAll(".daily-devotion-modal"));
-  dailyModals.forEach(modal => modal.setAttribute("aria-hidden", "true"));
-
-  // Use the same CSS-driven dialog layout as the working mobile browser.
-  // Do not set inline viewport dimensions: WebView viewport reports can be stale.
-  function sizeDailyModal(modal) {
-    if (!modal || !modal.classList.contains("is-open")) return;
-    const panel = modal.querySelector(".daily-devotion-modal-panel");
-    if (panel && panel.scrollTop < 0) panel.scrollTop = 0;
-  }
-
-  function closeDailyModal(modal) {
-    if (!modal) return;
-    modal.classList.remove("is-open");
-    modal.hidden = true;
-    modal.setAttribute("aria-hidden", "true");
-    modal.removeAttribute("style");
-    const panel = modal.querySelector(".daily-devotion-modal-panel");
-    panel?.removeAttribute("style");
-    document.body.classList.remove("daily-devotion-modal-open");
-    modal.querySelectorAll("audio").forEach(player => { player.pause(); });
-  }
-  document.querySelectorAll("[data-daily-open]").forEach(button => {
-    button.addEventListener("click", () => {
-      const modal = document.getElementById(button.dataset.dailyOpen);
-      if (!modal) return;
-      dailyModals.forEach(item => closeDailyModal(item));
-      modal.hidden = false;
-      modal.classList.add("is-open");
-      document.body.classList.add("daily-devotion-modal-open");
-      sizeDailyModal(modal);
-      requestAnimationFrame(() => {
-        sizeDailyModal(modal);
-        const panel = modal.querySelector(".daily-devotion-modal-panel");
-        panel?.scrollTo(0, 0);
-      });
-      modal.setAttribute("aria-hidden", "false");
-      const closeButton = modal.querySelector("[data-daily-close]");
-      closeButton?.focus({preventScroll:true});
-    });
-  });
-  window.addEventListener("resize", () => {
-    dailyModals.forEach(modal => sizeDailyModal(modal));
-  });
-  window.visualViewport?.addEventListener("resize", () => {
-    dailyModals.forEach(modal => sizeDailyModal(modal));
-  });
-  dailyModals.forEach(modal => {
-    modal.querySelector("[data-daily-close]")?.addEventListener("click", () => closeDailyModal(modal));
-    modal.addEventListener("click", event => { if (event.target === modal) closeDailyModal(modal); });
-  });
-
   if (dropdown && dropToggle && submenu) {
-    dropToggle.addEventListener("click", (event) => {
-      event.stopPropagation();
-      const open = dropdown.classList.toggle("open");
-      dropToggle.setAttribute("aria-expanded", String(open));
-    });
-
     fetch("/api/public/fellowships", {headers: {"Accept": "application/json"}})
       .then(response => {
         if (!response.ok) throw new Error("Fellowship list unavailable");
@@ -1081,41 +678,11 @@ body.daily-devotion-modal-open{overflow:hidden}
       });
   }
 
-  if (links) {
-    links.addEventListener("click", event => {
-      const anchor = event.target.closest("a");
-      if (!anchor) return;
-
-      if (dropdown && !dropdown.contains(anchor)) {
-        dropdown.classList.remove("open");
-        dropToggle?.setAttribute("aria-expanded", "false");
-      }
-
-      links.classList.remove("open");
-      toggle?.setAttribute("aria-expanded", "false");
-    });
-  }
-
-  document.addEventListener("click", event => {
-    if (dropdown && !dropdown.contains(event.target)) {
-      dropdown.classList.remove("open");
-      dropToggle?.setAttribute("aria-expanded", "false");
-    }
-  });
-
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape") {
-      dropdown?.classList.remove("open");
-      dropToggle?.setAttribute("aria-expanded", "false");
-      links?.classList.remove("open");
-      toggle?.setAttribute("aria-expanded", "false");
-    }
-  });
-
   const year = document.getElementById("year");
   if (year) year.textContent = new Date().getFullYear();
 })();
 </script>
+<script src="{{ url_for('static', filename='mcn-home-components.js') }}?v=1" defer></script>
 
 <script type="module">
 (async function () {
