@@ -48,7 +48,8 @@
 
 
 
-<link rel="stylesheet" href="{{ url_for('static', filename='mcn-home-components.css') }}?v=20261106-native-menu1">
+<link rel="stylesheet" href="{{ url_for('static', filename='mcn-home-components.css') }}?v=20261106-clean1">
+<link rel="stylesheet" href="{{ url_for('static', filename='home-navigation.css') }}?v=20261106-clean1">
 </head>
 <body>
 
@@ -71,21 +72,34 @@
   </div>
 </div>
 
-<nav class="navbar mcn-primary-nav" aria-label="Main navigation">
-  <details id="mcnMenuShell" class="mcn-menu-shell">
-    <summary class="mcn-menu-toggle" aria-controls="mcnMenuLinks">☰ Menu</summary>
-  
-  <div id="mcnMenuLinks" class="mcn-menu-links">
-    <a href="#home">⌂ Home</a><a href="#about">About Us</a><a href="#diocese">Our Diocese</a>
-    <div class="mcn-nav-dropdown" id="mcnFellowshipsDropdown">
-      <button type="button" class="mcn-nav-drop-toggle" aria-expanded="false" aria-controls="mcnFellowshipsSubmenu">Our Fellowships ▾</button>
-      <div class="mcn-nav-submenu" id="mcnFellowshipsSubmenu">
-        <a href="/fellowship/methodist-mens-fellowship">Men</a><a href="/fellowship/methodist-womens-fellowship">Women</a><a href="/fellowship/methodist-youth-fellowship">Youth</a><a href="/fellowship/methodist-campus-fellowship">MCF</a><a href="/fellowships">View All Fellowships</a>
-      </div>
+<nav class="ds-home-navigation" aria-label="Main navigation">
+  <details class="ds-nav-root" id="dsMainMenu">
+    <summary class="ds-nav-trigger">☰ Menu</summary>
+    <div class="ds-nav-panel" id="dsNavigationLinks">
+      <a href="#home">⌂ Home</a>
+      <a href="#about">About Us</a>
+      <a href="#diocese">Our Diocese</a>
+      <details class="ds-nav-group" id="dsFellowshipsGroup">
+        <summary>Our Fellowships</summary>
+        <div class="ds-nav-subpanel" id="dsFellowshipsList">
+          <a href="/fellowship/methodist-mens-fellowship">Men</a>
+          <a href="/fellowship/methodist-womens-fellowship">Women</a>
+          <a href="/fellowship/methodist-youth-fellowship">Youth</a>
+          <a href="/fellowship/methodist-campus-fellowship">MCF</a>
+          <a href="/fellowships">View All Fellowships</a>
+        </div>
+      </details>
+      <a href="#ministries">Ministries</a>
+      <a href="#watch">Sermons &amp; Media</a>
+      <a href="/devotional-centre">Devotional Centre</a>
+      <a href="#photo-gallery">Photo Gallery</a>
+      <a href="#events">Events</a>
+      <a href="#online">Online Services</a>
+      <a href="#resources">Resources</a>
+      <a href="#contact">Contact</a>
+      <a href="#" id="saveOfflineApp">Save app offline</a>
+      <a href="/login" id="nativeStaffSignIn">Staff sign in</a>
     </div>
-    <a href="#ministries">Ministries</a><a href="#watch">Sermons &amp; Media</a><a href="/devotional-centre">Devotional Centre</a><a href="#photo-gallery">Photo Gallery</a><a href="#events">Events</a><a href="#online">Online Services</a><a href="#resources">Resources</a><a href="#contact">Contact</a>
-    <a href="#" id="saveOfflineApp">Save app offline</a><a href="/login" id="nativeStaffSignIn">Staff sign in</a>
-  </div>
   </details>
 </nav>
 
@@ -591,11 +605,8 @@
 <script src="{{ url_for('static', filename='public-member-care.js') }}?v=20261016-guest-chat"></script>
 <script>
 (() => {
-  const toggle = document.getElementById("mcnMenuToggle");
-  const links = document.getElementById("mcnMenuLinks");
-  const dropdown = document.getElementById("mcnFellowshipsDropdown");
-  const dropToggle = dropdown?.querySelector(".mcn-nav-drop-toggle");
-  const submenu = document.getElementById("mcnFellowshipsSubmenu");
+  const dropdown = document.getElementById("dsFellowshipsGroup");
+  const submenu = document.getElementById("dsFellowshipsList");
   const saveOffline = document.getElementById("saveOfflineApp");
   const staffSignIn = document.getElementById("nativeStaffSignIn");
   const isAndroidApp = navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1;
@@ -632,7 +643,7 @@
     });
   }
 
-  if (dropdown && dropToggle && submenu) {
+  if (dropdown && submenu) {
     fetch("/api/public/fellowships", {headers: {"Accept": "application/json"}})
       .then(response => {
         if (!response.ok) throw new Error("Fellowship list unavailable");
@@ -685,7 +696,7 @@
   if (year) year.textContent = new Date().getFullYear();
 })();
 </script>
-<script src="{{ url_for('static', filename='mcn-home-components.js') }}?v=20261106-native-menu1" defer></script>
+<script src="{{ url_for('static', filename='mcn-home-components.js') }}?v=20261106-clean1" defer></script>
 
 <script type="module">
 (async function () {
