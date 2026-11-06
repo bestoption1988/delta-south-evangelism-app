@@ -1827,7 +1827,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
             factory = { ctx ->
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
-                    settings.userAgentString = settings.userAgentString + " MCNDeltaSouthAndroid"
+                    // Use the standard Android WebView user agent so the site follows its normal mobile-browser path.
                     settings.domStorageEnabled = true
                     settings.loadsImagesAutomatically = true
                     settings.javaScriptCanOpenWindowsAutomatically = true
