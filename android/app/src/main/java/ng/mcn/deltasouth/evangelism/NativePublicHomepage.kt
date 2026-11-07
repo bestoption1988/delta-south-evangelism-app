@@ -300,6 +300,29 @@ fun NativePublicHomepage(
                         }
                     }
                 }
+                item {
+                    SectionTitle("WATCH & LISTEN")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(
+                            Triple("▶", "Live Service", "/live"),
+                            Triple("🎙", "Recent Sermons", "/media-library/sermons"),
+                            Triple("📖", "Bible Teachings", "/media-library/bible-teachings"),
+                            Triple("🎤", "Special Programmes", "/media-library?type=video"),
+                            Triple("♫", "Choir & Music", "/media-library/choir-music"),
+                            Triple("♡", "Testimonies", "/#resources")
+                        ).forEach { item ->
+                            Card(onClick = { openPage(item.third) }, colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                                Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text(item.first, fontSize = 22.sp)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(item.second, color = DioceseNavy, fontWeight = FontWeight.SemiBold)
+                                    Spacer(Modifier.weight(1f))
+                                    Text("›", color = DioceseRed, fontSize = 22.sp)
+                                }
+                            }
+                        }
+                    }
+                }
                 item { SectionTitle("SERMONS & TEACHINGS") }
                 if (sermons.isEmpty()) item { Text("No sermons have been published yet. Please check back soon.", color = Color.Gray) }
                 items(sermons) { sermon ->
@@ -414,6 +437,13 @@ fun NativePublicHomepage(
                                 }
                             }
                             Text("WORSHIP · WITNESS · SERVICE · DISCIPLESHIP", color = Color.White)
+                            Text("CONTACT THE DIOCESE", color = DioceseGold, fontWeight = FontWeight.Bold)
+                            val contactEmail = content["contact_email"].asText()
+                            val contactPhone = content["contact_phone"].asText()
+                            val contactAddress = content["contact_address"].asText()
+                            if (contactPhone.isNotBlank()) Text("Phone: $contactPhone", color = Color.White)
+                            if (contactEmail.isNotBlank()) Text("Email: $contactEmail", color = Color.White)
+                            if (contactAddress.isNotBlank()) Text("Address: $contactAddress", color = Color.White)
                             Text("Useful Links", color = DioceseGold, fontWeight = FontWeight.Bold)
                             listOf("About Us" to "/#about", "Our Diocese" to "/#diocese", "Ministries & Fellowships" to "/fellowships",
                                 "Events" to "/#events", "Sermons" to "/#watch", "Photo Gallery" to "/#photo-gallery",
