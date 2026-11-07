@@ -924,9 +924,6 @@ footer .footer-brand {
 }
 @media(max-width:700px) {
 }
-.daily-devotion-card summary { cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
-.daily-devotion-card[open] .daily-devotion-full { display:block; }
-.daily-devotion-full .button { display:inline-block; margin-top:10px; }
 audio,video { display:block; width:100%; max-width:100%; }
 video { height:auto; max-height:70vh; background:#071331; object-fit:contain; }
 @media(max-width:700px){
@@ -973,12 +970,6 @@ video { height:auto; max-height:70vh; background:#071331; object-fit:contain; }
   white-space:nowrap;
   touch-action:manipulation;
 }
-.mcn-android-app .daily-devotion-open{touch-action:manipulation}
-.mcn-android-app .daily-devotion-preview{font-size:clamp(18px,5vw,23px);line-height:1.4}
-.mcn-android-app .daily-devotion-marquee{animation-duration:38s;gap:3rem}
-.mcn-android-app .daily-devotion-modal{z-index:30000}
-.mcn-android-app .daily-devotion-modal-panel{width:calc(100vw - 36px);max-width:560px;min-height:220px;max-height:76vh;overflow-y:auto;display:block}
-
 /* Final Android offline controls and devotional dialog sizing */
 html.mcn-android-app #mcnAppQuickActions{
   position:fixed!important;
@@ -1001,66 +992,13 @@ html.mcn-android-app #mcnAppQuickActions a{
   font-size:9px!important;
   line-height:1!important;
 }
-html.mcn-android-app .daily-devotion-modal{
-  padding:8px!important;
-  align-items:center!important;
-  justify-content:center!important;
-}
-html.mcn-android-app .daily-devotion-modal-panel{
-  width:98vw!important;
-  max-width:900px!important;
-  height:88vh!important;
-  min-height:60vh!important;
-  max-height:90vh!important;
-  padding:22px!important;
-  overflow-y:auto!important;
-  border-radius:18px!important;
-}
 @media(max-width:650px){
-  html.mcn-android-app .daily-devotion-modal-panel{
-    width:98vw!important;
-    height:88vh!important;
-    min-height:60vh!important;
-    max-height:90vh!important;
-    padding:20px 18px 26px!important;
-  }
 }
 
 
 /* Android WebView: keep the full daily Scripture/Hymn dialog expanded.
    A fixed flex basis prevents WebView from shrinking the panel to its heading. */
-html.mcn-android-app .daily-devotion-modal.is-open{
-  position:fixed!important; inset:0!important; z-index:30000!important;
-  display:flex!important; align-items:center!important; justify-content:center!important;
-  padding:12px!important; box-sizing:border-box!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open > .daily-devotion-modal-panel{
-  position:relative!important; display:block!important; flex:0 0 auto!important;
-  box-sizing:border-box!important; width:calc(100vw - 24px)!important;
-  max-width:720px!important; height:82vh!important; min-height:65vh!important;
-  max-height:88vh!important; overflow-x:hidden!important; overflow-y:auto!important;
-  padding:22px 18px 30px!important; border-radius:18px!important;
-  background:#fff!important; color:#172b4d!important;
-  visibility:visible!important; opacity:1!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-modal-panel > *{
-  visibility:visible!important; opacity:1!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-modal-close{
-  position:sticky!important; top:0!important; z-index:5!important;
-  float:right!important; margin:0 0 8px 12px!important;
-}
 html.mcn-android-app .daily-devotion-modal.is-open .daily-hymn-lyrics,
-html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-full-text{
-  display:block!important; visibility:visible!important;
-  white-space:pre-wrap!important; overflow-wrap:anywhere!important;
-  font-size:clamp(18px,4.6vw,24px)!important; line-height:1.75!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open .daily-hymn-audio audio{
-  display:block!important; width:100%!important; min-height:48px!important;
-}
-
-
 /* Android WebView final layout correction — 70% devotional dialog and clear controls */
 html.mcn-android-app,
 html.mcn-android-app body {
@@ -1069,95 +1007,8 @@ html.mcn-android-app body {
   overflow-x:hidden!important;
 }
 html.mcn-android-app body { padding-bottom:104px!important; }
-html.mcn-android-app .daily-devotion-modal.is-open {
-  position:fixed!important;
-  inset:0!important;
-  width:100vw!important;
-  height:100vh!important;
-  min-height:100vh!important;
-  display:flex!important;
-  align-items:center!important;
-  justify-content:center!important;
-  padding:0!important;
-  overflow:hidden!important;
-  z-index:30000!important;
-  background:rgba(4,16,43,.68)!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-modal-panel {
-  display:block!important;
-  position:relative!important;
-  flex:0 0 70vh!important;
-  width:calc(100vw - 28px)!important;
-  max-width:620px!important;
-  height:70vh!important;
-  min-height:70vh!important;
-  max-height:70vh!important;
-  margin:0 auto!important;
-  padding:18px 16px 28px!important;
-  box-sizing:border-box!important;
-  overflow-x:hidden!important;
-  overflow-y:auto!important;
-  -webkit-overflow-scrolling:touch!important;
-  overscroll-behavior:contain!important;
-  background:#fff!important;
-  color:#172b4d!important;
-  border:1px solid #dce3ed!important;
-  border-radius:16px!important;
-  box-shadow:0 14px 42px #0007!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-modal-close {
-  position:sticky!important;
-  top:0!important;
-  float:right!important;
-  width:42px!important;
-  height:42px!important;
-  margin:0 0 8px 10px!important;
-  z-index:10!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open h2 {
-  clear:both!important;
-  white-space:normal!important;
-  overflow-wrap:anywhere!important;
-  font-size:clamp(21px,5.5vw,27px)!important;
-  line-height:1.3!important;
-}
 html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-full-text,
-html.mcn-android-app .daily-devotion-modal.is-open .daily-hymn-lyrics {
-  display:block!important;
-  width:100%!important;
-  max-width:100%!important;
-  white-space:pre-wrap!important;
-  overflow-wrap:anywhere!important;
-  word-break:normal!important;
-  font-size:clamp(17px,4.5vw,21px)!important;
-  line-height:1.65!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open audio {
-  display:block!important;
-  width:100%!important;
-  max-width:100%!important;
-  min-height:48px!important;
-}
-html.mcn-android-app .daily-devotion-marquee {
-  display:block!important;
-  width:100%!important;
-  min-width:0!important;
-  animation:none!important;
-  transform:none!important;
-  white-space:normal!important;
-  overflow:visible!important;
-}
-html.mcn-android-app .daily-devotion-marquee span {
-  display:inline!important;
-  white-space:normal!important;
-  overflow-wrap:anywhere!important;
-}
 html.mcn-android-app .daily-devotion-preview,
-html.mcn-android-app .daily-devotion-open {
-  max-width:100%!important;
-  white-space:normal!important;
-  overflow-wrap:anywhere!important;
-}
 html.mcn-android-app #mcnAppQuickActions {
   left:8px!important;
   right:auto!important;
@@ -1180,259 +1031,27 @@ html.mcn-android-app #publicMemberCareButton {
 
 
 /* 2026-11-05: stable Android WebView devotional dialog and mobile navigation */
-html.mcn-android-app .daily-devotion-modal.is-open {
-  position:fixed!important; inset:0!important; display:block!important;
-  width:100%!important; height:100%!important; z-index:30000!important;
-  padding:0!important; margin:0!important; overflow:hidden!important;
-  background:rgba(4,16,43,.68)!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open > .daily-devotion-modal-panel {
-  position:fixed!important; top:15vh!important; left:4vw!important;
-  transform:none!important; display:block!important; flex:none!important;
-  width:92vw!important; max-width:620px!important;
-  height:70vh!important; min-height:70vh!important; max-height:70vh!important;
-  margin:0!important; padding:18px 16px 28px!important;
-  box-sizing:border-box!important; overflow-x:hidden!important; overflow-y:auto!important;
-  -webkit-overflow-scrolling:touch!important; overscroll-behavior:contain!important;
-  background:#fff!important; color:#172b4d!important;
-  border:1px solid #dce3ed!important; border-radius:16px!important;
-  box-shadow:0 14px 42px #0007!important; visibility:visible!important; opacity:1!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-modal-panel > * {
-  visibility:visible!important; opacity:1!important; max-width:100%!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-modal-close {
-  position:sticky!important; top:0!important; float:right!important;
-  width:42px!important; height:42px!important; z-index:20!important;
-}
 html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-full-text,
-html.mcn-android-app .daily-devotion-modal.is-open .daily-hymn-lyrics {
-  display:block!important; width:100%!important; white-space:pre-wrap!important;
-  overflow-wrap:anywhere!important; font-size:19px!important; line-height:1.65!important;
-}
 @media(max-width:700px) {
-  html.mcn-android-app .daily-devotion-modal.is-open > .daily-devotion-modal-panel {
-    left:4vw!important; width:92vw!important; max-width:none!important;
-  }
 }
 
 
 /* Ensure mobile menu and daily devotion dialogs stay above page controls. */
 @media(max-width:700px){}
-.daily-devotion-modal.is-open{z-index:30000}
-
-
 /* Android WebView final override: large readable devotional panel and reliable mobile menu. */
-html.mcn-android-app .daily-devotion-modal.is-open{
-  position:fixed!important;inset:0!important;display:block!important;
-  width:100%!important;height:100%!important;margin:0!important;padding:0!important;
-  overflow:hidden!important;z-index:30000!important;
-  background:rgba(4,16,43,.68)!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open > .daily-devotion-modal-panel{
-  position:fixed!important;top:9vh!important;left:4vw!important;
-  display:block!important;flex:none!important;transform:none!important;
-  box-sizing:border-box!important;width:92vw!important;max-width:620px!important;
-  height:82vh!important;min-height:82vh!important;max-height:82vh!important;
-  margin:0!important;padding:20px 18px 30px!important;
-  overflow-x:hidden!important;overflow-y:auto!important;
-  -webkit-overflow-scrolling:touch!important;overscroll-behavior:contain!important;
-  background:#fff!important;color:#172b4d!important;
-  border:1px solid #dce3ed!important;border-radius:16px!important;
-  box-shadow:0 14px 42px #0007!important;visibility:visible!important;opacity:1!important;
-}
 @media(max-width:700px) {
-  .daily-devotion-card { min-height:112px!important; }
-  .daily-devotion-open {
+.daily-devotion-open {
     min-height:112px!important;
     padding:17px 18px!important;
     touch-action:manipulation!important;
   }
   .daily-devotion-preview,
   .daily-devotion-marquee,
-  .daily-devotion-marquee span {
-    display:block!important;
-    width:100%!important;
-    min-width:0!important;
-    max-width:100%!important;
-    white-space:normal!important;
-    overflow:visible!important;
-    overflow-wrap:anywhere!important;
-    animation:none!important;
-    transform:none!important;
-  }
-  .daily-devotion-marquee span:nth-child(2) { display:none!important; }
-}
-.daily-devotion-modal[hidden] { display:none!important; }
-.daily-devotion-modal.is-open {
-  position:fixed!important;
-  inset:0!important;
-  z-index:30000!important;
-  display:block!important;
-  width:100%!important;
-  height:100%!important;
-  margin:0!important;
-  padding:0!important;
-  overflow:hidden!important;
-  background:rgba(4,16,43,.68)!important;
-}
-.daily-devotion-modal.is-open > .daily-devotion-modal-panel {
-  position:fixed!important;
-  top:15vh!important;
-  left:4vw!important;
-  display:block!important;
-  box-sizing:border-box!important;
-  width:92vw!important;
-  max-width:620px!important;
-  height:70vh!important;
-  min-height:70vh!important;
-  max-height:70vh!important;
-  margin:0!important;
-  padding:18px 16px 28px!important;
-  overflow-x:hidden!important;
-  overflow-y:auto!important;
-  -webkit-overflow-scrolling:touch!important;
-  overscroll-behavior:contain!important;
-  background:#fff!important;
-  color:#172b4d!important;
-  border:1px solid #dce3ed!important;
-  border-radius:16px!important;
-  box-shadow:0 14px 42px #0007!important;
+.daily-devotion-marquee span:nth-child(2) { display:none!important; }
 }
 .daily-devotion-modal.is-open .daily-devotion-full-text,
-.daily-devotion-modal.is-open .daily-hymn-lyrics {
-  display:block!important;
-  width:100%!important;
-  max-width:100%!important;
-  white-space:pre-wrap!important;
-  overflow-wrap:anywhere!important;
-  font-size:clamp(18px,4.5vw,22px)!important;
-  line-height:1.65!important;
-}
-.daily-devotion-modal.is-open audio {
-  display:block!important;
-  width:100%!important;
-  max-width:100%!important;
-  min-height:48px!important;
-}
 @supports(height:70dvh) {
-  .daily-devotion-modal.is-open > .daily-devotion-modal-panel {
-    top:15dvh!important;
-    height:70dvh!important;
-    min-height:70dvh!important;
-    max-height:70dvh!important;
-  }
 }
-html.mcn-android-app .daily-devotion-modal.is-open > .daily-devotion-modal-panel {
-  width:92vw!important;
-  max-width:620px!important;
-  height:70vh!important;
-  min-height:70vh!important;
-  max-height:70vh!important;
-}
-
-
 /* Final mobile menu visibility and tap-target correction. */
 @media(max-width:700px){
-}
-html.mcn-android-app .daily-devotion-modal.is-open{
-  position:fixed!important;inset:0!important;width:100%!important;height:100%!important;
-  z-index:30000!important;display:block!important;padding:0!important;overflow:hidden!important;
-}
-html.mcn-android-app .daily-devotion-modal.is-open>.daily-devotion-modal-panel{
-  position:fixed!important;top:15vh!important;left:4vw!important;width:92vw!important;
-  height:70vh!important;min-height:70vh!important;max-height:70vh!important;
-  box-sizing:border-box!important;display:block!important;overflow-x:hidden!important;overflow-y:auto!important;
-  -webkit-overflow-scrolling:touch!important;
-}
-
-
-/* Compact single-line daily Scripture and hymn tickers */
-.mcn-daily{width:100%;margin:0;background:#f4f6fb;border-bottom:1px solid #d9dfeb}
-.mcn-daily-ticker-row{display:flex;flex-direction:column;width:100%;gap:0}
-.mcn-daily-ticker{display:flex;align-items:center;gap:12px;width:100%;min-width:0;height:54px;padding:0 14px;border:0;border-bottom:1px solid #d9dfeb;background:#f4f6fb;color:#142b55;text-align:left;overflow:hidden;cursor:pointer;touch-action:manipulation}
-.mcn-ticker-tag{flex:0 0 auto;font:800 12px/1 Arial,sans-serif;letter-spacing:.06em;color:#142f65}
-.mcn-ticker-window{display:block;position:relative;flex:1 1 auto;min-width:0;overflow:hidden;white-space:nowrap}
-.mcn-ticker-track{display:inline-block;min-width:max-content;white-space:nowrap;font:600 15px/1.3 Georgia,serif;animation:mcnTickerMove 32s linear infinite;padding-left:100%}
-.mcn-daily-ticker:nth-child(2) .mcn-ticker-track{animation-duration:38s}
-.mcn-ticker-open{flex:0 0 auto;font-size:17px;color:#65748d}
-.mcn-daily-ticker:active{background:#e9eef8}
-@keyframes mcnTickerMove{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
-.mcn-reading-dialog[hidden]{display:none!important}
-.mcn-reading-dialog{position:fixed;inset:0;z-index:30000;display:flex;align-items:center;justify-content:center;padding:12px;background:rgba(4,16,43,.72);box-sizing:border-box}
-.mcn-reading-panel{position:relative;display:block;box-sizing:border-box;width:calc(100vw - 28px);max-width:680px;height:70vh;min-height:70vh;max-height:70vh;overflow-x:hidden;overflow-y:auto;padding:22px 18px 28px;border-radius:18px;background:#fff;color:#172b4d;box-shadow:0 14px 40px #0005;-webkit-overflow-scrolling:touch}
-.mcn-reading-close{position:sticky;top:0;float:right;z-index:3;width:42px;height:42px;border:0;border-radius:50%;background:#10285a;color:#fff;font-size:28px;line-height:1;cursor:pointer}
-.mcn-reading-kicker{display:block;margin:8px 0;color:#536782;font:800 13px/1.4 Arial,sans-serif;letter-spacing:.08em}
-.mcn-reading-title{margin:8px 0 18px;color:#10285a;font-size:clamp(22px,5vw,30px);line-height:1.25}
-.mcn-reading-text,.mcn-reading-lyrics{clear:both;white-space:pre-wrap;overflow-wrap:anywhere;font:normal clamp(18px,4.8vw,24px)/1.65 Georgia,serif;color:#172b4d}
-.mcn-reading-meta{font-size:15px;color:#536782}
-.mcn-reading-audio{margin:18px 0}
-.mcn-reading-audio audio{display:block;width:100%;min-height:48px}
-@media(prefers-reduced-motion:reduce){.mcn-ticker-track{animation:none;padding-left:0}}
-
-
-/* Final mobile/WebView correction: keep ticker content clipped to straight rectangular rows. */
-#daily-devotion.mcn-daily,
-#daily-devotion .mcn-daily-ticker-row,
-#daily-devotion .mcn-daily-ticker,
-#daily-devotion .mcn-ticker-window {
-  position:relative!important;
-  border-radius:0!important;
-  overflow:hidden!important;
-  clip-path:inset(0)!important;
-  isolation:isolate;
-}
-#daily-devotion .mcn-daily-ticker {height:58px!important;min-height:58px!important;max-height:58px!important}
-#daily-devotion .mcn-ticker-track {
-  animation-duration:72s!important;
-  animation-timing-function:linear!important;
-  animation-iteration-count:infinite!important;
-  will-change:transform;
-}
-#daily-devotion .mcn-daily-ticker:nth-child(2) .mcn-ticker-track {animation-duration:100s!important}
-#daily-devotion .mcn-ticker-window {contain:paint!important}
-.mcn-reading-dialog[hidden] {display:none!important}
-.mcn-reading-dialog.mcn-reading-open {
-  position:fixed!important;inset:0!important;z-index:2147483000!important;
-  display:flex!important;align-items:center!important;justify-content:center!important;
-  width:100vw!important;height:100vh!important;height:100dvh!important;
-  max-height:100vh!important;max-height:100dvh!important;
-  padding:0!important;margin:0!important;border:0!important;border-radius:0!important;
-  overflow:hidden!important;box-sizing:border-box!important;
-  background:rgba(4,16,43,.78)!important;clip-path:none!important;
-}
-.mcn-reading-dialog.mcn-reading-open .mcn-reading-panel {
-  position:relative!important;display:block!important;flex:none!important;
-  width:92vw!important;max-width:680px!important;
-  height:70vh!important;height:70dvh!important;
-  min-height:70vh!important;min-height:70dvh!important;
-  max-height:70vh!important;max-height:70dvh!important;
-  margin:0 auto!important;padding:22px 18px 28px!important;
-  border:1px solid #d6deeb!important;border-radius:10px!important;
-  background:#fff!important;color:#172b4d!important;
-  box-sizing:border-box!important;overflow-x:hidden!important;overflow-y:auto!important;
-  clip-path:none!important;transform:none!important;
-  -webkit-overflow-scrolling:touch!important;
-}
-.mcn-reading-dialog.mcn-reading-open .mcn-reading-close {
-  position:sticky!important;top:0!important;float:right!important;
-}
-@media(prefers-reduced-motion:reduce) {
-  #daily-devotion .mcn-ticker-track {animation-duration:0s!important;transform:none!important;padding-left:0!important}
-}
-
-
-/* Android WebView: explicit inline popup state must override hidden defaults. */
-.mcn-reading-dialog.mcn-reading-open,
-.mcn-reading-dialog[aria-hidden="false"] {
- display:flex!important;visibility:visible!important;opacity:1!important;
- position:fixed!important;inset:0!important;z-index:2147483000!important;
- align-items:center!important;justify-content:center!important;
- width:100vw!important;height:100vh!important;height:100dvh!important;
- background:rgba(4,16,43,.78)!important;overflow:hidden!important;
-}
-.mcn-reading-dialog[hidden]:not(.mcn-reading-open) {display:none!important}
-.mcn-reading-dialog.mcn-reading-open .mcn-reading-panel {
- display:block!important;width:92vw!important;height:70vh!important;
- min-height:70vh!important;max-height:70vh!important;overflow-y:auto!important;
 }
