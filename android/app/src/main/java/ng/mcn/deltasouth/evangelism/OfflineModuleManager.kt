@@ -352,16 +352,6 @@ object OfflineModuleManager {
         return total
     }
 
-    fun downloadDailyDevotion(context: Context): Boolean {
-        val request = Request.Builder().url(BuildConfig.API_BASE_URL + "api/offline/daily-devotion").get().build()
-        val json = Backend.client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IllegalStateException("Daily devotion HTTP " + response.code)
-            response.body?.string() ?: throw IllegalStateException("Empty daily devotion")
-        }
-        File(devotionalDirectory(context), "daily_devotion.json").writeText(json)
-        return true
-    }
-
     fun downloadLectionary(context: Context): Boolean {
         val request = Request.Builder().url(BuildConfig.API_BASE_URL + "api/offline/lectionary").get().build()
         val json = Backend.client.newCall(request).execute().use { response ->
