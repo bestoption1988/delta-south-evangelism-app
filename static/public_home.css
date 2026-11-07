@@ -1420,3 +1420,19 @@ html.mcn-android-app .daily-devotion-modal.is-open>.daily-devotion-modal-panel{
 @media(prefers-reduced-motion:reduce) {
   #daily-devotion .mcn-ticker-track {animation-duration:0s!important;transform:none!important;padding-left:0!important}
 }
+
+
+/* Android WebView: explicit inline popup state must override hidden defaults. */
+.mcn-reading-dialog.mcn-reading-open,
+.mcn-reading-dialog[aria-hidden="false"] {
+ display:flex!important;visibility:visible!important;opacity:1!important;
+ position:fixed!important;inset:0!important;z-index:2147483000!important;
+ align-items:center!important;justify-content:center!important;
+ width:100vw!important;height:100vh!important;height:100dvh!important;
+ background:rgba(4,16,43,.78)!important;overflow:hidden!important;
+}
+.mcn-reading-dialog[hidden]:not(.mcn-reading-open) {display:none!important}
+.mcn-reading-dialog.mcn-reading-open .mcn-reading-panel {
+ display:block!important;width:92vw!important;height:70vh!important;
+ min-height:70vh!important;max-height:70vh!important;overflow-y:auto!important;
+}
