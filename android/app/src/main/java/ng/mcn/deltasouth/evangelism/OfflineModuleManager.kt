@@ -147,7 +147,7 @@ object OfflineModuleManager {
         var unavailable = 0
         var failed = 0
         var mediaDownloaded = 0
-        val totalSteps = moduleRequests.size + 6
+        val totalSteps = moduleRequests.size + 5
         var completedSteps = 0
         fun report(stage: String) { completedSteps++; onProgress(stage, (completedSteps * 100 / totalSteps).coerceIn(0, 99)) }
         onProgress("Preparing secure offline package…", 0)
@@ -189,14 +189,6 @@ object OfflineModuleManager {
             failed++
         }
         report("Hymn recordings processed")
-        try {
-            onProgress("Saving today's Scripture and hymn…", completedSteps * 100 / totalSteps)
-            downloadDailyDevotion(context)
-            downloaded++
-        } catch (_: Exception) {
-            failed++
-        }
-        report("Daily devotion saved")
         try {
             onProgress("Saving lectionary…", completedSteps * 100 / totalSteps)
             downloadLectionary(context)
