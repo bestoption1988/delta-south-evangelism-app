@@ -177,9 +177,25 @@ fun NativePublicHomepage(
             items(leadership) { person ->
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val leaderPhoto = person["photo_path"].asText()
+                        if (leaderPhoto.isNotBlank()) {
+                            val leaderPhotoUrl = if (leaderPhoto.startsWith("http")) leaderPhoto else BuildConfig.API_BASE_URL.trimEnd('/') + "/static/" + leaderPhoto.trimStart('/')
+                            AsyncImage(model = leaderPhotoUrl, contentDescription = person["full_name"].asText(), modifier = Modifier.fillMaxWidth().height(190.dp))
+                        }
                         Text(person["title"].asText(), style = MaterialTheme.typography.labelLarge)
                         Text(person["full_name"].asText(), style = MaterialTheme.typography.titleMedium)
                         Text(person["biography"].asText(), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            item {
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("WORSHIP WITH US", style = MaterialTheme.typography.titleLarge)
+                        Text("Methodist Church Nigeria · Delta South Diocese")
+                        Text(content["livestream_announcement"].asText().ifBlank { "Join our worship services and church broadcasts." })
+                        Button(onClick = { openPage("live") }, modifier = Modifier.fillMaxWidth()) { Text("Watch Live Service") }
+                        OutlinedButton(onClick = { openPage("giving") }, modifier = Modifier.fillMaxWidth()) { Text("Give Online") }
                     }
                 }
             }
