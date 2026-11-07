@@ -2769,6 +2769,32 @@ def live_worship_page():
     )
 
 
+def _homepage_daily_reading():
+    """Build the public daily Scripture and hymn cards from the supplied collection."""
+    source = Path(ROOT) / "data" / "scripture_hymns.json"
+    try:
+        with source.open("r", encoding="utf-8") as handle:
+            collection = json.load(handle)
+        verses = collection.get("verses") or []
+        hymns = collection.get("hymns") or []
+        try:
+            from zoneinfo import ZoneInfo
+            today = datetime.now(ZoneInfo("Africa/Lagos")).date()
+        except Exception:
+            today = datetime.now().date()
+        day_number = today.toordinal()
+        verse = verses[day_number % len(verses)] if verses else {}
+        hymn = hymns[(day_number * 7) % len(hymns)] if hymns else {}
+        return {
+            "date": today.strftime("%A, %d %B %Y"),
+            "verse": verse if isinstance(verse, dict) else {},
+            "hymn": hymn if isinstance(hymn, dict) else {},
+        }
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        app.logger.exception("Homepage daily Scripture and hymn could not be loaded")
+        return {"date": "", "verse": {}, "hymn": {}}
+
+
 @app.get("/")
 def public_home():
     """Public diocesan homepage; no login required."""
@@ -2795,6 +2821,8 @@ def public_home():
              ELSE 99
            END, church_name"""
     ).fetchall()
+
+    daily_reading = _homepage_daily_reading()
 
     # Published media comes from the persistent Supabase catalogue.
     homepage_media_items = []
@@ -2962,6 +2990,7 @@ def public_home():
         homepage_sermons=sermons,
         homepage_events=events,
         homepage_churches=churches,
+        daily_reading=daily_reading,
         homepage_media_items=homepage_media_items,
         homepage_video_items=homepage_video_items,
         homepage_gallery_items=homepage_gallery_items,
