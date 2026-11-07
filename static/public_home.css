@@ -1449,7 +1449,10 @@ html.mcn-android-app .daily-devotion-modal.is-open>.daily-devotion-modal-panel{
 .mcn-daily-preview{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;min-height:48px;margin:8px 0 12px;color:#172b4d;font:17px/1.45 Georgia,serif}
 .mcn-hymn-title{font-weight:700}
 .mcn-daily-tune{margin:0 0 10px;color:#536782;font:13px/1.4 Arial,sans-serif}
-.mcn-daily-audio{display:block;width:100%;max-width:340px;height:38px;margin:6px 0 12px}
+.mcn-daily-audio-wrap{margin:8px 0 12px;padding:10px 12px;border:1px solid #d8dfeb;border-radius:10px;background:#fff}
+.mcn-audio-label{display:block;margin:0 0 6px;color:#10285a;font:800 12px/1.4 Arial,sans-serif}
+.mcn-daily-audio{display:block;width:100%;max-width:100%;height:42px;margin:0}
+.mcn-audio-unavailable{font-size:12px;color:#8a5260}
 .mcn-view-all{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 16px;border:0;border-radius:8px;background:#10285a;color:#fff;font:700 14px Arial,sans-serif;cursor:pointer;touch-action:manipulation}
 .mcn-view-all:active{background:#1b3e7b}
-@media(max-width:700px){.mcn-daily-cards{grid-template-columns:1fr}.mcn-daily-card{padding:15px 18px 16px;border-right:0;border-bottom:1px solid #d9dfeb}.mcn-daily-card:last-child{border-bottom:0}.mcn-daily-preview{min-height:0;-webkit-line-clamp:2}}
+@media(max-width:700px){.mcn-daily-cards{grid-template-columns:1fr}.mcn-daily-card{padding:15px 18px 16px;border-right:0;border-bottom:1px solid #d9dfeb}.mcn-daily-card:last-child{border-bottom:0}.mcn-daily-preview{min-height:0;-webkit-line-clamp:3}.mcn-daily-audio-wrap{padding:8px}.mcn-daily-audio{height:44px}}
