@@ -1119,3 +1119,6 @@ body.daily-reading-modal-open{overflow:hidden!important}
 .daily-preview-audio{display:block;width:100%;max-width:100%;margin:10px 0}
 .daily-preview-link{display:inline-block;margin-top:4px;padding:9px 14px;border-radius:7px;background:#10285a;color:#fff;font-size:13px;font-weight:700}
 @media(max-width:700px){.daily-reading{grid-template-columns:minmax(0,1fr);gap:12px;padding:14px 12px}.daily-reading-preview{padding:16px}.daily-reading-preview h3{font-size:18px}.daily-preview-text{font-size:15px}}
+
+/* Keep the Android-only preview hidden in ordinary web browsers. */
+.android-daily-reading[hidden]{display:none!important}
