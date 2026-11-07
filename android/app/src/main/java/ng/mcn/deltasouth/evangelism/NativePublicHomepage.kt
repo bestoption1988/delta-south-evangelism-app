@@ -214,7 +214,7 @@ fun NativePublicHomepage(
                     SectionTitle("EXPLORE THE DIOCESE")
                     val tiles = listOf(
                         Triple("Church Directory", "Locate a Church", "⌖") to ("/#churches" to DioceseNavy),
-                        Triple("New Converts", "Start Your Journey", "▤") to ("/member-registration" to Color(0xFF087344)),
+                        Triple("New Converts", "Start Your Journey", "▤") to ("/account-registration" to Color(0xFF087344)),
                         Triple("Prayer Request", "We Pray With You", "🙏") to ("/prayer-request" to Color(0xFFB58B20)),
                         Triple("Give Online", "Support God's Work", "♡") to ("/giving" to DioceseRed),
                         Triple("Events", "Stay Informed", "▦") to ("/#events" to Color(0xFF087CB5)),
