@@ -145,13 +145,16 @@
     <details class="android-daily-details">
       <summary>View Full Hymn <span aria-hidden="true">▾</span></summary>
       <div class="android-daily-full-text">{{ daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection." }}</div>
+      {% if daily_reading.get("hymn", {}).get("tune_name") or daily_reading.get("hymn", {}).get("tune") %}
+      <p class="daily-preview-tune">Hymn tune: {{ daily_reading.get("hymn", {}).get("tune_name") or daily_reading.get("hymn", {}).get("tune") }}</p>
+      {% endif %}
+      {% if daily_reading.get("hymn", {}).get("audio_url") %}
+      <div class="daily-preview-audio-wrap">
+        <span class="daily-preview-audio-label">▶ Play Hymn Tune</span>
+        <audio class="daily-preview-audio" controls preload="none" playsinline src="{{ daily_reading.get('hymn', {}).get('audio_url') }}">Your browser does not support audio playback.</audio>
+      </div>
+      {% endif %}
     </details>
-    {% if daily_reading.get("hymn", {}).get("tune_name") or daily_reading.get("hymn", {}).get("tune") %}
-    <p class="daily-preview-tune">Tune: {{ daily_reading.get("hymn", {}).get("tune_name") or daily_reading.get("hymn", {}).get("tune") }}</p>
-    {% endif %}
-    {% if daily_reading.get("hymn", {}).get("audio_url") %}
-    <audio class="daily-preview-audio" controls preload="none" src="{{ daily_reading.get('hymn', {}).get('audio_url') }}">Your browser does not support audio playback.</audio>
-    {% endif %}
     <a class="daily-preview-link" href="/devotional-centre">View All Hymns →</a>
   </article>
 </section>
