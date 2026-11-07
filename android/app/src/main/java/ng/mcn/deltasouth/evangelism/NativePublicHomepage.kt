@@ -2,6 +2,8 @@ package ng.mcn.deltasouth.evangelism
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
@@ -24,6 +26,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.runtime.*
+import androidx.compose.foundation.rememberScrollState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -37,6 +40,8 @@ private val DioceseRed = Color(0xFFD7193F)
 private val DioceseGold = Color(0xFFF2C230)
 private val PageBackground = Color(0xFFF1F4F9)
 private val CardText = Color(0xFF17233D)
+
+private fun churchCircuitKey(value: String): String = value.lowercase().replace(" circuit", "").trim()
 
 @Composable
 private fun SectionTitle(title: String) {
@@ -105,7 +110,9 @@ fun NativePublicHomepage(
     val churches = payload["churches"].asObjects().filterNot { church ->
         val name = church["church_name"].asText().trim()
         Regex("(?i)^.*\\b(local\\s+)?church\\s*\\d+$").matches(name)
-    }
+    }.sortedWith(compareBy<Map<String, Any?>> {
+        when (churchCircuitKey(it["circuit"].asText())) { "effurun" -> 0; "warri" -> 1; "sapele" -> 2; "steel town" -> 3; else -> 4 }
+    }.thenBy { it["church_name"].asText().lowercase() })
     val sermons = payload["sermons"].asObjects()
     val gallery = payload["gallery"].asObjects()
     val videos = payload["videos"].asObjects()
@@ -190,27 +197,45 @@ fun NativePublicHomepage(
                     }
                 }
                 item {
-                    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("SCRIPTURE FOR TODAY", color = DioceseRed, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                            Text(verse["reference"].asText().ifBlank { "Daily Scripture" }, color = DioceseNavy, fontSize = 24.sp, fontWeight = FontWeight.Bold)
-                            Text(verse["text"].asText().ifBlank { "Today's Scripture will appear here when the diocesan content is available." },
-                                color = CardText, fontSize = 16.sp, lineHeight = 25.sp)
-                            Divider(color = PageBackground)
-                            Text("♫ METHODIST HYMN FOR TODAY", color = DioceseRed, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                            val hymnTitle = hymn["title"].asText().ifBlank { "Daily Methodist Hymn" }
-                            val hymnNumber = listOf("number", "hymn_number", "item_number")
-                                .firstNotNullOfOrNull { hymn[it].asText().takeIf(String::isNotBlank) }.orEmpty()
-                            Text(listOf(hymnNumber, hymnTitle).filter(String::isNotBlank).joinToString(" "),
-                                color = DioceseNavy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                            Text(hymn["lyrics"].asText().ifBlank { "Hymn lyrics will appear here when available." },
-                                color = CardText, fontSize = 16.sp, lineHeight = 25.sp)
-                            val tune = hymn["tune_name"].asText().ifBlank { hymn["tune"].asText().ifBlank { hymn["meter"].asText() } }
-                            if (tune.isNotBlank()) Text("Tune: $tune", color = Color.Gray, fontSize = 13.sp)
-                            OutlinedButton(onClick = { openPage("/devotional-centre") }, modifier = Modifier.fillMaxWidth()) {
-                                Text("View All Scripture & Hymns", color = DioceseNavy)
+                    val scriptureLine = "✝ SCRIPTURE: " + verse["reference"].asText() + " — " + verse["text"].asText().replace("\n"," ")
+                    val hymnLine = "♫ HYMN: " + hymn["title"].asText() + " — " + hymn["lyrics"].asText().replace("\n"," ")
+                    var readingPopup by remember { mutableStateOf("") }
+                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("scripture" to scriptureLine, "hymn" to hymnLine).forEach { (kind, line) ->
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                                    Text(if (kind == "scripture") "✝ SCRIPTURE" else "♫ HYMN", color = DioceseRed, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(line.ifBlank { if (kind == "scripture") "Scripture for Today" else "Methodist Hymn for Today" },
+                                        modifier = Modifier.weight(1f).clickable { readingPopup = kind },
+                                        color = DioceseNavy, maxLines = 1, softWrap = false)
+                                    TextButton(onClick = { readingPopup = kind }) { Text("View Full", color = DioceseRed, fontSize = 11.sp) }
+                                }
                             }
                         }
+                    }
+                    LaunchedEffect(Unit) {
+                        while (true) { kotlinx.coroutines.delay(4000) }
+                    }
+                    if (readingPopup.isNotBlank()) {
+                        val isHymn = readingPopup == "hymn"
+                        AlertDialog(
+                            onDismissRequest = { readingPopup = "" },
+                            confirmButton = { TextButton(onClick = { readingPopup = "" }) { Text("Close") } },
+                            title = { Text(if (isHymn) hymn["title"].asText().ifBlank { "Methodist Hymn for Today" } else verse["reference"].asText().ifBlank { "Scripture for Today" }, color = DioceseNavy) },
+                            text = {
+                                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(if (isHymn) hymn["lyrics"].asText().ifBlank { "Hymn lyrics are not available." } else verse["text"].asText().ifBlank { "Scripture text is not available." }, color = CardText)
+                                    if (isHymn) {
+                                        val tune = hymn["tune_name"].asText().ifBlank { hymn["tune"].asText().ifBlank { hymn["meter"].asText() } }
+                                        if (tune.isNotBlank()) Text("Tune: $tune", color = DioceseRed, fontWeight = FontWeight.SemiBold)
+                                        val audio = hymn["audio_url"].asText()
+                                        if (audio.isNotBlank()) Button(onClick = { openPage(audio) }, modifier = Modifier.fillMaxWidth()) { Text("▶ Play Hymn Tune") }
+                                    }
+                                    TextButton(onClick = { openPage("/devotional-centre") }) { Text("View All Scripture & Hymns") }
+                                }
+                            }
+                        )
                     }
                 }
                 item {
@@ -293,18 +318,33 @@ fun NativePublicHomepage(
                         }
                     }
                 }
-                item { SectionTitle("OUR CHURCH GALLERY") }
-                if (gallery.isEmpty()) item { Text("Church photographs will appear here when published.", color = Color.Gray) }
-                items(gallery) { photo ->
-                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
-                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            val url = photo["signed_url"].asText()
-                            if (url.isNotBlank()) AsyncImage(model = url, contentDescription = photo["title"].asText(),
-                                modifier = Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
-                            val galleryTitle = photo["title"].asText().takeUnless { it.matches(Regex("(?i)^file_[a-f0-9]{12,}$")) }
-                                ?: "Diocesan Gallery Photo"
-                            Text(galleryTitle, color = DioceseNavy, fontWeight = FontWeight.Bold)
-                            Text(photo["description"].asText(), color = Color.Gray, fontSize = 13.sp)
+                item {
+                    SectionTitle("OUR CHURCH GALLERY")
+                    if (gallery.isEmpty()) {
+                        Text("Church photographs will appear here when published.", color = Color.Gray)
+                    } else {
+                        var galleryIndex by remember { mutableIntStateOf(0) }
+                        LaunchedEffect(gallery.size) {
+                            while (gallery.size > 1) {
+                                kotlinx.coroutines.delay(4500)
+                                galleryIndex = (galleryIndex + 1) % gallery.size
+                            }
+                        }
+                        val photo = gallery[galleryIndex]
+                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                AsyncImage(model = photo["signed_url"].asText(), contentDescription = photo["title"].asText(),
+                                    modifier = Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(12.dp)),
+                                    contentScale = ContentScale.Crop)
+                                Text(photo["title"].asText().takeUnless { it.matches(Regex("(?i)^file_[a-f0-9]{12,}$")) } ?: "Diocesan Gallery",
+                                    color = DioceseNavy, fontWeight = FontWeight.Bold)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                    TextButton(onClick = { galleryIndex = (galleryIndex - 1 + gallery.size) % gallery.size }) { Text("‹ Previous") }
+                                    Text("${galleryIndex + 1} / ${gallery.size}", color = Color.Gray)
+                                    TextButton(onClick = { galleryIndex = (galleryIndex + 1) % gallery.size }) { Text("Next ›") }
+                                }
+                                TextButton(onClick = { openPage("/#photo-gallery") }, modifier = Modifier.align(Alignment.End)) { Text("View Gallery") }
+                            }
                         }
                     }
                 }
@@ -363,6 +403,32 @@ fun NativePublicHomepage(
                             if (mission.isEmpty()) {
                                 Text("• To consistently win more souls for Christ.\n• To develop spiritually fulfilled members.\n• To remain active in serving humanity.", color = Color.White)
                             } else mission.forEach { Text("• $it", color = Color.White) }
+                        }
+                    }
+                }
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor = DioceseNavy), shape = RoundedCornerShape(18.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Image(painter = painterResource(id = R.drawable.app_logo), contentDescription = "Methodist Church Nigeria",
+                                    modifier = Modifier.size(54.dp), contentScale = ContentScale.Fit)
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text("METHODIST CHURCH NIGERIA", color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("DELTA SOUTH DIOCESE", color = DioceseGold, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            Text("WORSHIP · WITNESS · SERVICE · DISCIPLESHIP", color = Color.White)
+                            Text("Useful Links", color = DioceseGold, fontWeight = FontWeight.Bold)
+                            listOf("About Us" to "/#about", "Our Diocese" to "/#diocese", "Ministries & Fellowships" to "/fellowships",
+                                "Events" to "/#events", "Sermons" to "/#watch", "Photo Gallery" to "/#photo-gallery",
+                                "Devotional Centre" to "/devotional-centre", "Member Login" to "/login",
+                                "Online Giving" to "/giving", "Prayer Request" to "/prayer-request", "Live Service" to "/live").forEach { (label, route) ->
+                                TextButton(onClick = { openPage(route) }) { Text(label, color = Color.White) }
+                            }
+                            Text("“Together for a Greater Harvest in His Kingdom.”", color = Color.White)
+                            Text("© ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} Methodist Church Nigeria, Delta South Diocese. All rights reserved.",
+                                color = Color(0xFFD9DEEA), fontSize = 11.sp)
                         }
                     }
                 }
