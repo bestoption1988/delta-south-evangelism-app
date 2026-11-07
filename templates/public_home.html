@@ -102,6 +102,42 @@
   </div>
 </nav>
 
+<section class="daily-reading" aria-label="Daily Scripture and Hymn">
+  <div class="daily-reading-heading">
+    <span class="daily-reading-kicker">DAILY SPIRITUAL NOURISHMENT</span>
+    <span class="daily-reading-date">{{ daily_reading.get("date", "") }}</span>
+  </div>
+  <div class="daily-reading-grid">
+    <article class="daily-reading-card scripture-card">
+      <div class="daily-reading-card-top"><span class="daily-reading-icon">✝</span><span>SCRIPTURE FOR TODAY</span></div>
+      {% set today_verse = daily_reading.get("verse", {}) %}
+      {% if today_verse %}
+        <h2>{{ today_verse.get("reference") or "Today’s Scripture" }}</h2>
+        <p class="daily-reading-copy">{{ today_verse.get("text") or "" }}</p>
+      {% else %}
+        <h2>Scripture for Today</h2>
+        <p class="daily-reading-copy">Open the Bible and spend time in God’s Word today.</p>
+      {% endif %}
+      <a class="daily-reading-link" href="/devotional-centre">Open Bible &amp; Devotional Centre <span>→</span></a>
+    </article>
+    <article class="daily-reading-card hymn-card">
+      <div class="daily-reading-card-top"><span class="daily-reading-icon">♫</span><span>METHODIST HYMN FOR TODAY</span></div>
+      {% set today_hymn = daily_reading.get("hymn", {}) %}
+      {% if today_hymn %}
+        <h2>{{ today_hymn.get("title") or "Hymn for Today" }}</h2>
+        <details class="daily-hymn-details">
+          <summary>Read hymn lyrics</summary>
+          <div class="daily-reading-copy daily-hymn-lyrics">{{ today_hymn.get("lyrics") or "The lyrics for this hymn are not available." }}</div>
+        </details>
+      {% else %}
+        <h2>Hymn for Today</h2>
+        <p class="daily-reading-copy">Visit the Devotional Centre to explore the Methodist hymn collection.</p>
+      {% endif %}
+      <a class="daily-reading-link" href="/devotional-centre">Explore Methodist Hymns <span>→</span></a>
+    </article>
+  </div>
+</section>
+
 <main>
 <section class="hero" id="home">
   <div class="hero-content">
