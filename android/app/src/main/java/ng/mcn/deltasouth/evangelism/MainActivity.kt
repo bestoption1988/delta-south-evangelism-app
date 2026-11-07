@@ -1798,6 +1798,7 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
 private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
+    var pageErrorDetails by remember { mutableStateOf("The connection to the diocesan website failed.") }
     var pageLoading by remember { mutableStateOf(true) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
@@ -1856,6 +1857,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                             pageLoading = true
                             pageError = false
+                            pageErrorDetails = "Connecting to the diocesan website…"
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
                             // Android WebView fallback for the CSS-checkbox homepage menu.
@@ -1964,6 +1966,14 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
                             if (request.isForMainFrame) {
                                 pageLoading = false
+                                pageErrorDetails = "WebView error ${error.errorCode}: ${error.description}"
+                                pageError = true
+                            }
+                        }
+                        override fun onReceivedHttpError(view: WebView, request: android.webkit.WebResourceRequest, response: android.webkit.WebResourceResponse) {
+                            if (request.isForMainFrame && response.statusCode >= 400) {
+                                pageLoading = false
+                                pageErrorDetails = "The website returned HTTP ${response.statusCode}."
                                 pageError = true
                             }
                         }
@@ -1996,9 +2006,21 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
         if (pageError) {
             ElevatedCard(Modifier.align(androidx.compose.ui.Alignment.Center).padding(24.dp)) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("The diocesan homepage could not be reached.", style = MaterialTheme.typography.titleMedium)
-                    Text("Check your internet connection and try again.")
-                    Button(onClick = { pageError = false; pageLoading = true; webView?.reload() }) { Text("Retry homepage") }
+                    Text("The diocesan homepage could not be reached inside the app.", style = MaterialTheme.typography.titleMedium)
+                    Text(pageErrorDetails, style = MaterialTheme.typography.bodySmall)
+                    Text("You can retry here or open the same page in your phone browser.")
+                    Button(onClick = {
+                        pageError = false
+                        pageLoading = true
+                        webView?.clearHistory()
+                        webView?.reload()
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Retry homepage") }
+                    OutlinedButton(onClick = {
+                        runCatching {
+                            val browserIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(BuildConfig.API_BASE_URL))
+                            context.startActivity(browserIntent)
+                        }
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Open website in browser") }
                 }
             }
         }
