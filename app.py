@@ -5577,6 +5577,55 @@ def command_centre():
     })
 
 
+@app.get("/api/public/homepage")
+def api_public_homepage():
+    """Read-only public homepage payload for native and offline-first clients."""
+    def public_rows(rows):
+        return [dict(row) for row in rows]
+
+    profiles = db().execute(
+        """SELECT title, full_name, display_name, role, description, biography,
+                  photo, photo_url, display_order
+           FROM leadership_profiles
+           WHERE LOWER(CAST(active AS TEXT)) IN ('1','true','t')
+           ORDER BY display_order, title"""
+    ).fetchall()
+    content_rows = db().execute(
+        "SELECT content_key, content_value FROM homepage_content"
+    ).fetchall()
+    sermons = db().execute(
+        """SELECT title, description, preacher, sermon_date, media_url, display_order
+           FROM homepage_sermons
+           WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+           ORDER BY display_order, id DESC LIMIT 20"""
+    ).fetchall()
+    events = db().execute(
+        """SELECT title, description, event_date, venue
+           FROM homepage_events
+           WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+           ORDER BY event_date DESC, id DESC LIMIT 30"""
+    ).fetchall()
+    churches = db().execute(
+        """SELECT church_name, circuit, address, phone, minister
+           FROM churches
+           ORDER BY CASE lower(trim(circuit))
+             WHEN 'effurun' THEN 1 WHEN 'warri' THEN 2
+             WHEN 'sapele' THEN 3 WHEN 'steel town' THEN 4 ELSE 99 END,
+             church_name"""
+    ).fetchall()
+    daily = _homepage_daily_reading()
+    return jsonify({
+        "ok": True,
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "homepage_content": {row["content_key"]: row["content_value"] for row in content_rows},
+        "leadership": public_rows(profiles),
+        "sermons": public_rows(sermons),
+        "events": public_rows(events),
+        "churches": public_rows(churches),
+        "daily_reading": daily,
+    })
+
+
 @app.get("/api/public/churches")
 def public_churches():
     return jsonify(rows(
