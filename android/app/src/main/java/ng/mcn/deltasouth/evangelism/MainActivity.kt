@@ -1956,55 +1956,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(menuBridge, null)
-                            // Android WebView: show the page's own rectangular reading dialog.
-                            // Do not create a second full-screen overlay; that was obscuring the popup.
-                            val dailyReadingBridge = """
-                                (function() {
-                                  if (window.__mcnDailyReadingBridgeV3) return;
-                                  window.__mcnDailyReadingBridgeV3 = true;
-                                  var modal = document.getElementById('dailyReadingModal');
-                                  if (!modal) return;
-                                  var panel = modal.querySelector('.daily-reading-modal-panel');
-                                  var heading = document.getElementById('dailyReadingModalTitle');
-                                  var body = document.getElementById('dailyReadingModalBody');
-                                  function closeReading() {
-                                    modal.hidden = true;
-                                    modal.style.setProperty('display','none','important');
-                                    document.body.style.overflow = '';
-                                  }
-                                  function openReading(trigger) {
-                                    var source = document.getElementById(trigger.getAttribute('data-reading-source'));
-                                    if (!source || !panel || !heading || !body) return;
-                                    heading.textContent = trigger.getAttribute('data-reading-title') || 'Daily Reading';
-                                    body.textContent = (source.innerText || source.textContent || '').trim();
-                                    body.scrollTop = 0;
-                                    modal.hidden = false;
-                                    modal.style.cssText += ';position:fixed!important;inset:0!important;z-index:2147483647!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:4vh 3vw!important;box-sizing:border-box!important;background:rgba(4,15,39,.72)!important;';
-                                    panel.style.cssText += ';position:relative!important;z-index:2!important;display:flex!important;flex-direction:column!important;width:94vw!important;height:76vh!important;max-height:76vh!important;min-height:0!important;background:#fff!important;border-radius:16px!important;overflow:hidden!important;box-shadow:0 18px 60px rgba(0,0,0,.4)!important;';
-                                    body.style.cssText += ';display:block!important;flex:1 1 auto!important;min-height:0!important;overflow-y:scroll!important;-webkit-overflow-scrolling:touch!important;padding:20px 18px!important;color:#1b2d50!important;font:18px/1.75 Georgia,serif!important;white-space:pre-wrap!important;';
-                                    document.body.style.overflow = 'hidden';
-                                    body.scrollTop = 0;
-                                    body.focus();
-                                  }
-                                  document.addEventListener('click', function(event) {
-                                    var trigger = event.target.closest && event.target.closest('[data-reading-source]');
-                                    if (trigger) {
-                                      event.preventDefault();
-                                      event.stopImmediatePropagation();
-                                      openReading(trigger);
-                                      return;
-                                    }
-                                    if (event.target.closest && event.target.closest('[data-daily-close]')) {
-                                      event.preventDefault();
-                                      closeReading();
-                                    }
-                                  }, true);
-                                  document.addEventListener('keydown', function(event) {
-                                    if (event.key === 'Escape' && !modal.hidden) closeReading();
-                                  });
-                                })();
-                            """.trimIndent()
-                            view.evaluateJavascript(dailyReadingBridge, null)
+                            // Daily Scripture and hymn use the same tested webpage implementation as Chrome.
                             pageLoading = false
                         }
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
