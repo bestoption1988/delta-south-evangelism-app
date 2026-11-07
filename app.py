@@ -5614,27 +5614,36 @@ def api_public_homepage():
     ).fetchall()
 
     media_items, gallery_items, video_items = [], [], []
-    try:
-        media_rows = _ml_supabase_request(
-            "GET", params={
-                "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
-                "published": "eq.true", "order": "created_at.desc", "limit": "10"
-            }
-        )
-        for row in media_rows:
-            item = dict(row)
-            try:
-                item["signed_url"] = _ml_signed(item["storage_path"])
-            except Exception:
-                item["signed_url"] = ""
-            item["original_name"] = item.get("storage_path", "").rsplit("/", 1)[-1]
-            media_items.append(item)
-            if str(item.get("mime_type") or "").lower().startswith("image/"):
-                gallery_items.append(item)
-            if str(item.get("media_type") or "").lower() == "video":
-                video_items.append(item)
-    except Exception:
-        app.logger.exception("Native homepage media catalogue could not be loaded")
+    def load_public_media(params, destination, image_only=False):
+        try:
+            rows = _ml_supabase_request("GET", params=params)
+            for row in rows:
+                item = dict(row)
+                if image_only and not str(item.get("mime_type") or "").lower().startswith("image/"):
+                    continue
+                try:
+                    item["signed_url"] = _ml_signed(item["storage_path"])
+                except Exception:
+                    item["signed_url"] = ""
+                item["original_name"] = str(item.get("storage_path") or "").rsplit("/", 1)[-1]
+                destination.append(item)
+        except Exception:
+            app.logger.exception("Native homepage published media could not be loaded")
+
+    media_select = "id,title,description,storage_path,mime_type,media_type,published,created_at"
+    load_public_media({
+        "select": media_select, "published": "eq.true",
+        "order": "created_at.desc", "limit": "6"
+    }, media_items)
+    load_public_media({
+        "select": media_select, "published": "eq.true",
+        "order": "created_at.desc", "limit": "10"
+    }, gallery_items, image_only=True)
+    load_public_media({
+        "select": media_select, "published": "eq.true", "media_type": "eq.video",
+        "order": "created_at.desc", "limit": "3"
+    }, video_items)
+
 
     birthday_members = []
     try:
