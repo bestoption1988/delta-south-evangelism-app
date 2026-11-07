@@ -1876,8 +1876,106 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             pageError = false
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
-                            // Homepage navigation uses native HTML details/summary controls.
-                            // No injected click handlers are attached from the Android WebView.
+                            // Android WebView fallback for the CSS-checkbox homepage menu.
+                            // Chrome uses the native label/checkbox behaviour; some embedded WebViews
+                            // fail to toggle visually clipped checkbox inputs when their labels are tapped.
+                            val menuBridge = """
+                                (function() {
+                                  if (window.__mcnAndroidMenuBridge) return;
+                                  var nav = document.querySelector('.ds-site-nav');
+                                  var menu = document.querySelector('.ds-menu');
+                                  var trigger = document.querySelector('.ds-menu-trigger');
+                                  var panel = document.querySelector('.ds-menu-panel');
+                                  var toggle = document.querySelector('#dsMenuToggle');
+                                  var subToggle = document.querySelector('#dsFellowshipsToggle');
+                                  if (!nav || !menu || !trigger || !panel) return;
+                                  window.__mcnAndroidMenuBridge = true;
+
+                                  // Detach the real navigation panel from the page's nested layout.
+                                  // This avoids WebView clipping/stacking bugs while preserving the
+                                  // original anchor nodes and their existing click handlers.
+                                  document.body.appendChild(panel);
+                                  panel.style.cssText += ';display:none!important;position:fixed!important;left:0!important;right:0!important;width:100vw!important;top:0!important;max-height:50vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;padding:8px 0!important;background:#08245b!important;border:1px solid rgba(255,255,255,.25)!important;z-index:2147483647!important;-webkit-overflow-scrolling:touch!important;';
+
+                                  panel.querySelectorAll('a,.ds-menu-group-trigger').forEach(function(item) {
+                                    item.style.cssText += ';display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;float:none!important;width:100%!important;min-height:48px!important;height:auto!important;box-sizing:border-box!important;padding:13px 20px!important;margin:0!important;color:#fff!important;background:#08245b!important;font:600 16px/1.4 Arial,sans-serif!important;text-align:left!important;text-decoration:none!important;border:0!important;border-bottom:1px solid rgba(255,255,255,.16)!important;';
+                                  });
+                                  panel.querySelectorAll('.ds-menu-submenu a').forEach(function(item) {
+                                    item.style.setProperty('padding-left','40px','important');
+                                    item.style.setProperty('background','#061943','important');
+                                  });
+
+                                  function closeMenu() {
+                                    if (toggle) toggle.checked = false;
+                                    menu.classList.remove('ds-menu-open');
+                                    panel.style.setProperty('display','none','important');
+                                    trigger.setAttribute('aria-expanded','false');
+                                  }
+                                  function openMenu() {
+                                    if (toggle) toggle.checked = true;
+                                    menu.classList.add('ds-menu-open');
+                                    var top = Math.max(0, nav.getBoundingClientRect().bottom);
+                                    panel.style.setProperty('top',top+'px','important');
+                                    panel.style.setProperty('max-height',Math.max(160,Math.min(window.innerHeight*0.5,window.innerHeight-top))+'px','important');
+                                    panel.style.setProperty('display','block','important');
+                                    panel.style.setProperty('visibility','visible','important');
+                                    panel.style.setProperty('opacity','1','important');
+                                    trigger.setAttribute('aria-expanded','true');
+                                  }
+                                  trigger.addEventListener('click',function(event) {
+                                    event.preventDefault();
+                                    event.stopImmediatePropagation();
+                                    if (panel.style.display === 'none' || getComputedStyle(panel).display === 'none') openMenu();
+                                    else closeMenu();
+                                  },true);
+                                  panel.addEventListener('click',function(event) {
+                                    var groupLabel = event.target.closest('.ds-menu-group-trigger');
+                                    if (groupLabel && subToggle) {
+                                      event.preventDefault();
+                                      subToggle.checked = !subToggle.checked;
+                                      var submenu = panel.querySelector('.ds-menu-submenu');
+                                      if (submenu) submenu.style.setProperty('display',subToggle.checked?'block':'none','important');
+                                      return;
+                                    }
+                                    var link = event.target.closest('a');
+                                    if (link) {
+                                      // The panel is detached from its original nav container.
+                                      // Handle navigation explicitly: hiding a fixed WebView overlay
+                                      // during the same click can cancel the anchor's default action.
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      var href = link.getAttribute('href') || '';
+                                      closeMenu();
+                                      window.setTimeout(function() {
+                                        if (href === '#' || href === '') {
+                                          if (link.id === 'saveOfflineApp') {
+                                            if (window.mcnCacheEntireApp) window.mcnCacheEntireApp();
+                                            window.location.href = 'mcn-app://offline';
+                                          }
+                                          return;
+                                        }
+                                        if (href.charAt(0) === '#') {
+                                          var target = document.getElementById(href.slice(1));
+                                          if (target) {
+                                            target.scrollIntoView({behavior:'smooth',block:'start'});
+                                            if (history && history.replaceState) history.replaceState(null,'',href);
+                                          }
+                                          return;
+                                        }
+                                        if (href.indexOf('mcn-app://') === 0) {
+                                          window.location.href = href;
+                                          return;
+                                        }
+                                        window.location.assign(new URL(href, document.baseURI).href);
+                                      }, 80);
+                                    }
+                                  },true);
+                                  document.addEventListener('keydown',function(event){if(event.key==='Escape')closeMenu();});
+                                  window.addEventListener('resize',function(){if(panel.style.display!=='none')openMenu();});
+                                  window.addEventListener('scroll',function(){if(panel.style.display!=='none')closeMenu();},{passive:true});
+                                })();
+                            """.trimIndent()
+                            view.evaluateJavascript(menuBridge, null)
                             pageLoading = false
                         }
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {

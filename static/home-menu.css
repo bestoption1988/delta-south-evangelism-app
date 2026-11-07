@@ -23,3 +23,7 @@
  .ds-menu-panel>a,.ds-menu-group-trigger{width:auto;min-height:52px;padding:12px 10px;font-size:13px;border:0}
  .ds-menu-submenu{position:absolute;top:100%;left:0;z-index:100001;min-width:220px;box-shadow:0 8px 20px #0005}
 }
+
+/* Explicit open state set by the Android WebView compatibility bridge. */
+.ds-menu.ds-menu-open>.ds-menu-panel{display:block!important;visibility:visible!important;opacity:1!important}
+.ds-menu.ds-fellowships-open .ds-menu-submenu{display:block!important}
