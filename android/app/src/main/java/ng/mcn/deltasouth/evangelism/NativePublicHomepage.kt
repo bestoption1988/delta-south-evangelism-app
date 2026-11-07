@@ -90,6 +90,7 @@ fun NativePublicHomepage(
     val context = LocalContext.current
     var payload by remember { mutableStateOf<Map<String, Any?>>(emptyMap()) }
     var loadMessage by remember { mutableStateOf("Loading diocesan information…") }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     LaunchedEffect(online) {
         loadMessage = if (online) "Refreshing diocesan information…" else "Opening saved diocesan information…"
@@ -155,6 +156,28 @@ fun NativePublicHomepage(
                             Text("METHODIST CHURCH NIGERIA", color = DioceseNavy, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             Text("DELTA SOUTH DIOCESE", color = DioceseRed, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                             Text("WORSHIP · WITNESS · SERVICE · DISCIPLESHIP", color = Color.Gray, fontSize = 8.sp)
+                        }
+                        Button(onClick = onStaffLogin, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 7.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = DioceseRed)) { Text("Member Portal / Login", fontSize = 9.sp, maxLines = 2) }
+                    }
+                    Box(Modifier.fillMaxWidth()) {
+                        Button(onClick = { menuExpanded = true }, modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = DioceseNavy)) {
+                            Text("☰   Menu", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Start, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                        }
+                        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false },
+                            modifier = Modifier.fillMaxWidth().background(Color.White)) {
+                            listOf("Home" to "/", "Church Membership" to "/login",
+                                "New Converts / Registration" to "/account-registration", "Member Portal / Login" to "/login",
+                                "Admin & Staff Portal" to "/login", "Prayer Request" to "/prayer-request",
+                                "Online Giving" to "/giving", "Events & Announcements" to "/#events",
+                                "Live Streaming" to "/live", "Sermons & Media Library" to "/#watch",
+                                "Devotional Centre" to "/devotional-centre", "Photo Gallery" to "/#photo-gallery",
+                                "Church Directory" to "/#churches", "Fellowships" to "/fellowships",
+                                "Contact Us" to "/#contact").forEach { (label, route) ->
+                                DropdownMenuItem(text = { Text(label, color = DioceseNavy) },
+                                    onClick = { menuExpanded = false; if (route != "/") openPage(route) })
+                            }
                         }
                     }
                 }
@@ -230,6 +253,26 @@ fun NativePublicHomepage(
                                     modifier = Modifier.fillMaxWidth()) { Text("Download / Update Modules") }
                             }
                             Text(loadMessage, color = Color.Gray, fontSize = 12.sp)
+                        }
+                    }
+                }
+                item {
+                    Card(shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = DioceseNavy)) {
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("LIVE SERVICE", color = Color.White, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.background(DioceseRed, RoundedCornerShape(8.dp)).padding(9.dp))
+                            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(
+                                Brush.linearGradient(listOf(Color(0xFF17264A), Color(0xFF9C7655), Color(0xFF101C3D))))
+                                .height(270.dp), contentAlignment = Alignment.Center) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text("✝", color = DioceseGold, fontSize = 48.sp)
+                                    Text("Worship with Us", color = Color.White, fontSize = 27.sp, fontWeight = FontWeight.Bold)
+                                    Text("Methodist Church Nigeria\nDelta South Diocese", color = Color.White, textAlign = TextAlign.Center, fontSize = 17.sp)
+                                    Button(onClick = { openPage("/live") }, colors = ButtonDefaults.buttonColors(containerColor = DioceseRed)) { Text("Watch & Listen") }
+                                    OutlinedButton(onClick = onStaffLogin, colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text("Member Conference Login") }
+                                }
+                            }
+                            Text(content["livestream_announcement"].asText().ifBlank { "Live service video will appear here when the official stream is configured." }, color = Color(0xFFDCE3F4))
                         }
                     }
                 }
@@ -351,7 +394,7 @@ fun NativePublicHomepage(
                         val photo = gallery[galleryIndex]
                         Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
                             Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                AsyncImage(model = photo["signed_url"].asText(), contentDescription = photo["title"].asText(),
+                                AsyncImage(model = photo["signed_url"].asText().ifBlank { photo["public_url"].asText().ifBlank { photo["image_url"].asText() } }, contentDescription = photo["title"].asText(),
                                     modifier = Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(12.dp)),
                                     contentScale = ContentScale.Crop)
                                 Text(photo["title"].asText().takeUnless { it.matches(Regex("(?i)^file_[a-f0-9]{12,}$")) } ?: "Diocesan Gallery",
