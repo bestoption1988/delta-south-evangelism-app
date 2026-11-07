@@ -1122,3 +1122,68 @@ body.daily-reading-modal-open{overflow:hidden!important}
 
 /* Keep the Android-only preview hidden in ordinary web browsers. */
 .android-daily-reading[hidden]{display:none!important}
+
+
+/* APK-only daily reading: one Scripture and one hymn card with expandable full text. */
+html.mcn-android-app .android-daily-reading[hidden]{display:none!important}
+html.mcn-android-app .android-daily-reading{
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr)!important;
+  gap:12px!important;
+  width:100%!important;
+  padding:14px 12px!important;
+  box-sizing:border-box!important;
+  background:#f2f5fa!important;
+}
+html.mcn-android-app .android-daily-card{
+  display:block!important;
+  min-width:0!important;
+  padding:17px 16px!important;
+  border:1px solid #e0e6ef!important;
+  border-radius:12px!important;
+  background:#fff!important;
+  box-shadow:0 3px 12px rgba(12,35,78,.07)!important;
+  box-sizing:border-box!important;
+}
+html.mcn-android-app .android-daily-card h3{
+  margin:0 0 12px!important;
+  color:#10285a!important;
+  font:700 19px/1.4 Arial,sans-serif!important;
+  overflow-wrap:anywhere!important;
+}
+html.mcn-android-app .android-daily-details{margin:8px 0 12px!important}
+html.mcn-android-app .android-daily-details summary{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  min-height:42px!important;
+  padding:10px 13px!important;
+  border-radius:8px!important;
+  background:#edf1f8!important;
+  color:#173568!important;
+  font:700 14px/1.4 Arial,sans-serif!important;
+  cursor:pointer!important;
+  touch-action:manipulation!important;
+  list-style:none!important;
+}
+html.mcn-android-app .android-daily-details summary::-webkit-details-marker{display:none!important}
+html.mcn-android-app .android-daily-details[open] summary span{transform:rotate(180deg)}
+html.mcn-android-app .android-daily-full-text{
+  display:block!important;
+  max-height:55vh!important;
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch!important;
+  overscroll-behavior:contain!important;
+  margin-top:10px!important;
+  padding:14px!important;
+  border-radius:8px!important;
+  background:#f7f8fb!important;
+  color:#25334e!important;
+  font:16px/1.75 Georgia,serif!important;
+  white-space:pre-wrap!important;
+  overflow-wrap:anywhere!important;
+}
+html.mcn-android-app .android-daily-card .daily-preview-audio{
+  display:block!important;width:100%!important;max-width:100%!important;margin:10px 0!important;
+}
+html.mcn-android-app section.daily-reading:not(.android-daily-reading){display:none!important}
