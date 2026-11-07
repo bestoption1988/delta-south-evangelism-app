@@ -482,12 +482,11 @@ private fun NativeDioceseApp() {
                             scope.launch {
                                 val count = withContext(Dispatchers.IO) {
                                     val saved = OfflineModuleManager.downloadAllDevotionalResources(appContext)
-                                    OfflineModuleManager.downloadDailyDevotion(appContext)
                                     OfflineModuleManager.downloadLectionary(appContext)
                                     saved
                                 }
                                 devotionalResourceCount = count
-                                downloadMessage = "$count devotional resources, today's Scripture and hymn, and the 2027 lectionary saved for offline use."
+                                downloadMessage = "$count devotional resources and the 2027 lectionary saved for offline use."
                                 downloadBusy = false
                             }
                         },
@@ -1669,13 +1668,12 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
                 val result = withContext(Dispatchers.IO) {
                     runCatching {
                         val count = OfflineModuleManager.downloadAllDevotionalResources(context)
-                        OfflineModuleManager.downloadDailyDevotion(context)
                         OfflineModuleManager.downloadLectionary(context)
                         count
                     }
                 }
                 resources = withContext(Dispatchers.IO) { loadOfflineDevotionalRows(context) }
-                message = result.fold({ "${it} devotional resources and today's Scripture and hymn are saved." }, { it.message ?: "Some resources could not be downloaded." })
+                message = result.fold({ "${it} devotional resources are saved." }, { it.message ?: "Some resources could not be downloaded." })
                 busy = false
             }
         }, modifier = Modifier.fillMaxWidth()) { Text("Download Hymns, Scripture & Worship Books") }
