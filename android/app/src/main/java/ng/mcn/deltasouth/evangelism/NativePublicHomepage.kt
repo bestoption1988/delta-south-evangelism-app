@@ -3,6 +3,7 @@ package ng.mcn.deltasouth.evangelism
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -131,9 +133,12 @@ fun NativePublicHomepage(
                         modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(14.dp)).padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(Modifier.size(58.dp).clip(RoundedCornerShape(50)).background(Color(0xFFF5F6F8)), contentAlignment = Alignment.Center) {
-                            Text("✝", color = DioceseRed, fontSize = 34.sp, fontWeight = FontWeight.Bold)
-                        }
+                        Image(
+                            painter = painterResource(id = R.drawable.app_logo),
+                            contentDescription = "Methodist Church Nigeria crest",
+                            modifier = Modifier.size(62.dp),
+                            contentScale = ContentScale.Fit
+                        )
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
                             Text("METHODIST CHURCH NIGERIA", color = DioceseNavy, fontWeight = FontWeight.Bold, fontSize = 16.sp)
@@ -197,9 +202,9 @@ fun NativePublicHomepage(
                                 color = DioceseNavy, fontSize = 23.sp, fontWeight = FontWeight.Bold)
                             Text(hymn["lyrics"].asText().ifBlank { "Hymn lyrics will appear here when available." },
                                 color = CardText, fontSize = 16.sp, lineHeight = 25.sp)
-                            val tune = hymn["tune_name"].asText().ifBlank { hymn["tune"].asText() }
+                            val tune = hymn["tune_name"].asText().ifBlank { hymn["tune"].asText().ifBlank { hymn["meter"].asText() } }
                             if (tune.isNotBlank()) Text("Tune: $tune", color = Color.Gray, fontSize = 13.sp)
-                            OutlinedButton(onClick = { openPage("devotional-centre") }, modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(onClick = { openPage("/devotional-centre") }, modifier = Modifier.fillMaxWidth()) {
                                 Text("View All Scripture & Hymns", color = DioceseNavy)
                             }
                         }
@@ -208,15 +213,15 @@ fun NativePublicHomepage(
                 item {
                     SectionTitle("EXPLORE THE DIOCESE")
                     val tiles = listOf(
-                        Triple("Church Directory", "Locate a Church", "⌖") to ("churches" to DioceseNavy),
-                        Triple("New Converts", "Start Your Journey", "▤") to ("new-converts" to Color(0xFF087344)),
-                        Triple("Prayer Request", "We Pray With You", "🙏") to ("prayer-request" to Color(0xFFB58B20)),
-                        Triple("Give Online", "Support God's Work", "♡") to ("giving" to DioceseRed),
-                        Triple("Events", "Stay Informed", "▦") to ("events" to Color(0xFF087CB5)),
-                        Triple("Live Streaming", "Watch Our Services", "▶") to ("live" to Color(0xFF4822B5)),
-                        Triple("Sermons", "Listen & Be Blessed", "♫") to ("sermons" to DioceseNavy),
-                        Triple("Fellowships", "Ministries & Groups", "✥") to ("fellowships" to Color(0xFF263D9B)),
-                        Triple("Member Portal", "Registration & Login", "♙") to ("member/login" to Color(0xFF087344))
+                        Triple("Church Directory", "Locate a Church", "⌖") to ("/#churches" to DioceseNavy),
+                        Triple("New Converts", "Start Your Journey", "▤") to ("/member-registration" to Color(0xFF087344)),
+                        Triple("Prayer Request", "We Pray With You", "🙏") to ("/prayer-request" to Color(0xFFB58B20)),
+                        Triple("Give Online", "Support God's Work", "♡") to ("/giving" to DioceseRed),
+                        Triple("Events", "Stay Informed", "▦") to ("/#events" to Color(0xFF087CB5)),
+                        Triple("Live Streaming", "Watch Our Services", "▶") to ("/live" to Color(0xFF4822B5)),
+                        Triple("Sermons", "Listen & Be Blessed", "♫") to ("/#watch" to DioceseNavy),
+                        Triple("Fellowships", "Ministries & Groups", "✥") to ("/fellowships" to Color(0xFF263D9B)),
+                        Triple("Member Portal", "Registration & Login", "♙") to ("/login" to Color(0xFF087344))
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                         tiles.chunked(3).forEach { rowTiles ->
@@ -254,9 +259,9 @@ fun NativePublicHomepage(
                             Text("Methodist Church Nigeria · Delta South Diocese", color = Color.White, fontSize = 17.sp)
                             Text(content["livestream_announcement"].asText().ifBlank { "Join our worship services and church broadcasts." },
                                 color = Color(0xFFE7EAF2))
-                            Button(onClick = { openPage("live") }, modifier = Modifier.fillMaxWidth(),
+                            Button(onClick = { openPage("/live") }, modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.buttonColors(containerColor = DioceseRed)) { Text("Watch Live Service") }
-                            OutlinedButton(onClick = { openPage("giving") }, modifier = Modifier.fillMaxWidth(),
+                            OutlinedButton(onClick = { openPage("/giving") }, modifier = Modifier.fillMaxWidth(),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)) { Text("Give Online") }
                         }
                     }
