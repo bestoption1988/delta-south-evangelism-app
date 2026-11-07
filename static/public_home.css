@@ -1107,3 +1107,15 @@ html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-full-text,
 body.daily-reading-modal-open{overflow:hidden!important}
 @media(max-width:700px){.daily-reading-ticker{height:62px;gap:10px;padding:0 12px}.daily-ticker-label{font-size:12px}.daily-ticker-text{font-size:16px;line-height:62px;animation-duration:68s}.daily-reading-modal{padding:4vh 3vw}.daily-reading-modal-panel{width:94vw;height:76vh;max-height:76vh;border-radius:13px}.daily-reading-modal-header{padding:13px 15px}.daily-reading-modal-header h2{font-size:18px}.daily-reading-modal-body{padding:18px 17px;font-size:18px;line-height:1.75}.daily-reading-modal-footer{padding:10px 15px}}
 @media(prefers-reduced-motion:reduce){.daily-ticker-text{animation:none;padding-left:0;min-width:0;white-space:normal;line-height:1.4}}
+
+
+/* Daily Scripture and hymn inline preview cards */
+.daily-reading{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;padding:20px clamp(12px,3vw,24px);background:#f2f5fa}
+.daily-reading-preview{min-width:0;background:#fff;border:1px solid #e0e6ef;border-radius:13px;padding:18px 20px;box-shadow:0 4px 14px #17213b0c}
+.daily-preview-heading{font-size:12px;font-weight:800;letter-spacing:1px;color:#9b2036;margin-bottom:9px}
+.daily-reading-preview h3{margin:0 0 9px;color:#10285a;font:700 19px/1.35 Arial,sans-serif}
+.daily-preview-text{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:4;overflow:hidden;white-space:pre-line;margin:0 0 12px;color:#25334e;font:16px/1.65 Georgia,serif}
+.daily-preview-tune{margin:0 0 10px;color:#5c6679;font-size:13px;font-weight:700}
+.daily-preview-audio{display:block;width:100%;max-width:100%;margin:10px 0}
+.daily-preview-link{display:inline-block;margin-top:4px;padding:9px 14px;border-radius:7px;background:#10285a;color:#fff;font-size:13px;font-weight:700}
+@media(max-width:700px){.daily-reading{grid-template-columns:minmax(0,1fr);gap:12px;padding:14px 12px}.daily-reading-preview{padding:16px}.daily-reading-preview h3{font-size:18px}.daily-preview-text{font-size:15px}}
