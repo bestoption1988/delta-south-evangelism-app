@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import coil.compose.AsyncImage
 import androidx.compose.material3.Card
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.LinearProgressIndicator
@@ -77,6 +78,10 @@ fun NativePublicHomepage(
     val events = payload["events"].asObjects()
     val churches = payload["churches"].asObjects()
     val sermons = payload["sermons"].asObjects()
+    val gallery = payload["gallery"].asObjects()
+    val videos = payload["videos"].asObjects()
+    val birthdays = payload["birthdays"].asObjects()
+    val media = payload["media"].asObjects()
 
     fun openPage(path: String) {
         runCatching {
@@ -204,6 +209,47 @@ fun NativePublicHomepage(
                                 runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(sermon["video_url"].asText()))) }
                             }) { Text("Watch / Listen") }
                         }
+                    }
+                }
+            }
+            item {
+                Text("📸 OUR CHURCH GALLERY", style = MaterialTheme.typography.titleLarge)
+                if (gallery.isEmpty()) Text("Our diocesan memories will appear here when published.")
+            }
+            items(gallery) { photo ->
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        val imageUrl = photo["signed_url"].asText()
+                        if (imageUrl.isNotBlank()) AsyncImage(model = imageUrl, contentDescription = photo["title"].asText(), modifier = Modifier.fillMaxWidth().height(210.dp))
+                        Text(photo["title"].asText().ifBlank { "Diocesan photograph" }, style = MaterialTheme.typography.titleMedium)
+                        Text(photo["description"].asText(), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            item {
+                Text("FEATURED CHURCH VIDEOS", style = MaterialTheme.typography.titleLarge)
+                if (videos.isEmpty()) Text("Published church videos will appear here.")
+            }
+            items(videos) { video ->
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(video["title"].asText(), style = MaterialTheme.typography.titleMedium)
+                        Text(video["description"].asText())
+                        OutlinedButton(enabled = video["signed_url"].asText().isNotBlank(), onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(video["signed_url"].asText()))) } }) { Text("Watch Video") }
+                    }
+                }
+            }
+            item {
+                Text("HAPPY BIRTHDAY!", style = MaterialTheme.typography.titleLarge)
+                if (birthdays.isEmpty()) Text("We celebrate our members on their birthdays.")
+            }
+            items(birthdays) { member ->
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        val photoUrl = member["photo_url"].asText()
+                        if (photoUrl.isNotBlank()) AsyncImage(model = photoUrl, contentDescription = member["full_name"].asText(), modifier = Modifier.fillMaxWidth().height(160.dp))
+                        Text(member["full_name"].asText(), style = MaterialTheme.typography.titleMedium)
+                        Text(listOf(member["circuit"].asText(), member["church_name"].asText()).filter(String::isNotBlank).joinToString(" · "))
                     }
                 }
             }
