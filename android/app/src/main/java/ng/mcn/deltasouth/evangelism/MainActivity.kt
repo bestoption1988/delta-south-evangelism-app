@@ -1961,73 +1961,61 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // initialise late or WebView misses button listeners.
                             val dailyReadingBridge = """
                                 (function() {
-                                  if (window.__mcnDailyReadingBridge) return;
+                                  if (window.__mcnDailyReadingBridgeV2) return;
+                                  window.__mcnDailyReadingBridgeV2 = true;
                                   var modal = document.getElementById('dailyReadingModal');
-                                  var title = document.getElementById('dailyReadingModalTitle');
-                                  var body = document.getElementById('dailyReadingModalBody');
-                                  if (!modal || !title || !body) return;
-                                  window.__mcnDailyReadingBridge = true;
-                                  document.body.appendChild(modal);
-                                  modal.style.setProperty('z-index','2147483000','important');
-                                  modal.style.setProperty('position','fixed','important');
-                                  modal.style.setProperty('inset','0','important');
-                                  modal.style.setProperty('display','none','important');
-                                  modal.style.setProperty('align-items','center','important');
-                                  modal.style.setProperty('justify-content','center','important');
-                                  modal.style.setProperty('padding','4vh 3vw','important');
-                                  modal.style.setProperty('box-sizing','border-box','important');
-                                  var panel = modal.querySelector('.daily-reading-modal-panel');
-                                  if (panel) {
-                                    panel.style.setProperty('position','relative','important');
-                                    panel.style.setProperty('z-index','1','important');
-                                    panel.style.setProperty('display','flex','important');
-                                    panel.style.setProperty('flex-direction','column','important');
-                                    panel.style.setProperty('width','94vw','important');
-                                    panel.style.setProperty('height','76vh','important');
-                                    panel.style.setProperty('max-height','76vh','important');
-                                    panel.style.setProperty('background','#fff','important');
-                                    panel.style.setProperty('overflow','hidden','important');
-                                  }
-                                  body.style.setProperty('flex','1 1 auto','important');
-                                  body.style.setProperty('min-height','0','important');
-                                  body.style.setProperty('overflow-y','auto','important');
-                                  body.style.setProperty('-webkit-overflow-scrolling','touch','important');
-                                  body.style.setProperty('touch-action','pan-y','important');
-
-                                  function closeReading() {
-                                    modal.hidden = true;
-                                    modal.style.setProperty('display','none','important');
-                                    document.body.classList.remove('daily-reading-modal-open');
-                                  }
-                                  function openReading(trigger) {
-                                    var sourceId = trigger.getAttribute('data-reading-source');
-                                    var source = sourceId && document.getElementById(sourceId);
-                                    if (!source) return;
-                                    title.textContent = trigger.getAttribute('data-reading-title') || 'Daily Reading';
-                                    body.textContent = (source.innerText || source.textContent || '').trim();
-                                    body.scrollTop = 0;
-                                    modal.hidden = false;
-                                    modal.style.setProperty('display','flex','important');
-                                    document.body.classList.add('daily-reading-modal-open');
+                                  if (!modal) return;
+                                  var lastTitle = 'Daily Reading';
+                                  var overlay = document.createElement('div');
+                                  overlay.id = 'mcnNativeReadingOverlay';
+                                  overlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:2147483647;background:rgba(4,15,39,.78);align-items:center;justify-content:center;padding:4vh 3vw;box-sizing:border-box;';
+                                  var card = document.createElement('section');
+                                  card.style.cssText = 'display:flex;flex-direction:column;position:relative;width:94vw;height:76vh;max-height:76vh;min-height:0;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.4);';
+                                  var header = document.createElement('div');
+                                  header.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 17px;background:#0b2455;color:#fff;';
+                                  var heading = document.createElement('h2');
+                                  heading.style.cssText = 'margin:0;font:700 19px/1.3 Arial,sans-serif;color:#fff;';
+                                  var close = document.createElement('button');
+                                  close.type = 'button';
+                                  close.textContent = '×';
+                                  close.setAttribute('aria-label','Close reading');
+                                  close.style.cssText = 'width:42px;height:42px;flex:0 0 42px;border:0;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:30px;line-height:1;';
+                                  var reading = document.createElement('div');
+                                  reading.tabIndex = 0;
+                                  reading.style.cssText = 'flex:1 1 auto;min-height:0;overflow-y:scroll;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:20px 18px;color:#1b2d50;font:18px/1.75 Georgia,serif;white-space:pre-wrap;overflow-wrap:anywhere;';
+                                  var footer = document.createElement('div');
+                                  footer.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 15px;border-top:1px solid #e4e8ef;color:#68758a;font:600 12px/1.4 Arial,sans-serif;';
+                                  var date = document.createElement('span');
+                                  date.textContent = modal.querySelector('.daily-reading-modal-footer span')?.textContent || '';
+                                  var link = document.createElement('a');
+                                  link.href = '/devotional-centre';
+                                  link.textContent = 'Devotional Centre →';
+                                  link.style.cssText = 'color:#a51e37;text-decoration:none;';
+                                  header.appendChild(heading); header.appendChild(close);
+                                  footer.appendChild(date); footer.appendChild(link);
+                                  card.appendChild(header); card.appendChild(reading); card.appendChild(footer);
+                                  overlay.appendChild(card); document.body.appendChild(overlay);
+                                  function hide() { overlay.style.display='none'; document.body.style.overflow=''; }
+                                  function show(trigger) {
+                                    var sourceId=trigger.getAttribute('data-reading-source');
+                                    var source=sourceId && document.getElementById(sourceId);
+                                    if(!source) return;
+                                    heading.textContent=trigger.getAttribute('data-reading-title') || 'Daily Reading';
+                                    reading.textContent=(source.innerText || source.textContent || '').trim();
+                                    reading.scrollTop=0;
+                                    overlay.style.display='flex';
+                                    document.body.style.overflow='hidden';
+                                    reading.focus();
                                   }
                                   document.addEventListener('click',function(event) {
-                                    var trigger = event.target.closest('[data-reading-source]');
-                                    if (trigger) {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      openReading(trigger);
-                                      return;
-                                    }
-                                    if (event.target.closest('[data-daily-close]') || event.target === modal) {
-                                      event.preventDefault();
-                                      closeReading();
+                                    var trigger=event.target.closest('[data-reading-source]');
+                                    if(trigger) { event.preventDefault(); event.stopImmediatePropagation(); show(trigger); return; }
+                                    if(event.target===overlay || event.target===close || event.target.closest('#mcnNativeReadingOverlay a')) {
+                                      if(event.target.closest('#mcnNativeReadingOverlay a')) return;
+                                      event.preventDefault(); hide();
                                     }
                                   },true);
-                                  document.addEventListener('keydown',function(event) {
-                                    if (event.key === 'Escape' && !modal.hidden) closeReading();
-                                  });
-                                  // Keep modal closed until a user taps a ticker.
-                                  modal.hidden = true;
+                                  document.addEventListener('keydown',function(event){if(event.key==='Escape' && overlay.style.display!=='none')hide();});
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(dailyReadingBridge, null)
