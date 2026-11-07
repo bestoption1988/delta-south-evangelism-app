@@ -103,38 +103,29 @@
 </nav>
 
 <section class="daily-reading" aria-label="Daily Scripture and Hymn">
-  <div class="daily-reading-heading">
-    <span class="daily-reading-kicker">DAILY SPIRITUAL NOURISHMENT</span>
-    <span class="daily-reading-date">{{ daily_reading.get("date", "") }}</span>
+  <div class="daily-reading-ticker scripture-ticker">
+    <span class="daily-ticker-label">✝ SCRIPTURE</span>
+    <button class="daily-ticker-track" type="button" data-reading-title="Scripture for Today" data-reading-source="dailyScriptureFull" aria-haspopup="dialog">
+      <span class="daily-ticker-text">{{ daily_reading.get("verse", {}).get("reference") or "Scripture for Today" }} — {{ daily_reading.get("verse", {}).get("text") or "Open the Bible and spend time in God’s Word today." }}</span>
+    </button><span class="daily-ticker-hint">↗</span>
   </div>
-  <div class="daily-reading-grid">
-    <article class="daily-reading-card scripture-card">
-      <div class="daily-reading-card-top"><span class="daily-reading-icon">✝</span><span>SCRIPTURE FOR TODAY</span></div>
-      {% set today_verse = daily_reading.get("verse", {}) %}
-      {% if today_verse %}
-        <h2>{{ today_verse.get("reference") or "Today’s Scripture" }}</h2>
-        <p class="daily-reading-copy">{{ today_verse.get("text") or "" }}</p>
-      {% else %}
-        <h2>Scripture for Today</h2>
-        <p class="daily-reading-copy">Open the Bible and spend time in God’s Word today.</p>
-      {% endif %}
-      <a class="daily-reading-link" href="/devotional-centre">Open Bible &amp; Devotional Centre <span>→</span></a>
-    </article>
-    <article class="daily-reading-card hymn-card">
-      <div class="daily-reading-card-top"><span class="daily-reading-icon">♫</span><span>METHODIST HYMN FOR TODAY</span></div>
-      {% set today_hymn = daily_reading.get("hymn", {}) %}
-      {% if today_hymn %}
-        <h2>{{ today_hymn.get("title") or "Hymn for Today" }}</h2>
-        <details class="daily-hymn-details">
-          <summary>Read hymn lyrics</summary>
-          <div class="daily-reading-copy daily-hymn-lyrics">{{ today_hymn.get("lyrics") or "The lyrics for this hymn are not available." }}</div>
-        </details>
-      {% else %}
-        <h2>Hymn for Today</h2>
-        <p class="daily-reading-copy">Visit the Devotional Centre to explore the Methodist hymn collection.</p>
-      {% endif %}
-      <a class="daily-reading-link" href="/devotional-centre">Explore Methodist Hymns <span>→</span></a>
-    </article>
+  <div class="daily-reading-ticker hymn-ticker">
+    <span class="daily-ticker-label">♫ HYMN</span>
+    <button class="daily-ticker-track" type="button" data-reading-title="Methodist Hymn for Today" data-reading-source="dailyHymnFull" aria-haspopup="dialog">
+      <span class="daily-ticker-text">{{ daily_reading.get("hymn", {}).get("title") or "Methodist Hymn for Today" }} — {{ (daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection.") | replace("\n", " ") }}</span>
+    </button><span class="daily-ticker-hint">↗</span>
+  </div>
+  <div class="daily-reading-accessible-content" aria-hidden="true">
+    <div id="dailyScriptureFull">{{ daily_reading.get("verse", {}).get("reference") or "Scripture for Today" }}&#10;&#10;{{ daily_reading.get("verse", {}).get("text") or "Open the Bible and spend time in God’s Word today." }}</div>
+    <div id="dailyHymnFull">{{ daily_reading.get("hymn", {}).get("title") or "Methodist Hymn for Today" }}&#10;&#10;{{ daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection." }}</div>
+  </div>
+  <div class="daily-reading-modal" id="dailyReadingModal" hidden role="dialog" aria-modal="true" aria-labelledby="dailyReadingModalTitle">
+    <div class="daily-reading-modal-backdrop" data-daily-close></div>
+    <div class="daily-reading-modal-panel" role="document">
+      <div class="daily-reading-modal-header"><h2 id="dailyReadingModalTitle">Daily Reading</h2><button type="button" class="daily-reading-modal-close" data-daily-close aria-label="Close reading">×</button></div>
+      <div class="daily-reading-modal-body" id="dailyReadingModalBody" tabindex="0"></div>
+      <div class="daily-reading-modal-footer"><span>{{ daily_reading.get("date", "") }}</span><a href="/devotional-centre">Devotional Centre →</a></div>
+    </div>
   </div>
 </section>
 
@@ -977,5 +968,6 @@
 })();
 </script>
 <footer style="text-align:center;padding:24px 14px;font:14px Arial,sans-serif;background:#f4f6fa"><a href="/privacy-policy">Privacy Policy</a> · <a href="/account-deletion">Account and Data Deletion</a> · <a href="mailto:bestoption1988@gmail.com">Support</a></footer>
+<script src="{{ url_for('static', filename='daily-reading.js') }}?v=20261107-ticker-modal1" defer></script>
 </body>
 </html>
