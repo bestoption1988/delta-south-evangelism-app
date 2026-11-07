@@ -5584,8 +5584,7 @@ def api_public_homepage():
         return [dict(row) for row in rows]
 
     profiles = db().execute(
-        """SELECT title, full_name, display_name, role, description, biography,
-                  photo, photo_url, display_order
+        """SELECT title, full_name, biography, photo_path, display_order
            FROM leadership_profiles
            WHERE LOWER(CAST(active AS TEXT)) IN ('1','true','t')
            ORDER BY display_order, title"""
@@ -5594,7 +5593,7 @@ def api_public_homepage():
         "SELECT content_key, content_value FROM homepage_content"
     ).fetchall()
     sermons = db().execute(
-        """SELECT title, description, preacher, sermon_date, media_url, display_order
+        """SELECT title, description, video_url, display_order
            FROM homepage_sermons
            WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
            ORDER BY display_order, id DESC LIMIT 20"""
@@ -5606,7 +5605,7 @@ def api_public_homepage():
            ORDER BY event_date DESC, id DESC LIMIT 30"""
     ).fetchall()
     churches = db().execute(
-        """SELECT church_name, circuit, address, phone, minister
+        """SELECT church_name, circuit, address, phone, contact_person, town, state, maps_url
            FROM churches
            ORDER BY CASE lower(trim(circuit))
              WHEN 'effurun' THEN 1 WHEN 'warri' THEN 2
