@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261107-inline-daily-cards1">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261107-web-popup-android-inline2">
 
 <style>
 .pdf-book-preview {
@@ -103,6 +103,32 @@
 </nav>
 
 <section class="daily-reading" aria-label="Daily Scripture and Hymn">
+  <div class="daily-reading-ticker scripture-ticker">
+    <span class="daily-ticker-label">✝ SCRIPTURE</span>
+    <button class="daily-ticker-track" type="button" data-reading-title="Scripture for Today" data-reading-source="dailyScriptureFull" aria-haspopup="dialog">
+      <span class="daily-ticker-text">{{ daily_reading.get("verse", {}).get("reference") or "Scripture for Today" }} — {{ daily_reading.get("verse", {}).get("text") or "Open the Bible and spend time in God’s Word today." }}</span>
+    </button><span class="daily-ticker-hint">↗</span>
+  </div>
+  <div class="daily-reading-ticker hymn-ticker">
+    <span class="daily-ticker-label">♫ HYMN</span>
+    <button class="daily-ticker-track" type="button" data-reading-title="Methodist Hymn for Today" data-reading-source="dailyHymnFull" aria-haspopup="dialog">
+      <span class="daily-ticker-text">{{ daily_reading.get("hymn", {}).get("title") or "Methodist Hymn for Today" }} — {{ (daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection.") | replace("\n", " ") }}</span>
+    </button><span class="daily-ticker-hint">↗</span>
+  </div>
+  <div class="daily-reading-accessible-content" aria-hidden="true">
+    <div id="dailyScriptureFull">{{ daily_reading.get("verse", {}).get("reference") or "Scripture for Today" }}&#10;&#10;{{ daily_reading.get("verse", {}).get("text") or "Open the Bible and spend time in God’s Word today." }}</div>
+    <div id="dailyHymnFull">{{ daily_reading.get("hymn", {}).get("title") or "Methodist Hymn for Today" }}&#10;&#10;{{ daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection." }}</div>
+  </div>
+  <div class="daily-reading-modal" id="dailyReadingModal" hidden role="dialog" aria-modal="true" aria-labelledby="dailyReadingModalTitle">
+    <div class="daily-reading-modal-backdrop" data-daily-close></div>
+    <div class="daily-reading-modal-panel" role="document">
+      <div class="daily-reading-modal-header"><h2 id="dailyReadingModalTitle">Daily Reading</h2><button type="button" class="daily-reading-modal-close" data-daily-close aria-label="Close reading">×</button></div>
+      <div class="daily-reading-modal-body" id="dailyReadingModalBody" tabindex="0"></div>
+      <div class="daily-reading-modal-footer"><span>{{ daily_reading.get("date", "") }}</span><a href="/devotional-centre">Devotional Centre →</a></div>
+    </div>
+  </div>
+</section>
+<section class="daily-reading android-daily-reading" id="androidDailyReading" hidden aria-label="Daily Scripture and Hymn">
   <div class="daily-reading-preview scripture-preview">
     <div class="daily-preview-heading"><span>✝ SCRIPTURE FOR TODAY</span></div>
     <h3>{{ daily_reading.get("verse", {}).get("reference") or "Scripture for Today" }}</h3>
@@ -591,6 +617,15 @@
   const saveOffline = document.getElementById("saveOfflineApp");
   const staffSignIn = document.getElementById("nativeStaffSignIn");
   const isAndroidApp = navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1;
+  const webDailyReading = document.querySelector('section.daily-reading:not(.android-daily-reading)');
+  const androidDailyReading = document.getElementById("androidDailyReading");
+  if (isAndroidApp) {
+    if (webDailyReading) webDailyReading.hidden = true;
+    if (androidDailyReading) androidDailyReading.hidden = false;
+  } else {
+    if (webDailyReading) webDailyReading.hidden = false;
+    if (androidDailyReading) androidDailyReading.hidden = true;
+  }
   if (isAndroidApp) {
     // Keep the APK on the same responsive layout as the working mobile browser.
     // Native-only quick actions remain available without enabling Android CSS overrides.
