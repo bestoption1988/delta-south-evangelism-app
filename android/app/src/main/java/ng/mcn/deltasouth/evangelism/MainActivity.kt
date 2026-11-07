@@ -1956,6 +1956,81 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(menuBridge, null)
+                            // Android WebView fallback for daily Scripture and hymn reading dialogs.
+                            // Use delegated click handling so taps work even if deferred page scripts
+                            // initialise late or WebView misses button listeners.
+                            val dailyReadingBridge = """
+                                (function() {
+                                  if (window.__mcnDailyReadingBridge) return;
+                                  var modal = document.getElementById('dailyReadingModal');
+                                  var title = document.getElementById('dailyReadingModalTitle');
+                                  var body = document.getElementById('dailyReadingModalBody');
+                                  if (!modal || !title || !body) return;
+                                  window.__mcnDailyReadingBridge = true;
+                                  document.body.appendChild(modal);
+                                  modal.style.setProperty('z-index','2147483000','important');
+                                  modal.style.setProperty('position','fixed','important');
+                                  modal.style.setProperty('inset','0','important');
+                                  modal.style.setProperty('display','none','important');
+                                  modal.style.setProperty('align-items','center','important');
+                                  modal.style.setProperty('justify-content','center','important');
+                                  modal.style.setProperty('padding','4vh 3vw','important');
+                                  modal.style.setProperty('box-sizing','border-box','important');
+                                  var panel = modal.querySelector('.daily-reading-modal-panel');
+                                  if (panel) {
+                                    panel.style.setProperty('position','relative','important');
+                                    panel.style.setProperty('z-index','1','important');
+                                    panel.style.setProperty('display','flex','important');
+                                    panel.style.setProperty('flex-direction','column','important');
+                                    panel.style.setProperty('width','94vw','important');
+                                    panel.style.setProperty('height','76vh','important');
+                                    panel.style.setProperty('max-height','76vh','important');
+                                    panel.style.setProperty('background','#fff','important');
+                                    panel.style.setProperty('overflow','hidden','important');
+                                  }
+                                  body.style.setProperty('flex','1 1 auto','important');
+                                  body.style.setProperty('min-height','0','important');
+                                  body.style.setProperty('overflow-y','auto','important');
+                                  body.style.setProperty('-webkit-overflow-scrolling','touch','important');
+                                  body.style.setProperty('touch-action','pan-y','important');
+
+                                  function closeReading() {
+                                    modal.hidden = true;
+                                    modal.style.setProperty('display','none','important');
+                                    document.body.classList.remove('daily-reading-modal-open');
+                                  }
+                                  function openReading(trigger) {
+                                    var sourceId = trigger.getAttribute('data-reading-source');
+                                    var source = sourceId && document.getElementById(sourceId);
+                                    if (!source) return;
+                                    title.textContent = trigger.getAttribute('data-reading-title') || 'Daily Reading';
+                                    body.textContent = (source.innerText || source.textContent || '').trim();
+                                    body.scrollTop = 0;
+                                    modal.hidden = false;
+                                    modal.style.setProperty('display','flex','important');
+                                    document.body.classList.add('daily-reading-modal-open');
+                                  }
+                                  document.addEventListener('click',function(event) {
+                                    var trigger = event.target.closest('[data-reading-source]');
+                                    if (trigger) {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      openReading(trigger);
+                                      return;
+                                    }
+                                    if (event.target.closest('[data-daily-close]') || event.target === modal) {
+                                      event.preventDefault();
+                                      closeReading();
+                                    }
+                                  },true);
+                                  document.addEventListener('keydown',function(event) {
+                                    if (event.key === 'Escape' && !modal.hidden) closeReading();
+                                  });
+                                  // Keep modal closed until a user taps a ticker.
+                                  modal.hidden = true;
+                                })();
+                            """.trimIndent()
+                            view.evaluateJavascript(dailyReadingBridge, null)
                             pageLoading = false
                         }
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
