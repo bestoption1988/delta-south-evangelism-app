@@ -302,6 +302,38 @@ fun NativePublicHomepage(
                         }
                     }
                 }
+                item {
+                    val prelate = payload["prelate"].asObject()
+                    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = DioceseNavy)) {
+                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("CHURCH LEADERSHIP", color = DioceseGold, fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                            Text(prelate["name"].asText().ifBlank { "His Eminence, Dr. Oliver Ali Aba (JP)" },
+                                color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                            Text(prelate["title"].asText().ifBlank { "Prelate, Methodist Church Nigeria" }, color = Color.White)
+                            Text("“" + prelate["quote"].asText().ifBlank { "A Church on Fire for Christ, Transforming Lives and Impacting Nations." } + "”",
+                                color = Color(0xFFE7EAF2), fontSize = 15.sp)
+                            Button(onClick = { openPage("/#leadership") }, colors = ButtonDefaults.buttonColors(containerColor = DioceseGold)) {
+                                Text("Read More →", color = DioceseNavy)
+                            }
+                        }
+                    }
+                }
+                item {
+                    Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("OUR VISION & MISSION", color = Color(0xFF667085), fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
+                            Text("Vision", color = DioceseNavy, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Text(content["vision"].asText().ifBlank { "To be spiritually vibrant and one of the largest Churches in Nigeria." }, color = CardText)
+                            Text("Mission", color = DioceseNavy, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            val missionItems = listOf("mission_1", "mission_2", "mission_3").map { content[it].asText() }.filter(String::isNotBlank)
+                            (if (missionItems.isEmpty()) listOf("To consistently win more souls for Christ.", "To develop spiritually fulfilled members.", "To remain very active in serving humanity.") else missionItems)
+                                .forEach { Text("•  $it", color = CardText) }
+                            Button(onClick = { openPage("/#about") }, colors = ButtonDefaults.buttonColors(containerColor = DioceseGold)) {
+                                Text("Learn More About Our Diocese →", color = DioceseNavy)
+                            }
+                        }
+                    }
+                }
                 item { SectionTitle("OUR LEADERSHIP") }
                 items(leadership) { person ->
                     Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -340,6 +372,24 @@ fun NativePublicHomepage(
                             Text(event["event_date"].asText(), color = DioceseRed, fontSize = 12.sp)
                             Text(event["description"].asText(), color = CardText)
                             Text(event["venue"].asText(), color = Color.Gray, fontSize = 13.sp)
+                        }
+                    }
+                }
+                item {
+                    SectionTitle("UPCOMING EVENTS")
+                    TextButton(onClick = { openPage("/#events") }, modifier = Modifier.align(Alignment.End)) { Text("View Events →") }
+                }
+                items(events) { event ->
+                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(event["event_date"].asText(), color = DioceseNavy, fontWeight = FontWeight.Bold,
+                                modifier = Modifier.background(PageBackground, RoundedCornerShape(10.dp)).padding(10.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(event["title"].asText(), color = DioceseNavy, fontWeight = FontWeight.Bold)
+                                Text(event["description"].asText(), color = CardText)
+                                Text(event["venue"].asText(), color = Color.Gray, fontSize = 12.sp)
+                            }
                         }
                     }
                 }
