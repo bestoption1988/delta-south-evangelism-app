@@ -1625,24 +1625,6 @@ private fun loadOfflineDevotionalRows(context: Context): List<Map<String, String
             }
         }
     }
-    val daily = File(directory, "daily_devotion.json")
-    if (daily.exists()) runCatching {
-        val root = JSONObject(daily.readText())
-        val verse = root.optJSONObject("verse") ?: JSONObject()
-        val hymn = root.optJSONObject("hymn") ?: JSONObject()
-        if (verse.length() > 0) output.add(0, mapOf(
-            "title" to ("Scripture of the Day · " + verse.optString("reference")),
-            "collection" to "daily scripture",
-            "content" to verse.optString("text"),
-            "audio_file" to ""
-        ))
-        if (hymn.length() > 0) output.add(1.coerceAtMost(output.size), mapOf(
-            "title" to ("Hymn of the Day · " + hymn.optString("title")),
-            "collection" to "daily hymn",
-            "content" to hymn.optString("lyrics"),
-            "audio_file" to ""
-        ))
-    }
     return output
 }
 
