@@ -13804,3 +13804,140 @@ if __name__ == "__main__":
         debug=False
     )
 
+
+
+@app.get("/api/public/homepage")
+def api_public_homepage():
+    """Read-only public homepage payload for the native Android client."""
+    def public_rows(rows):
+        return [dict(row) for row in rows]
+
+    profiles = db().execute(
+        """SELECT title, full_name, biography, photo_path, display_order
+           FROM leadership_profiles
+           WHERE LOWER(CAST(active AS TEXT)) IN ('1','true','t')
+           ORDER BY display_order, title"""
+    ).fetchall()
+    content_rows = db().execute(
+        "SELECT content_key, content_value FROM homepage_content"
+    ).fetchall()
+    sermons = db().execute(
+        """SELECT title, description, video_url, display_order
+           FROM homepage_sermons
+           WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+           ORDER BY display_order, id DESC LIMIT 20"""
+    ).fetchall()
+    events = db().execute(
+        """SELECT title, description, event_date, venue
+           FROM homepage_events
+           WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
+           ORDER BY event_date DESC, id DESC LIMIT 30"""
+    ).fetchall()
+    churches = db().execute(
+        """SELECT church_name, circuit, address, phone, contact_person,
+                  town, state, maps_url
+           FROM churches
+           ORDER BY CASE lower(trim(circuit))
+             WHEN 'effurun' THEN 1 WHEN 'warri' THEN 2
+             WHEN 'sapele' THEN 3 WHEN 'steel town' THEN 4 ELSE 99 END,
+             church_name"""
+    ).fetchall()
+
+    media_items, gallery_items, video_items = [], [], []
+
+    def load_public_media(params, destination, image_only=False):
+        try:
+            rows = _ml_supabase_request("GET", params=params)
+            for row in rows:
+                item = dict(row)
+                if image_only and not str(item.get("mime_type") or "").lower().startswith("image/"):
+                    continue
+                try:
+                    item["signed_url"] = _ml_signed(item["storage_path"])
+                except Exception:
+                    item["signed_url"] = ""
+                item["original_name"] = str(item.get("storage_path") or "").rsplit("/", 1)[-1]
+                destination.append(item)
+        except Exception:
+            app.logger.exception("Native homepage published media could not be loaded")
+
+    media_select = "id,title,description,storage_path,mime_type,media_type,published,created_at"
+    load_public_media({
+        "select": media_select, "published": "eq.true",
+        "order": "created_at.desc", "limit": "6"
+    }, media_items)
+    load_public_media({
+        "select": media_select, "published": "eq.true",
+        "order": "created_at.desc", "limit": "10"
+    }, gallery_items, image_only=True)
+    load_public_media({
+        "select": media_select, "published": "eq.true", "media_type": "eq.video",
+        "order": "created_at.desc", "limit": "3"
+    }, video_items)
+
+    birthday_members = []
+    try:
+        try:
+            from zoneinfo import ZoneInfo
+            today = datetime.now(ZoneInfo("Africa/Lagos")).date()
+        except Exception:
+            today = datetime.utcnow().date()
+        # The production members table has no passport_photo column.
+        birthday_rows = db().execute(
+            """SELECT full_name, birthday, circuit, church_name
+               FROM members
+               WHERE birthday IS NOT NULL AND TRIM(birthday) <> ''
+                 AND (death IS NULL OR LOWER(TRIM(death)) NOT IN ('yes','true','1','deceased'))
+               ORDER BY full_name"""
+        ).fetchall()
+        for row in birthday_rows:
+            value = str(row["birthday"] or "").strip()
+            parsed = None
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%d/%m", "%d-%m"):
+                try:
+                    parsed = datetime.strptime(value, fmt).date()
+                    break
+                except ValueError:
+                    continue
+            if parsed and (parsed.month, parsed.day) == (today.month, today.day):
+                birthday_members.append({
+                    "full_name": row["full_name"] or "Church Member",
+                    "circuit": row["circuit"] or "",
+                    "church_name": row["church_name"] or ""
+                })
+    except Exception:
+        app.logger.exception("Native homepage birthday list could not be loaded")
+
+    return jsonify({
+        "ok": True,
+        "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "homepage_content": {row["content_key"]: row["content_value"] for row in content_rows},
+        "leadership": public_rows(profiles),
+        "sermons": public_rows(sermons),
+        "events": public_rows(events),
+        "churches": public_rows(churches),
+        "daily_reading": _homepage_daily_reading(),
+        "media": media_items,
+        "gallery": gallery_items,
+        "videos": video_items,
+        "birthdays": birthday_members,
+        "prelate": {
+            "name": "His Eminence, Dr. Oliver Ali Aba (JP)",
+            "title": "Prelate, Methodist Church Nigeria",
+            "quote": "A Church on Fire for Christ, Transforming Lives and Impacting Nations."
+        },
+        "navigation": [
+            {"label": "Home", "route": "/"},
+            {"label": "About Us", "route": "/#about"},
+            {"label": "Our Diocese", "route": "/#diocese"},
+            {"label": "Fellowships", "route": "/fellowships"},
+            {"label": "Sermons & Media", "route": "/#watch"},
+            {"label": "Devotional Centre", "route": "/devotional-centre"},
+            {"label": "Photo Gallery", "route": "/#photo-gallery"},
+            {"label": "Events", "route": "/#events"},
+            {"label": "Prayer Requests", "route": "/prayer-request"},
+            {"label": "Online Giving", "route": "/giving"},
+            {"label": "Live Services", "route": "/live"},
+            {"label": "Member Portal", "route": "/login"}
+        ]
+    })
