@@ -1369,3 +1369,54 @@ html.mcn-android-app .daily-devotion-modal.is-open>.daily-devotion-modal-panel{
 .mcn-reading-audio{margin:18px 0}
 .mcn-reading-audio audio{display:block;width:100%;min-height:48px}
 @media(prefers-reduced-motion:reduce){.mcn-ticker-track{animation:none;padding-left:0}}
+
+
+/* Final mobile/WebView correction: keep ticker content clipped to straight rectangular rows. */
+#daily-devotion.mcn-daily,
+#daily-devotion .mcn-daily-ticker-row,
+#daily-devotion .mcn-daily-ticker,
+#daily-devotion .mcn-ticker-window {
+  position:relative!important;
+  border-radius:0!important;
+  overflow:hidden!important;
+  clip-path:inset(0)!important;
+  isolation:isolate;
+}
+#daily-devotion .mcn-daily-ticker {height:58px!important;min-height:58px!important;max-height:58px!important}
+#daily-devotion .mcn-ticker-track {
+  animation-duration:72s!important;
+  animation-timing-function:linear!important;
+  animation-iteration-count:infinite!important;
+  will-change:transform;
+}
+#daily-devotion .mcn-daily-ticker:nth-child(2) .mcn-ticker-track {animation-duration:100s!important}
+#daily-devotion .mcn-ticker-window {contain:paint!important}
+.mcn-reading-dialog[hidden] {display:none!important}
+.mcn-reading-dialog.mcn-reading-open {
+  position:fixed!important;inset:0!important;z-index:2147483000!important;
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  width:100vw!important;height:100vh!important;height:100dvh!important;
+  max-height:100vh!important;max-height:100dvh!important;
+  padding:0!important;margin:0!important;border:0!important;border-radius:0!important;
+  overflow:hidden!important;box-sizing:border-box!important;
+  background:rgba(4,16,43,.78)!important;clip-path:none!important;
+}
+.mcn-reading-dialog.mcn-reading-open .mcn-reading-panel {
+  position:relative!important;display:block!important;flex:none!important;
+  width:92vw!important;max-width:680px!important;
+  height:70vh!important;height:70dvh!important;
+  min-height:70vh!important;min-height:70dvh!important;
+  max-height:70vh!important;max-height:70dvh!important;
+  margin:0 auto!important;padding:22px 18px 28px!important;
+  border:1px solid #d6deeb!important;border-radius:10px!important;
+  background:#fff!important;color:#172b4d!important;
+  box-sizing:border-box!important;overflow-x:hidden!important;overflow-y:auto!important;
+  clip-path:none!important;transform:none!important;
+  -webkit-overflow-scrolling:touch!important;
+}
+.mcn-reading-dialog.mcn-reading-open .mcn-reading-close {
+  position:sticky!important;top:0!important;float:right!important;
+}
+@media(prefers-reduced-motion:reduce) {
+  #daily-devotion .mcn-ticker-track {animation-duration:0s!important;transform:none!important;padding-left:0!important}
+}
