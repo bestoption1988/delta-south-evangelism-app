@@ -1956,66 +1956,52 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(menuBridge, null)
-                            // Android WebView fallback for daily Scripture and hymn reading dialogs.
-                            // Use delegated click handling so taps work even if deferred page scripts
-                            // initialise late or WebView misses button listeners.
+                            // Android WebView: show the page's own rectangular reading dialog.
+                            // Do not create a second full-screen overlay; that was obscuring the popup.
                             val dailyReadingBridge = """
                                 (function() {
-                                  if (window.__mcnDailyReadingBridgeV2) return;
-                                  window.__mcnDailyReadingBridgeV2 = true;
+                                  if (window.__mcnDailyReadingBridgeV3) return;
+                                  window.__mcnDailyReadingBridgeV3 = true;
                                   var modal = document.getElementById('dailyReadingModal');
                                   if (!modal) return;
-                                  var lastTitle = 'Daily Reading';
-                                  var overlay = document.createElement('div');
-                                  overlay.id = 'mcnNativeReadingOverlay';
-                                  overlay.style.cssText = 'display:none;position:fixed;inset:0;z-index:2147483647;background:rgba(4,15,39,.78);align-items:center;justify-content:center;padding:4vh 3vw;box-sizing:border-box;';
-                                  var card = document.createElement('section');
-                                  card.style.cssText = 'display:flex;flex-direction:column;position:relative;width:94vw;height:76vh;max-height:76vh;min-height:0;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.4);';
-                                  var header = document.createElement('div');
-                                  header.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 17px;background:#0b2455;color:#fff;';
-                                  var heading = document.createElement('h2');
-                                  heading.style.cssText = 'margin:0;font:700 19px/1.3 Arial,sans-serif;color:#fff;';
-                                  var close = document.createElement('button');
-                                  close.type = 'button';
-                                  close.textContent = '×';
-                                  close.setAttribute('aria-label','Close reading');
-                                  close.style.cssText = 'width:42px;height:42px;flex:0 0 42px;border:0;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:30px;line-height:1;';
-                                  var reading = document.createElement('div');
-                                  reading.tabIndex = 0;
-                                  reading.style.cssText = 'flex:1 1 auto;min-height:0;overflow-y:scroll;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:20px 18px;color:#1b2d50;font:18px/1.75 Georgia,serif;white-space:pre-wrap;overflow-wrap:anywhere;';
-                                  var footer = document.createElement('div');
-                                  footer.style.cssText = 'flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 15px;border-top:1px solid #e4e8ef;color:#68758a;font:600 12px/1.4 Arial,sans-serif;';
-                                  var date = document.createElement('span');
-                                  date.textContent = modal.querySelector('.daily-reading-modal-footer span')?.textContent || '';
-                                  var link = document.createElement('a');
-                                  link.href = '/devotional-centre';
-                                  link.textContent = 'Devotional Centre →';
-                                  link.style.cssText = 'color:#a51e37;text-decoration:none;';
-                                  header.appendChild(heading); header.appendChild(close);
-                                  footer.appendChild(date); footer.appendChild(link);
-                                  card.appendChild(header); card.appendChild(reading); card.appendChild(footer);
-                                  overlay.appendChild(card); document.body.appendChild(overlay);
-                                  function hide() { overlay.style.display='none'; document.body.style.overflow=''; }
-                                  function show(trigger) {
-                                    var sourceId=trigger.getAttribute('data-reading-source');
-                                    var source=sourceId && document.getElementById(sourceId);
-                                    if(!source) return;
-                                    heading.textContent=trigger.getAttribute('data-reading-title') || 'Daily Reading';
-                                    reading.textContent=(source.innerText || source.textContent || '').trim();
-                                    reading.scrollTop=0;
-                                    overlay.style.display='flex';
-                                    document.body.style.overflow='hidden';
-                                    reading.focus();
+                                  var panel = modal.querySelector('.daily-reading-modal-panel');
+                                  var heading = document.getElementById('dailyReadingModalTitle');
+                                  var body = document.getElementById('dailyReadingModalBody');
+                                  function closeReading() {
+                                    modal.hidden = true;
+                                    modal.style.setProperty('display','none','important');
+                                    document.body.style.overflow = '';
                                   }
-                                  document.addEventListener('click',function(event) {
-                                    var trigger=event.target.closest('[data-reading-source]');
-                                    if(trigger) { event.preventDefault(); event.stopImmediatePropagation(); show(trigger); return; }
-                                    if(event.target===overlay || event.target===close || event.target.closest('#mcnNativeReadingOverlay a')) {
-                                      if(event.target.closest('#mcnNativeReadingOverlay a')) return;
-                                      event.preventDefault(); hide();
+                                  function openReading(trigger) {
+                                    var source = document.getElementById(trigger.getAttribute('data-reading-source'));
+                                    if (!source || !panel || !heading || !body) return;
+                                    heading.textContent = trigger.getAttribute('data-reading-title') || 'Daily Reading';
+                                    body.textContent = (source.innerText || source.textContent || '').trim();
+                                    body.scrollTop = 0;
+                                    modal.hidden = false;
+                                    modal.style.cssText += ';position:fixed!important;inset:0!important;z-index:2147483647!important;display:flex!important;align-items:center!important;justify-content:center!important;padding:4vh 3vw!important;box-sizing:border-box!important;background:rgba(4,15,39,.72)!important;';
+                                    panel.style.cssText += ';position:relative!important;z-index:2!important;display:flex!important;flex-direction:column!important;width:94vw!important;height:76vh!important;max-height:76vh!important;min-height:0!important;background:#fff!important;border-radius:16px!important;overflow:hidden!important;box-shadow:0 18px 60px rgba(0,0,0,.4)!important;';
+                                    body.style.cssText += ';display:block!important;flex:1 1 auto!important;min-height:0!important;overflow-y:scroll!important;-webkit-overflow-scrolling:touch!important;padding:20px 18px!important;color:#1b2d50!important;font:18px/1.75 Georgia,serif!important;white-space:pre-wrap!important;';
+                                    document.body.style.overflow = 'hidden';
+                                    body.scrollTop = 0;
+                                    body.focus();
+                                  }
+                                  document.addEventListener('click', function(event) {
+                                    var trigger = event.target.closest && event.target.closest('[data-reading-source]');
+                                    if (trigger) {
+                                      event.preventDefault();
+                                      event.stopImmediatePropagation();
+                                      openReading(trigger);
+                                      return;
                                     }
-                                  },true);
-                                  document.addEventListener('keydown',function(event){if(event.key==='Escape' && overlay.style.display!=='none')hide();});
+                                    if (event.target.closest && event.target.closest('[data-daily-close]')) {
+                                      event.preventDefault();
+                                      closeReading();
+                                    }
+                                  }, true);
+                                  document.addEventListener('keydown', function(event) {
+                                    if (event.key === 'Escape' && !modal.hidden) closeReading();
+                                  });
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(dailyReadingBridge, null)
