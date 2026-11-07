@@ -6,6 +6,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -61,9 +62,10 @@ fun NativePublicHomepage(
         }
         result.onSuccess {
             payload = it
-            loadMessage = if (online) "Diocesan information is up to date." else "Showing saved information. Connect to refresh."
+            loadMessage = if (online) "Diocesan information is up to date." else "Showing saved diocesan information from this device."
         }.onFailure {
-            loadMessage = "No saved homepage is available yet. Connect once and download the offline modules."
+            loadMessage = if (online) "Could not reach the diocesan server. Check your connection or try again."
+            else "No homepage has been saved on this device yet. Connect once, then download the offline modules."
         }
         loading = false
     }
@@ -83,8 +85,6 @@ fun NativePublicHomepage(
         }
     }
 
-    BackHandler(enabled = false) { }
-
     Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -99,9 +99,16 @@ fun NativePublicHomepage(
                         Text("WORSHIP · WITNESS · SERVICE · DISCIPLESHIP", style = MaterialTheme.typography.bodySmall)
                         Text(content["hero_heading"].asText().ifBlank { "A Church on Fire for Christ" }, style = MaterialTheme.typography.titleLarge)
                         Text(content["hero_subheading"].asText().ifBlank { "Transforming Lives and Impacting Nations." })
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = onStaffLogin) { Text("Member / Staff Login") }
-                            OutlinedButton(onClick = onOpenOfflineLibrary) { Text("Offline Library") }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(onClick = onStaffLogin, modifier = Modifier.weight(1.35f)) {
+                                Text("Member / Staff Login", maxLines = 1)
+                            }
+                            OutlinedButton(onClick = onOpenOfflineLibrary, modifier = Modifier.weight(1f)) {
+                                Text("Offline Library", maxLines = 1)
+                            }
                         }
                     }
                 }
