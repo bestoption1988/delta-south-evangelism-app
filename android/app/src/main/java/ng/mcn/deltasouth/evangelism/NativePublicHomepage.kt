@@ -163,16 +163,13 @@ fun NativePublicHomepage(
                     val hymnLine = "♫ HYMN: " + hymn["title"].asText() + " — " + hymn["lyrics"].asText().replace("\n"," ")
                     var readingPopup by remember { mutableStateOf("") }
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("scripture" to scriptureLine, "hymn" to hymnLine).forEach { (kind, line) ->
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                                    Text(if (kind == "scripture") "✝ SCRIPTURE" else "♫ HYMN", color = DioceseRed, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(line.ifBlank { if (kind == "scripture") "Scripture for Today" else "Methodist Hymn for Today" },
-                                        modifier = Modifier.weight(1f).basicMarquee().clickable { readingPopup = kind },
-                                        color = DioceseNavy, maxLines = 1, softWrap = false)
-                                    TextButton(onClick = { readingPopup = kind }) { Text("View Full", color = DioceseRed, fontSize = 11.sp) }
-                                }
+                        Column(Modifier.fillMaxWidth().padding(vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text((scriptureLine + "     •     " + hymnLine).replace(Regex("\\s+"), " ").trim(),
+                                modifier = Modifier.fillMaxWidth().clickable { readingPopup = "scripture" }.basicMarquee().padding(horizontal = 12.dp),
+                                color = DioceseNavy, maxLines = 1, softWrap = false, fontSize = 13.sp)
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.End) {
+                                TextButton(onClick = { readingPopup = "scripture" }) { Text("View Full Scripture", color = DioceseRed, fontSize = 11.sp) }
+                                TextButton(onClick = { readingPopup = "hymn" }) { Text("View Full Hymn", color = DioceseRed, fontSize = 11.sp) }
                             }
                         }
                     }
