@@ -1938,7 +1938,37 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                       return;
                                     }
                                     var link = event.target.closest('a');
-                                    if (link) closeMenu();
+                                    if (link) {
+                                      // The panel is detached from its original nav container.
+                                      // Handle navigation explicitly: hiding a fixed WebView overlay
+                                      // during the same click can cancel the anchor's default action.
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      var href = link.getAttribute('href') || '';
+                                      closeMenu();
+                                      window.setTimeout(function() {
+                                        if (href === '#' || href === '') {
+                                          if (link.id === 'saveOfflineApp') {
+                                            if (window.mcnCacheEntireApp) window.mcnCacheEntireApp();
+                                            window.location.href = 'mcn-app://offline';
+                                          }
+                                          return;
+                                        }
+                                        if (href.charAt(0) === '#') {
+                                          var target = document.getElementById(href.slice(1));
+                                          if (target) {
+                                            target.scrollIntoView({behavior:'smooth',block:'start'});
+                                            if (history && history.replaceState) history.replaceState(null,'',href);
+                                          }
+                                          return;
+                                        }
+                                        if (href.indexOf('mcn-app://') === 0) {
+                                          window.location.href = href;
+                                          return;
+                                        }
+                                        window.location.assign(new URL(href, document.baseURI).href);
+                                      }, 80);
+                                    }
                                   },true);
                                   document.addEventListener('keydown',function(event){if(event.key==='Escape')closeMenu();});
                                   window.addEventListener('resize',function(){if(panel.style.display!=='none')openMenu();});
