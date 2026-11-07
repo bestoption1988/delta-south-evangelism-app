@@ -128,17 +128,24 @@
     </div>
   </div>
 </section>
-<section class="daily-reading android-daily-reading" id="androidDailyReading" hidden aria-label="Daily Scripture and Hymn">
-  <div class="daily-reading-preview scripture-preview">
-    <div class="daily-preview-heading"><span>✝ SCRIPTURE FOR TODAY</span></div>
+<section class="android-daily-reading" id="androidDailyReading" hidden aria-label="Daily Scripture and Hymn">
+  <article class="android-daily-card scripture-preview">
+    <div class="daily-preview-heading">✝ SCRIPTURE FOR TODAY</div>
     <h3>{{ daily_reading.get("verse", {}).get("reference") or "Scripture for Today" }}</h3>
-    <p class="daily-preview-text">{{ daily_reading.get("verse", {}).get("text") or "Open the Bible and spend time in God’s Word today." }}</p>
+    <details class="android-daily-details">
+      <summary>View Full Scripture <span aria-hidden="true">▾</span></summary>
+      <div class="android-daily-full-text">{{ daily_reading.get("verse", {}).get("text") or "Open the Bible and spend time in God’s Word today." }}</div>
+    </details>
     <a class="daily-preview-link" href="/devotional-centre">View All Scripture →</a>
-  </div>
-  <div class="daily-reading-preview hymn-preview">
-    <div class="daily-preview-heading"><span>♫ METHODIST HYMN FOR TODAY</span></div>
+  </article>
+
+  <article class="android-daily-card hymn-preview">
+    <div class="daily-preview-heading">♫ METHODIST HYMN FOR TODAY</div>
     <h3>{{ daily_reading.get("hymn", {}).get("number") or daily_reading.get("hymn", {}).get("hymn_number") or daily_reading.get("hymn", {}).get("item_number") or "" }} {{ daily_reading.get("hymn", {}).get("title") or "Methodist Hymn for Today" }}</h3>
-    <p class="daily-preview-text">{{ daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection." }}</p>
+    <details class="android-daily-details">
+      <summary>View Full Hymn <span aria-hidden="true">▾</span></summary>
+      <div class="android-daily-full-text">{{ daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection." }}</div>
+    </details>
     {% if daily_reading.get("hymn", {}).get("tune_name") or daily_reading.get("hymn", {}).get("tune") %}
     <p class="daily-preview-tune">Tune: {{ daily_reading.get("hymn", {}).get("tune_name") or daily_reading.get("hymn", {}).get("tune") }}</p>
     {% endif %}
@@ -146,7 +153,7 @@
     <audio class="daily-preview-audio" controls preload="none" src="{{ daily_reading.get('hymn', {}).get('audio_url') }}">Your browser does not support audio playback.</audio>
     {% endif %}
     <a class="daily-preview-link" href="/devotional-centre">View All Hymns →</a>
-  </div>
+  </article>
 </section>
 
 <main>
@@ -620,6 +627,7 @@
   const webDailyReading = document.querySelector('section.daily-reading:not(.android-daily-reading)');
   const androidDailyReading = document.getElementById("androidDailyReading");
   if (isAndroidApp) {
+    document.documentElement.classList.add("mcn-android-app");
     if (webDailyReading) webDailyReading.hidden = true;
     if (androidDailyReading) androidDailyReading.hidden = false;
   } else {
