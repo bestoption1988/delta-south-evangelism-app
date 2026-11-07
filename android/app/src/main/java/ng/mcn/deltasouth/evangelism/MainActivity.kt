@@ -1815,7 +1815,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     settings.loadWithOverviewMode = false
                     settings.allowFileAccess = false
                     settings.allowContentAccess = true
-                    settings.cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                    settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                     isFocusable = true
                     isFocusableInTouchMode = true
                     isVerticalScrollBarEnabled = true
@@ -1968,7 +1968,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 }
             },
             update = { view ->
-                val cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                val cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                 if (view.settings.cacheMode != cacheMode) {
                     view.settings.cacheMode = cacheMode
                     if (!view.url.isNullOrBlank()) view.reload()
