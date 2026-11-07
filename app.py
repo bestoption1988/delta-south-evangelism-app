@@ -5652,8 +5652,10 @@ def api_public_homepage():
             today = datetime.now(ZoneInfo("Africa/Lagos")).date()
         except Exception:
             today = datetime.utcnow().date()
+        # Match the production members schema: member records do not have
+        # a passport_photo column. Birthday data must still load without photos.
         birthday_rows = db().execute(
-            """SELECT full_name, birthday, passport_photo, circuit, church_name
+            """SELECT full_name, birthday, circuit, church_name
                FROM members
                WHERE birthday IS NOT NULL AND TRIM(birthday) <> ''
                  AND (death IS NULL OR LOWER(TRIM(death)) NOT IN ('yes','true','1','deceased'))
@@ -5670,17 +5672,10 @@ def api_public_homepage():
                     continue
             if not parsed or (parsed.month, parsed.day) != (today.month, today.day):
                 continue
-            photo = str(row["passport_photo"] or "").strip()
-            if photo and not photo.startswith(("http://", "https://")):
-                try:
-                    photo = _member_photo_storage_signed_url(photo)
-                except Exception:
-                    photo = ""
             birthday_members.append({
                 "full_name": row["full_name"] or "Church Member",
                 "circuit": row["circuit"] or "",
-                "church_name": row["church_name"] or "",
-                "photo_url": photo if photo.startswith(("http://", "https://")) else ""
+                "church_name": row["church_name"] or ""
             })
     except Exception:
         app.logger.exception("Native homepage birthday list could not be loaded")
