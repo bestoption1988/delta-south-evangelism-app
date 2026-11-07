@@ -81,11 +81,13 @@ private fun NativeDioceseApp() {
         val callback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 val capabilities = manager.getNetworkCapabilities(network)
-                online = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+                online = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true &&
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             }
             override fun onLost(network: Network) { online = networkAvailable(appContext) }
             override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) {
-                online = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                online = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             }
         }
         runCatching { manager.registerDefaultNetworkCallback(callback) }
@@ -1531,7 +1533,8 @@ private fun networkAvailable(context: Context): Boolean {
     val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     val network = manager.activeNetwork ?: return false
     val capabilities = manager.getNetworkCapabilities(network) ?: return false
-    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
 }
 
 @Composable
@@ -1815,7 +1818,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     settings.loadWithOverviewMode = false
                     settings.allowFileAccess = false
                     settings.allowContentAccess = true
-                    settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    settings.cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
                     isFocusable = true
                     isFocusableInTouchMode = true
                     isVerticalScrollBarEnabled = true
@@ -1968,7 +1971,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 }
             },
             update = { view ->
-                val cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                val cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
                 if (view.settings.cacheMode != cacheMode) {
                     view.settings.cacheMode = cacheMode
                     if (!view.url.isNullOrBlank()) view.reload()
