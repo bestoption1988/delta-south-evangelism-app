@@ -102,7 +102,10 @@ fun NativePublicHomepage(
     val hymn = reading["hymn"].asObject()
     val leadership = payload["leadership"].asObjects()
     val events = payload["events"].asObjects()
-    val churches = payload["churches"].asObjects()
+    val churches = payload["churches"].asObjects().filterNot { church ->
+        val name = church["church_name"].asText().trim()
+        Regex("(?i)^.*\\b(local\\s+)?church\\s*\\d+$").matches(name)
+    }
     val sermons = payload["sermons"].asObjects()
     val gallery = payload["gallery"].asObjects()
     val videos = payload["videos"].asObjects()
@@ -130,20 +133,20 @@ fun NativePublicHomepage(
             ) {
                 item {
                     Row(
-                        modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(14.dp)).padding(12.dp),
+                        modifier = Modifier.fillMaxWidth().background(Color.White, RoundedCornerShape(14.dp)).padding(horizontal = 10.dp, vertical = 9.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.app_logo),
                             contentDescription = "Methodist Church Nigeria crest",
-                            modifier = Modifier.size(62.dp),
+                            modifier = Modifier.size(54.dp),
                             contentScale = ContentScale.Fit
                         )
                         Spacer(Modifier.width(10.dp))
                         Column(Modifier.weight(1f)) {
-                            Text("METHODIST CHURCH NIGERIA", color = DioceseNavy, fontWeight = FontWeight.Bold, fontSize = 16.sp)
-                            Text("DELTA SOUTH DIOCESE", color = DioceseRed, fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                            Text("WORSHIP · WITNESS · SERVICE · DISCIPLESHIP", color = Color.Gray, fontSize = 9.sp)
+                            Text("METHODIST CHURCH NIGERIA", color = DioceseNavy, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("DELTA SOUTH DIOCESE", color = DioceseRed, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                            Text("WORSHIP · WITNESS · SERVICE · DISCIPLESHIP", color = Color.Gray, fontSize = 8.sp)
                         }
                     }
                 }
@@ -278,6 +281,7 @@ fun NativePublicHomepage(
                     }
                 }
                 item { SectionTitle("SERMONS & TEACHINGS") }
+                if (sermons.isEmpty()) item { Text("No sermons have been published yet. Please check back soon.", color = Color.Gray) }
                 items(sermons) { sermon ->
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
@@ -290,18 +294,22 @@ fun NativePublicHomepage(
                     }
                 }
                 item { SectionTitle("OUR CHURCH GALLERY") }
+                if (gallery.isEmpty()) item { Text("Church photographs will appear here when published.", color = Color.Gray) }
                 items(gallery) { photo ->
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             val url = photo["signed_url"].asText()
                             if (url.isNotBlank()) AsyncImage(model = url, contentDescription = photo["title"].asText(),
                                 modifier = Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
-                            Text(photo["title"].asText(), color = DioceseNavy, fontWeight = FontWeight.Bold)
+                            val galleryTitle = photo["title"].asText().takeUnless { it.matches(Regex("(?i)^file_[a-f0-9]{12,}$")) }
+                                ?: "Diocesan Gallery Photo"
+                            Text(galleryTitle, color = DioceseNavy, fontWeight = FontWeight.Bold)
                             Text(photo["description"].asText(), color = Color.Gray, fontSize = 13.sp)
                         }
                     }
                 }
                 item { SectionTitle("FEATURED CHURCH VIDEOS") }
+                if (videos.isEmpty()) item { Text("No church videos have been published yet.", color = Color.Gray) }
                 items(videos) { video ->
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -318,6 +326,7 @@ fun NativePublicHomepage(
                     SectionTitle("HAPPY BIRTHDAY!")
                     Text("We celebrate our members on their birthdays.", color = CardText)
                 }
+                if (birthdays.isEmpty()) item { Text("There are no member birthdays listed for today.", color = Color.Gray) }
                 items(birthdays) { member ->
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                         Column(Modifier.padding(12.dp)) {
@@ -328,6 +337,7 @@ fun NativePublicHomepage(
                     }
                 }
                 item { SectionTitle("FIND A CHURCH") }
+                if (churches.isEmpty()) item { Text("Church directory records are being updated. Please check again soon.", color = Color.Gray) }
                 items(churches) { church ->
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
                         Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
