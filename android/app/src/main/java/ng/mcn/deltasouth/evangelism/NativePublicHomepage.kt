@@ -2,6 +2,7 @@ package ng.mcn.deltasouth.evangelism
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
@@ -158,6 +159,45 @@ fun NativePublicHomepage(
                     }
                 }
                 item {
+                    val scriptureLine = "✝ SCRIPTURE: " + verse["reference"].asText() + " — " + verse["text"].asText().replace("\n"," ")
+                    val hymnLine = "♫ HYMN: " + hymn["title"].asText() + " — " + hymn["lyrics"].asText().replace("\n"," ")
+                    var readingPopup by remember { mutableStateOf("") }
+                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf("scripture" to scriptureLine, "hymn" to hymnLine).forEach { (kind, line) ->
+                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                                    Text(if (kind == "scripture") "✝ SCRIPTURE" else "♫ HYMN", color = DioceseRed, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(line.ifBlank { if (kind == "scripture") "Scripture for Today" else "Methodist Hymn for Today" },
+                                        modifier = Modifier.weight(1f).basicMarquee().clickable { readingPopup = kind },
+                                        color = DioceseNavy, maxLines = 1, softWrap = false)
+                                    TextButton(onClick = { readingPopup = kind }) { Text("View Full", color = DioceseRed, fontSize = 11.sp) }
+                                }
+                            }
+                        }
+                    }
+                    if (readingPopup.isNotBlank()) {
+                        val isHymn = readingPopup == "hymn"
+                        AlertDialog(
+                            onDismissRequest = { readingPopup = "" },
+                            confirmButton = { TextButton(onClick = { readingPopup = "" }) { Text("Close") } },
+                            title = { Text(if (isHymn) hymn["title"].asText().ifBlank { "Methodist Hymn for Today" } else verse["reference"].asText().ifBlank { "Scripture for Today" }, color = DioceseNavy) },
+                            text = {
+                                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Text(if (isHymn) hymn["lyrics"].asText().ifBlank { "Hymn lyrics are not available." } else verse["text"].asText().ifBlank { "Scripture text is not available." }, color = CardText)
+                                    if (isHymn) {
+                                        val tune = hymn["tune_name"].asText().ifBlank { hymn["tune"].asText().ifBlank { hymn["meter"].asText() } }
+                                        if (tune.isNotBlank()) Text("Tune: $tune", color = DioceseRed, fontWeight = FontWeight.SemiBold)
+                                        val audio = hymn["audio_url"].asText()
+                                        if (audio.isNotBlank()) Button(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(audio))) } }, modifier = Modifier.fillMaxWidth()) { Text("▶ Play Hymn Tune") }
+                                    }
+                                    TextButton(onClick = { openPage("/devotional-centre") }) { Text("View All Scripture & Hymns") }
+                                }
+                            }
+                        )
+                    }
+                }
+                item {
                     Column(
                         modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp))
                             .background(Brush.linearGradient(listOf(DioceseNavy, Color(0xFF142D65), Color(0xFF744B42))))
@@ -194,48 +234,6 @@ fun NativePublicHomepage(
                             }
                             Text(loadMessage, color = Color.Gray, fontSize = 12.sp)
                         }
-                    }
-                }
-                item {
-                    val scriptureLine = "✝ SCRIPTURE: " + verse["reference"].asText() + " — " + verse["text"].asText().replace("\n"," ")
-                    val hymnLine = "♫ HYMN: " + hymn["title"].asText() + " — " + hymn["lyrics"].asText().replace("\n"," ")
-                    var readingPopup by remember { mutableStateOf("") }
-                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("scripture" to scriptureLine, "hymn" to hymnLine).forEach { (kind, line) ->
-                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
-                                    Text(if (kind == "scripture") "✝ SCRIPTURE" else "♫ HYMN", color = DioceseRed, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(line.ifBlank { if (kind == "scripture") "Scripture for Today" else "Methodist Hymn for Today" },
-                                        modifier = Modifier.weight(1f).clickable { readingPopup = kind },
-                                        color = DioceseNavy, maxLines = 1, softWrap = false)
-                                    TextButton(onClick = { readingPopup = kind }) { Text("View Full", color = DioceseRed, fontSize = 11.sp) }
-                                }
-                            }
-                        }
-                    }
-                    LaunchedEffect(Unit) {
-                        while (true) { kotlinx.coroutines.delay(4000) }
-                    }
-                    if (readingPopup.isNotBlank()) {
-                        val isHymn = readingPopup == "hymn"
-                        AlertDialog(
-                            onDismissRequest = { readingPopup = "" },
-                            confirmButton = { TextButton(onClick = { readingPopup = "" }) { Text("Close") } },
-                            title = { Text(if (isHymn) hymn["title"].asText().ifBlank { "Methodist Hymn for Today" } else verse["reference"].asText().ifBlank { "Scripture for Today" }, color = DioceseNavy) },
-                            text = {
-                                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                    Text(if (isHymn) hymn["lyrics"].asText().ifBlank { "Hymn lyrics are not available." } else verse["text"].asText().ifBlank { "Scripture text is not available." }, color = CardText)
-                                    if (isHymn) {
-                                        val tune = hymn["tune_name"].asText().ifBlank { hymn["tune"].asText().ifBlank { hymn["meter"].asText() } }
-                                        if (tune.isNotBlank()) Text("Tune: $tune", color = DioceseRed, fontWeight = FontWeight.SemiBold)
-                                        val audio = hymn["audio_url"].asText()
-                                        if (audio.isNotBlank()) Button(onClick = { openPage(audio) }, modifier = Modifier.fillMaxWidth()) { Text("▶ Play Hymn Tune") }
-                                    }
-                                    TextButton(onClick = { openPage("/devotional-centre") }) { Text("View All Scripture & Hymns") }
-                                }
-                            }
-                        )
                     }
                 }
                 item {
