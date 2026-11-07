@@ -1895,7 +1895,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   // This avoids WebView clipping/stacking bugs while preserving the
                                   // original anchor nodes and their existing click handlers.
                                   document.body.appendChild(panel);
-                                  panel.style.cssText += ';display:none!important;position:fixed!important;left:0!important;right:0!important;width:100vw!important;top:0!important;max-height:70vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;padding:8px 0!important;background:#08245b!important;border:1px solid rgba(255,255,255,.25)!important;z-index:2147483647!important;-webkit-overflow-scrolling:touch!important;';
+                                  panel.style.cssText += ';display:none!important;position:fixed!important;left:0!important;right:0!important;width:100vw!important;top:0!important;max-height:50vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;padding:8px 0!important;background:#08245b!important;border:1px solid rgba(255,255,255,.25)!important;z-index:2147483647!important;-webkit-overflow-scrolling:touch!important;';
 
                                   panel.querySelectorAll('a,.ds-menu-group-trigger').forEach(function(item) {
                                     item.style.cssText += ';display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;float:none!important;width:100%!important;min-height:48px!important;height:auto!important;box-sizing:border-box!important;padding:13px 20px!important;margin:0!important;color:#fff!important;background:#08245b!important;font:600 16px/1.4 Arial,sans-serif!important;text-align:left!important;text-decoration:none!important;border:0!important;border-bottom:1px solid rgba(255,255,255,.16)!important;';
@@ -1916,7 +1916,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     menu.classList.add('ds-menu-open');
                                     var top = Math.max(0, nav.getBoundingClientRect().bottom);
                                     panel.style.setProperty('top',top+'px','important');
-                                    panel.style.setProperty('max-height',Math.max(180,window.innerHeight-top)+'px','important');
+                                    panel.style.setProperty('max-height',Math.max(160,Math.min(window.innerHeight*0.5,window.innerHeight-top))+'px','important');
                                     panel.style.setProperty('display','block','important');
                                     panel.style.setProperty('visibility','visible','important');
                                     panel.style.setProperty('opacity','1','important');
