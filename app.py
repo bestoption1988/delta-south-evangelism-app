@@ -5579,7 +5579,7 @@ def command_centre():
 
 @app.get("/api/public/homepage")
 def api_public_homepage():
-    """Read-only public homepage payload for native and offline-first clients."""
+    """Complete read-only public homepage payload for native and offline-first clients."""
     def public_rows(rows):
         return [dict(row) for row in rows]
 
@@ -5612,7 +5612,70 @@ def api_public_homepage():
              WHEN 'sapele' THEN 3 WHEN 'steel town' THEN 4 ELSE 99 END,
              church_name"""
     ).fetchall()
-    daily = _homepage_daily_reading()
+
+    media_items, gallery_items, video_items = [], [], []
+    try:
+        media_rows = _ml_supabase_request(
+            "GET", params={
+                "select": "id,title,description,storage_path,mime_type,media_type,published,created_at",
+                "published": "eq.true", "order": "created_at.desc", "limit": "10"
+            }
+        )
+        for row in media_rows:
+            item = dict(row)
+            try:
+                item["signed_url"] = _ml_signed(item["storage_path"])
+            except Exception:
+                item["signed_url"] = ""
+            item["original_name"] = item.get("storage_path", "").rsplit("/", 1)[-1]
+            media_items.append(item)
+            if str(item.get("mime_type") or "").lower().startswith("image/"):
+                gallery_items.append(item)
+            if str(item.get("media_type") or "").lower() == "video":
+                video_items.append(item)
+    except Exception:
+        app.logger.exception("Native homepage media catalogue could not be loaded")
+
+    birthday_members = []
+    try:
+        try:
+            from zoneinfo import ZoneInfo
+            today = datetime.now(ZoneInfo("Africa/Lagos")).date()
+        except Exception:
+            today = datetime.utcnow().date()
+        birthday_rows = db().execute(
+            """SELECT full_name, birthday, passport_photo, circuit, church_name
+               FROM members
+               WHERE birthday IS NOT NULL AND TRIM(birthday) <> ''
+                 AND (death IS NULL OR LOWER(TRIM(death)) NOT IN ('yes','true','1','deceased'))
+               ORDER BY full_name"""
+        ).fetchall()
+        for row in birthday_rows:
+            value = str(row["birthday"] or "").strip()
+            parsed = None
+            for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%d/%m", "%d-%m"):
+                try:
+                    parsed = datetime.strptime(value, fmt).date()
+                    break
+                except ValueError:
+                    continue
+            if not parsed or (parsed.month, parsed.day) != (today.month, today.day):
+                continue
+            photo = str(row["passport_photo"] or "").strip()
+            if photo and not photo.startswith(("http://", "https://")):
+                try:
+                    photo = _member_photo_storage_signed_url(photo)
+                except Exception:
+                    photo = ""
+            birthday_members.append({
+                "full_name": row["full_name"] or "Church Member",
+                "circuit": row["circuit"] or "",
+                "church_name": row["church_name"] or "",
+                "photo_url": photo if photo.startswith(("http://", "https://")) else ""
+            })
+    except Exception:
+        app.logger.exception("Native homepage birthday list could not be loaded")
+
     return jsonify({
         "ok": True,
         "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
@@ -5621,7 +5684,30 @@ def api_public_homepage():
         "sermons": public_rows(sermons),
         "events": public_rows(events),
         "churches": public_rows(churches),
-        "daily_reading": daily,
+        "daily_reading": _homepage_daily_reading(),
+        "media": media_items,
+        "gallery": gallery_items,
+        "videos": video_items,
+        "birthdays": birthday_members,
+        "prelate": {
+            "name": "His Eminence, Dr. Oliver Ali Aba (JP)",
+            "title": "Prelate, Methodist Church Nigeria",
+            "quote": "A Church on Fire for Christ, Transforming Lives and Impacting Nations."
+        },
+        "navigation": [
+            {"label": "Home", "route": "/"},
+            {"label": "About Us", "route": "/#about"},
+            {"label": "Our Diocese", "route": "/#diocese"},
+            {"label": "Fellowships", "route": "/fellowships"},
+            {"label": "Sermons & Media", "route": "/#watch"},
+            {"label": "Devotional Centre", "route": "/devotional-centre"},
+            {"label": "Photo Gallery", "route": "/#photo-gallery"},
+            {"label": "Events", "route": "/#events"},
+            {"label": "Prayer Requests", "route": "/prayer-request"},
+            {"label": "Online Giving", "route": "/giving"},
+            {"label": "Live Services", "route": "/live"},
+            {"label": "Member Portal", "route": "/login"}
+        ]
     })
 
 
