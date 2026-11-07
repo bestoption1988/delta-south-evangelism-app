@@ -2769,223 +2769,6 @@ def live_worship_page():
     )
 
 
-def _daily_scripture_and_hymn():
-    # Load the supplied verse/hymn collection using Nigeria's calendar date.
-    source = Path(ROOT) / "data" / "scripture_hymns.json"
-    try:
-        with source.open("r", encoding="utf-8") as handle:
-            collection = json.load(handle)
-        verses = collection.get("verses") or []
-        hymns = collection.get("hymns") or []
-        try:
-            from zoneinfo import ZoneInfo
-            today = datetime.now(ZoneInfo("Africa/Lagos")).date()
-        except Exception:
-            today = datetime.now().date()
-        # Stable daily selection: all visitors see the same Scripture.
-        day_key = today.isoformat().encode("utf-8")
-        day_digest = hashlib.sha256(day_key).digest()
-
-        verse_index = (
-            int.from_bytes(day_digest[:8], "big") % len(verses)
-            if verses else 0
-        )
-        verse = verses[verse_index] if verses else {}
-
-        # Match the hymn to the main themes in the selected Scripture.
-        theme_keywords = {
-            "salvation": [
-                "salvation", "redeem", "redeemer", "saviour", "savior",
-                "saved", "eternal life", "cross", "blood of jesus",
-                "forgive", "forgiveness", "grace", "perish"
-            ],
-            "love": [
-                "love", "loved", "loving", "beloved", "compassion",
-                "kindness", "charity", "merciful", "mercy"
-            ],
-            "praise": [
-                "praise", "thanksgiving", "thankful", "thanks",
-                "worship", "glory", "hallelujah", "bless the lord",
-                "sing unto", "rejoice"
-            ],
-            "prayer": [
-                "pray", "prayer", "supplication", "intercede",
-                "hear my cry", "call upon"
-            ],
-            "evangelism": [
-                "preach", "proclaim", "gospel", "witness", "mission",
-                "spread the word", "all nations", "make disciples",
-                "tell the world"
-            ],
-            "holy_spirit": [
-                "holy spirit", "holy ghost", "comforter", "pentecost",
-                "anoint", "sanctify", "spirit of god"
-            ],
-            "faith": [
-                "faith", "believe", "believes", "believing", "trust",
-                "faithful", "depend upon"
-            ],
-            "hope": [
-                "hope", "resurrection", "heaven", "everlasting",
-                "eternal", "comfort", "promise"
-            ],
-            "guidance": [
-                "guide", "guidance", "way", "truth", "light",
-                "path", "shepherd", "word of god"
-            ],
-            "peace": [
-                "peace", "rest", "calm", "fear not", "still my soul",
-                "quietness"
-            ],
-            "repentance": [
-                "repent", "repentance", "confess", "cleanse",
-                "pardon", "forgive", "cleansing"
-            ],
-            "holiness": [
-                "holy", "holiness", "righteous", "purity", "pure",
-                "obedience", "sanctification"
-            ],
-            "service": [
-                "serve", "servant", "service", "labour", "work for god",
-                "disciples", "follow me"
-            ],
-            "provision": [
-                "provide", "provision", "provider", "supplies",
-                "supply", "needs", "daily bread", "bread",
-                "sustain", "sustains", "sustenance", "bountiful",
-                "abundance", "feed", "feeding", "care for",
-                "my shepherd", "want", "riches", "storehouse"
-            ],
-            "healing": [
-                "heal", "healing", "healer", "restore health",
-                "sick", "disease", "affliction", "wounded",
-                "broken heart", "physician"
-            ],
-            "protection": [
-                "protect", "protection", "defend", "deliver",
-                "deliverance", "refuge", "fortress", "shield",
-                "shelter", "safe", "safety", "keep me",
-                "guardian", "preserve"
-            ],
-            "strength": [
-                "strength", "strong", "mighty", "power",
-                "weary", "weak", "uphold", "renew my strength",
-                "courage", "victory"
-            ],
-            "wisdom": [
-                "wisdom", "understanding", "knowledge",
-                "teach me", "instruction", "discernment",
-                "counsel", "judgment"
-            ],
-            "creation": [
-                "creator", "creation", "created", "earth", "heavens",
-                "nature", "almighty god"
-            ],
-        }
-
-        scripture_text = (
-            str(verse.get("reference", "")) + " " +
-            str(verse.get("text", ""))
-        ).lower()
-
-        theme_scores = {}
-        for theme, keywords in theme_keywords.items():
-            score = sum(
-                1 for keyword in keywords
-                if keyword in scripture_text
-            )
-            if score:
-                theme_scores[theme] = score
-
-        # Use the strongest Scripture themes; if no keywords match,
-        # use the Scripture reference/text as a general matching basis.
-        if theme_scores:
-            highest_score = max(theme_scores.values())
-            selected_themes = {
-                theme for theme, score in theme_scores.items()
-                if score == highest_score
-            }
-        else:
-            selected_themes = set()
-
-        scored_hymns = []
-        for index, hymn_item in enumerate(hymns):
-            title = str(hymn_item.get("title", "")).lower()
-            lyrics = str(hymn_item.get("lyrics", "")).lower()
-            score = 0
-
-            for theme in selected_themes:
-                for keyword in theme_keywords[theme]:
-                    if keyword in title:
-                        score += 3
-                    elif keyword in lyrics:
-                        score += 1
-
-            if score:
-                scored_hymns.append((index, score))
-
-        # Select randomly but deterministically among the best matches.
-        if scored_hymns:
-            best_score = max(score for _, score in scored_hymns)
-            best_hymns = [
-                index for index, score in scored_hymns
-                if score == best_score
-            ]
-        else:
-            # Safe fallback if no hymn matches the detected themes.
-            best_hymns = list(range(len(hymns)))
-
-        if best_hymns:
-            hymn_choice = int.from_bytes(day_digest[8:16], "big")
-            hymn_index = best_hymns[hymn_choice % len(best_hymns)]
-            hymn = hymns[hymn_index]
-        else:
-            hymn = {}
-
-        # Reuse the tune already stored with the matching Devotional Centre hymn.
-        # The daily hymn JSON remains the source of the displayed lyrics.
-        if hymn:
-            try:
-                hymn_title = str(hymn.get("title") or "").strip()
-                hymn_number_match = re.search(r"(\d+)", hymn_title)
-                hymn_number = hymn_number_match.group(1) if hymn_number_match else ""
-                hymn_row = db().execute(
-                    """SELECT audio_path,content_json FROM devotional_resources
-                       WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
-                         AND collection='english_hymns'
-                         AND (LOWER(title)=LOWER(?) OR item_number=?)
-                       ORDER BY CASE WHEN LOWER(title)=LOWER(?) THEN 0 ELSE 1 END
-                       LIMIT 1""",
-                    (hymn_title, hymn_number, hymn_title)
-                ).fetchone()
-                if hymn_row:
-                    hymn_resource = dict(hymn_row)
-                    hymn_payload = json.loads(hymn_resource.get("content_json") or "{}")
-                    hymn["audio_url"] = _dc_signed(
-                        hymn_resource.get("audio_path") or hymn_payload.get("musicFilePath")
-                    )
-                    hymn["audio_tune_name"] = (
-                        hymn_payload.get("musicTitle")
-                        or hymn_payload.get("tuneName")
-                        or hymn_payload.get("musicName")
-                        or hymn_payload.get("tune")
-                        or "Main tune"
-                    )
-                    hymn["other_tunes"] = []
-                    for tune in hymn_payload.get("otherTunes") or []:
-                        if isinstance(tune, dict) and tune.get("musicFilePath"):
-                            tune_copy = dict(tune)
-                            tune_copy["audio_url"] = _dc_signed(tune_copy.get("musicFilePath"))
-                            if tune_copy["audio_url"]:
-                                hymn["other_tunes"].append(tune_copy)
-            except Exception:
-                app.logger.exception("Could not attach the Devotional Centre hymn tune to the daily hymn")
-        return {"date": today.isoformat(), "verse": verse, "hymn": hymn}
-    except (OSError, ValueError, TypeError, json.JSONDecodeError):
-        app.logger.exception("Daily Scripture and Hymn collection could not be loaded")
-        return {"date": datetime.now().date().isoformat(), "verse": {}, "hymn": {}}
-
-
 @app.get("/")
 def public_home():
     """Public diocesan homepage; no login required."""
@@ -3012,8 +2795,6 @@ def public_home():
              ELSE 99
            END, church_name"""
     ).fetchall()
-
-    daily_devotion = _daily_scripture_and_hymn()
 
     # Published media comes from the persistent Supabase catalogue.
     homepage_media_items = []
@@ -3184,7 +2965,6 @@ def public_home():
         homepage_media_items=homepage_media_items,
         homepage_video_items=homepage_video_items,
         homepage_gallery_items=homepage_gallery_items,
-        daily_devotion=daily_devotion,
         birthday_celebration_members=birthday_celebration_members
     )
 
@@ -13831,15 +13611,6 @@ def api_offline_devotional_resources():
         "pages": max(1, (total + per_page - 1) // per_page),
         "items": items
     })
-
-
-@app.get("/api/offline/daily-devotion")
-def api_offline_daily_devotion():
-    try:
-        return jsonify(_daily_scripture_and_hymn())
-    except Exception:
-        app.logger.exception("Daily offline devotion could not be prepared")
-        return jsonify({"error": "Daily devotion is temporarily unavailable."}), 503
 
 
 @app.get("/api/offline/csb-bible")
