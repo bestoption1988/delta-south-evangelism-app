@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261107-ticker70-clean-menu1">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261107-ticker-dialog-fix-clean-menu1">
 
 <style>
 .pdf-book-preview {
@@ -140,6 +140,54 @@
   </div>
 </div>
 
+
+
+<script>
+(function () {
+  if (window.__mcnDailyReadingDialogs) return;
+  window.__mcnDailyReadingDialogs = true;
+  function closeDialog(dialog) {
+    if (!dialog) return;
+    dialog.classList.remove('mcn-reading-open');
+    dialog.hidden = true;
+    dialog.setAttribute('aria-hidden','true');
+    dialog.querySelectorAll('audio').forEach(function(a){ if(!a.paused) a.pause(); });
+  }
+  document.addEventListener('click', function(event) {
+    var opener = event.target.closest('[data-mcn-reading-open]');
+    if (opener) {
+      var dialog = document.getElementById(opener.getAttribute('data-mcn-reading-open'));
+      if (!dialog) return;
+      event.preventDefault();
+      document.querySelectorAll('.mcn-reading-dialog').forEach(closeDialog);
+      dialog.hidden = false;
+      dialog.setAttribute('aria-hidden','false');
+      dialog.classList.add('mcn-reading-open');
+      var panel = dialog.querySelector('.mcn-reading-panel');
+      if (panel) { panel.scrollTop = 0; panel.focus({preventScroll:true}); }
+      document.body.style.overflow = 'hidden';
+      return;
+    }
+    var close = event.target.closest('.mcn-reading-close');
+    if (close) {
+      var owner = close.closest('.mcn-reading-dialog');
+      closeDialog(owner);
+      document.body.style.overflow = '';
+      return;
+    }
+    if (event.target.classList && event.target.classList.contains('mcn-reading-dialog')) {
+      closeDialog(event.target);
+      document.body.style.overflow = '';
+    }
+  }, true);
+  document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+      document.querySelectorAll('.mcn-reading-dialog').forEach(closeDialog);
+      document.body.style.overflow = '';
+    }
+  });
+})();
+</script>
 
 <main>
 <section class="hero" id="home">
