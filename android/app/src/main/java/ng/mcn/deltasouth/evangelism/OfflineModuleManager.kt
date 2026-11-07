@@ -97,6 +97,7 @@ object OfflineAttendanceQueue {
 object OfflineModuleManager {
     // These are the native app's role-protected read modules. Server authorization remains authoritative.
     private val moduleRequests = listOf(
+        "api/public/homepage",
         "api/me",
         "api/dashboard",
         "api/communications",
