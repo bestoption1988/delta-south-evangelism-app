@@ -289,12 +289,13 @@ private fun NativeDioceseApp() {
     val canReview = role == "Admin" || role == "Evangelism Minister"
 
     if (!signedIn && !showStaffLogin && !showOfflineLibrary) {
-        PublicDiocesanHomepage(
+        NativePublicHomepage(
             online = online,
             offlineDownloadBusy = downloadBusy,
             offlineDownloadProgress = downloadProgress,
             offlineDownloadStage = downloadStage,
             onStaffLogin = { showStaffLogin = true },
+            onOpenOfflineLibrary = { showOfflineLibrary = true },
             onOfflineDownload = {
                 if (online && !downloadBusy) {
                     downloadBusy = true
@@ -327,8 +328,7 @@ private fun NativeDioceseApp() {
                         downloadBusy = false
                     }
                 }
-            },
-            onBackPressed = { }
+            }
         )
     } else if (!signedIn && showOfflineLibrary) {
         PublicOfflineLibrary(online = online, onBack = { showOfflineLibrary = false })
