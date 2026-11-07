@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261106-clean-menu1">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261107-ticker70-clean-menu1">
 
 <style>
 .pdf-book-preview {
@@ -108,17 +108,17 @@
 <section id="daily-devotion" class="mcn-daily" aria-label="Scripture and Hymn of the Day">
   {% set day_verse = daily_devotion.get("verse", {}) %}
   {% set day_hymn = daily_devotion.get("hymn", {}) %}
-  <div class="mcn-daily-grid">
-    <article class="mcn-daily-card"><button type="button" class="mcn-daily-trigger" data-mcn-reading-open="mcnScriptureDialog" aria-haspopup="dialog" aria-controls="mcnScriptureDialog">
-      <span class="mcn-daily-label">SCRIPTURE OF THE DAY: {{ day_verse.get("reference", "Scripture") }}</span>
-      <span class="mcn-daily-preview">{{ day_verse.get("text", "The daily Scripture will appear here.")|truncate(150, True, "…") }}</span>
-      <span class="mcn-daily-hint">Tap to read the full Scripture</span>
-    </button></article>
-    <article class="mcn-daily-card"><button type="button" class="mcn-daily-trigger" data-mcn-reading-open="mcnHymnDialog" aria-haspopup="dialog" aria-controls="mcnHymnDialog">
-      <span class="mcn-daily-label">{{ day_hymn.get("title", "HYMN OF THE DAY") }}</span>
-      <span class="mcn-daily-preview">{{ day_hymn.get("lyrics", "The daily hymn will appear here.").split("\n")[0]|truncate(120, True, "…") }}</span>
-      <span class="mcn-daily-hint">Tap to read the full hymn and listen</span>
-    </button></article>
+  <div class="mcn-daily-ticker-row">
+    <button type="button" class="mcn-daily-ticker" data-mcn-reading-open="mcnScriptureDialog" aria-haspopup="dialog" aria-controls="mcnScriptureDialog">
+      <span class="mcn-ticker-tag">SCRIPTURE</span>
+      <span class="mcn-ticker-window"><span class="mcn-ticker-track">{{ day_verse.get("reference", "Scripture of the Day") }} — {{ day_verse.get("text", "The daily Scripture will appear here.") }}</span></span>
+      <span class="mcn-ticker-open">↗</span>
+    </button>
+    <button type="button" class="mcn-daily-ticker" data-mcn-reading-open="mcnHymnDialog" aria-haspopup="dialog" aria-controls="mcnHymnDialog">
+      <span class="mcn-ticker-tag">HYMN</span>
+      <span class="mcn-ticker-window"><span class="mcn-ticker-track">{{ day_hymn.get("title", "Hymn of the Day") }} — {{ day_hymn.get("lyrics", "The daily hymn will appear here.").split("\\n")[0] }}</span></span>
+      <span class="mcn-ticker-open">↗</span>
+    </button>
   </div>
 </section>
 <div class="mcn-reading-dialog" id="mcnScriptureDialog" role="dialog" aria-modal="true" aria-labelledby="mcnScriptureTitle" aria-hidden="true" hidden>
