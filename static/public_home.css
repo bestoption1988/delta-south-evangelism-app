@@ -1081,3 +1081,29 @@ html.mcn-android-app .daily-devotion-modal.is-open .daily-devotion-full-text,
  .daily-reading-card h2{font-size:21px}
  .daily-reading-copy{font-size:17px;line-height:1.6}
 }
+
+/* Slow, clickable daily reading ticker and 70%-height scrollable reader. */
+.daily-reading{width:100%;padding:0;background:#f3f5fa;border-bottom:1px solid #d9e0ec;box-sizing:border-box}
+.daily-reading-ticker{height:68px;display:flex;align-items:center;gap:14px;padding:0 18px;border-bottom:1px solid #dce2ec;overflow:hidden;box-sizing:border-box}
+.daily-reading-ticker:last-of-type{border-bottom:0}
+.daily-ticker-label{flex:0 0 auto;color:#173568;font:800 14px/1 Arial,sans-serif;letter-spacing:.04em;white-space:nowrap}
+.daily-ticker-track{display:block;position:relative;flex:1;min-width:0;height:100%;overflow:hidden;border:0;padding:0;background:transparent;color:#1b2d50;text-align:left;cursor:pointer;touch-action:manipulation}
+.daily-ticker-text{display:inline-block;min-width:max-content;padding-left:100%;font:700 18px/68px Georgia,serif;white-space:nowrap;animation:dailyTickerMove 58s linear infinite}
+.daily-reading-ticker:hover .daily-ticker-text,.daily-reading-ticker:focus-within .daily-ticker-text{animation-play-state:paused}
+.daily-ticker-track:focus-visible{outline:2px solid #b18a19;outline-offset:-3px}
+.daily-ticker-hint{flex:0 0 auto;color:#66738a;font-size:18px}
+@keyframes dailyTickerMove{from{transform:translateX(0)}to{transform:translateX(-100%)}}
+.daily-reading-accessible-content{display:none!important}
+.daily-reading-modal[hidden]{display:none!important}
+.daily-reading-modal{position:fixed;inset:0;z-index:10050;display:flex;align-items:center;justify-content:center;padding:5vh 4vw;box-sizing:border-box}
+.daily-reading-modal-backdrop{position:absolute;inset:0;background:rgba(4,15,39,.72)}
+.daily-reading-modal-panel{position:relative;z-index:1;display:flex;flex-direction:column;width:min(760px,92vw);height:min(76vh,760px);max-height:76vh;background:#fff;border-radius:16px;box-shadow:0 18px 60px rgba(0,0,0,.32);overflow:hidden}
+.daily-reading-modal-header{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 20px;background:#0b2455;color:#fff}
+.daily-reading-modal-header h2{margin:0;font:700 21px/1.3 Arial,sans-serif}
+.daily-reading-modal-close{width:42px;height:42px;border:0;border-radius:50%;background:rgba(255,255,255,.15);color:#fff;font-size:30px;line-height:1;cursor:pointer;touch-action:manipulation}
+.daily-reading-modal-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:22px 24px;color:#1b2d50;font:400 19px/1.8 Georgia,serif;white-space:pre-wrap;overflow-wrap:anywhere}
+.daily-reading-modal-footer{flex:0 0 auto;display:flex;justify-content:space-between;gap:12px;padding:12px 20px;border-top:1px solid #e4e8ef;color:#68758a;font:600 12px/1.4 Arial,sans-serif}
+.daily-reading-modal-footer a{color:#a51e37;text-decoration:none}
+body.daily-reading-modal-open{overflow:hidden!important}
+@media(max-width:700px){.daily-reading-ticker{height:62px;gap:10px;padding:0 12px}.daily-ticker-label{font-size:12px}.daily-ticker-text{font-size:16px;line-height:62px;animation-duration:68s}.daily-reading-modal{padding:4vh 3vw}.daily-reading-modal-panel{width:94vw;height:76vh;max-height:76vh;border-radius:13px}.daily-reading-modal-header{padding:13px 15px}.daily-reading-modal-header h2{font-size:18px}.daily-reading-modal-body{padding:18px 17px;font-size:18px;line-height:1.75}.daily-reading-modal-footer{padding:10px 15px}}
+@media(prefers-reduced-motion:reduce){.daily-ticker-text{animation:none;padding-left:0;min-width:0;white-space:normal;line-height:1.4}}
