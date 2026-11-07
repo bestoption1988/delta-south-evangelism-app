@@ -105,118 +105,120 @@
 
 {% set day_verse = daily_devotion.get("verse", {}) %}
 {% set day_hymn = daily_devotion.get("hymn", {}) %}
-<section id="daily-devotion" class="mcn-daily" aria-label="Scripture and Hymn of the Day">
-  {% set day_verse = daily_devotion.get("verse", {}) %}
-  {% set day_hymn = daily_devotion.get("hymn", {}) %}
-  <div class="mcn-daily-ticker-row">
-    <button type="button" class="mcn-daily-ticker" data-mcn-reading-open="mcnScriptureDialog" aria-haspopup="dialog" aria-controls="mcnScriptureDialog">
-      <span class="mcn-ticker-tag">SCRIPTURE</span>
-      <span class="mcn-ticker-window"><span class="mcn-ticker-track">{{ day_verse.get("reference", "Scripture of the Day") }} — {{ day_verse.get("text", "The daily Scripture will appear here.") }}</span></span>
-      <span class="mcn-ticker-open">↗</span>
-    </button>
-    <button type="button" class="mcn-daily-ticker" data-mcn-reading-open="mcnHymnDialog" aria-haspopup="dialog" aria-controls="mcnHymnDialog">
-      <span class="mcn-ticker-tag">HYMN</span>
-      <span class="mcn-ticker-window"><span class="mcn-ticker-track">{{ day_hymn.get("title", "Hymn of the Day") }} — {{ day_hymn.get("lyrics", "The daily hymn will appear here.").split("\\n")[0] }}</span></span>
-      <span class="mcn-ticker-open">↗</span>
-    </button>
-  </div>
+{% set hymn_number = day_hymn.get("number") or day_hymn.get("hymn_number") or day_hymn.get("item_number") or day_hymn.get("title", "Hymn of the Day") %}
+<section id="daily-devotion" class="mcn-daily-cards" aria-label="Scripture and Hymn of the Day">
+  <article class="mcn-daily-card mcn-scripture-card">
+    <div class="mcn-daily-card-heading">
+      <span class="mcn-daily-icon" aria-hidden="true">✝</span>
+      <div><p class="mcn-daily-label">SCRIPTURE OF THE DAY</p><h2>{{ day_verse.get("reference", "Scripture of the Day") }}</h2></div>
+    </div>
+    <p class="mcn-daily-preview">{{ day_verse.get("text", "The daily Scripture will appear here.") }}</p>
+    <button type="button" class="mcn-view-all" data-mcn-reading-open="mcnScriptureDialog">View all Scripture</button>
+  </article>
+  <article class="mcn-daily-card mcn-hymn-card">
+    <div class="mcn-daily-card-heading">
+      <span class="mcn-daily-icon" aria-hidden="true">♫</span>
+      <div><p class="mcn-daily-label">HYMN OF THE DAY</p><h2>{{ hymn_number }}</h2></div>
+    </div>
+    <p class="mcn-daily-preview mcn-hymn-title">{{ day_hymn.get("title", "Hymn of the Day") }}</p>
+    {% if day_hymn.get("audio_tune_name") %}
+      <p class="mcn-daily-tune"><b>Hymn tune:</b> {{ day_hymn.get("audio_tune_name") }}</p>
+    {% elif day_hymn.get("meter") %}
+      <p class="mcn-daily-tune"><b>Meter:</b> {{ day_hymn.get("meter") }}</p>
+    {% endif %}
+    {% if day_hymn.get("audio_url") %}
+      <audio class="mcn-daily-audio" controls preload="none" playsinline src="{{ day_hymn.get('audio_url') }}">Your browser does not support audio playback.</audio>
+    {% endif %}
+    <button type="button" class="mcn-view-all" data-mcn-reading-open="mcnHymnDialog">View all Hymn</button>
+  </article>
 </section>
 <div class="mcn-reading-dialog" id="mcnScriptureDialog" role="dialog" aria-modal="true" aria-labelledby="mcnScriptureTitle" aria-hidden="true" hidden>
-  <div class="mcn-reading-panel" tabindex="-1"><button type="button" class="mcn-reading-close" aria-label="Close Scripture">×</button>
-    <span class="mcn-reading-kicker">SCRIPTURE OF THE DAY</span><h2 class="mcn-reading-title" id="mcnScriptureTitle">{{ day_verse.get("reference", "Scripture of the Day") }}</h2>
+  <div class="mcn-reading-panel" tabindex="-1">
+    <button type="button" class="mcn-reading-close" aria-label="Close Scripture">×</button>
+    <span class="mcn-reading-kicker">SCRIPTURE OF THE DAY</span>
+    <h2 class="mcn-reading-title" id="mcnScriptureTitle">{{ day_verse.get("reference", "Scripture of the Day") }}</h2>
     <div class="mcn-reading-text">{{ day_verse.get("text", "") }}</div>
     <a class="button blue-button" href="/devotional-centre/bible-verses">Browse the Scripture Library →</a>
   </div>
 </div>
 <div class="mcn-reading-dialog" id="mcnHymnDialog" role="dialog" aria-modal="true" aria-labelledby="mcnHymnTitle" aria-hidden="true" hidden>
-  <div class="mcn-reading-panel" tabindex="-1"><button type="button" class="mcn-reading-close" aria-label="Close hymn">×</button>
-    <span class="mcn-reading-kicker">HYMN OF THE DAY</span><h2 class="mcn-reading-title" id="mcnHymnTitle">{{ day_hymn.get("title", "Hymn of the Day") }}</h2>
+  <div class="mcn-reading-panel" tabindex="-1">
+    <button type="button" class="mcn-reading-close" aria-label="Close hymn">×</button>
+    <span class="mcn-reading-kicker">HYMN OF THE DAY</span>
+    <h2 class="mcn-reading-title" id="mcnHymnTitle">{{ hymn_number }}{% if day_hymn.get("title") and day_hymn.get("title") != hymn_number %} — {{ day_hymn.get("title") }}{% endif %}</h2>
+    {% if day_hymn.get("audio_tune_name") %}<p class="mcn-reading-meta"><b>Hymn tune:</b> {{ day_hymn.get("audio_tune_name") }}</p>{% endif %}
     {% if day_hymn.get("meter") %}<p class="mcn-reading-meta"><b>Meter:</b> {{ day_hymn.get("meter") }}</p>{% endif %}
     <div class="mcn-reading-lyrics">{{ day_hymn.get("lyrics", "") }}</div>
-    {% if day_hymn.get("audio_url") %}<div class="mcn-reading-audio"><p>{{ day_hymn.get("audio_tune_name", "Main tune") }}</p><audio controls preload="none" playsinline src="{{ day_hymn.get('audio_url') }}"></audio></div>{% endif %}
+    {% if day_hymn.get("audio_url") %}<div class="mcn-reading-audio"><p>{{ day_hymn.get("audio_tune_name", "Hymn tune") }}</p><audio controls preload="none" playsinline src="{{ day_hymn.get('audio_url') }}">Your browser does not support audio playback.</audio></div>{% endif %}
     {% for tune in day_hymn.get("other_tunes", []) %}{% if tune.get("audio_url") %}<div class="mcn-reading-audio"><p>{{ tune.get("title", tune.get("musicTitle", "Additional hymn tune")) }}</p><audio controls preload="none" playsinline src="{{ tune.get('audio_url') }}"></audio></div>{% endif %}{% endfor %}
     {% if day_hymn.get("author") %}<p class="mcn-reading-meta"><b>Author:</b> {{ day_hymn.get("author") }}</p>{% endif %}
     <a class="button blue-button" href="/devotional-centre/english-hymns">Browse English Methodist Hymns →</a>
   </div>
 </div>
-
-
-
 <script>
 (function () {
   function closeReading(dialog) {
     if (!dialog) return;
     dialog.hidden = true;
-    dialog.setAttribute('aria-hidden','true');
+    dialog.setAttribute('aria-hidden', 'true');
     dialog.classList.remove('mcn-reading-open');
-    dialog.style.setProperty('display','none','important');
-    dialog.querySelectorAll('audio').forEach(function(audio) {
-      try { audio.pause(); } catch (e) {}
+    dialog.style.setProperty('display', 'none', 'important');
+    dialog.querySelectorAll('audio').forEach(function (audio) {
+      try { audio.pause(); } catch (_) {}
     });
     document.body.style.overflow = '';
   }
-  window.mcnOpenDailyReading = function(id) {
+  window.mcnOpenDailyReading = function (id) {
     var dialog = document.getElementById(id);
     if (!dialog) return false;
     document.querySelectorAll('.mcn-reading-dialog').forEach(closeReading);
     dialog.hidden = false;
-    dialog.removeAttribute('hidden');
-    dialog.setAttribute('aria-hidden','false');
+    dialog.setAttribute('aria-hidden', 'false');
     dialog.classList.add('mcn-reading-open');
-    dialog.style.setProperty('display','flex','important');
-    dialog.style.setProperty('visibility','visible','important');
-    dialog.style.setProperty('opacity','1','important');
-    dialog.style.setProperty('position','fixed','important');
-    dialog.style.setProperty('inset','0','important');
-    dialog.style.setProperty('z-index','2147483000','important');
-    dialog.style.setProperty('width','100vw','important');
-    dialog.style.setProperty('height','100vh','important');
-    dialog.style.setProperty('height','100dvh','important');
-    dialog.style.setProperty('align-items','center','important');
-    dialog.style.setProperty('justify-content','center','important');
-    dialog.style.setProperty('background','rgba(4,16,43,.78)','important');
-    dialog.style.setProperty('padding','0','important');
-    dialog.style.setProperty('overflow','hidden','important');
+    dialog.style.setProperty('display', 'flex', 'important');
+    dialog.style.setProperty('visibility', 'visible', 'important');
+    dialog.style.setProperty('opacity', '1', 'important');
+    dialog.style.setProperty('position', 'fixed', 'important');
+    dialog.style.setProperty('inset', '0', 'important');
+    dialog.style.setProperty('z-index', '2147483000', 'important');
+    dialog.style.setProperty('width', '100vw', 'important');
+    dialog.style.setProperty('height', '100vh', 'important');
+    dialog.style.setProperty('align-items', 'center', 'important');
+    dialog.style.setProperty('justify-content', 'center', 'important');
+    dialog.style.setProperty('background', 'rgba(4,16,43,.72)', 'important');
+    dialog.style.setProperty('overflow', 'hidden', 'important');
     var panel = dialog.querySelector('.mcn-reading-panel');
     if (panel) {
-      panel.style.setProperty('display','block','important');
-      panel.style.setProperty('width','92vw','important');
-      panel.style.setProperty('height','70vh','important');
-      panel.style.setProperty('max-height','70vh','important');
-      panel.style.setProperty('min-height','70vh','important');
-      panel.style.setProperty('overflow-y','auto','important');
+      panel.style.setProperty('width', '92vw', 'important');
+      panel.style.setProperty('height', '76vh', 'important');
+      panel.style.setProperty('max-height', '76vh', 'important');
+      panel.style.setProperty('min-height', '0', 'important');
+      panel.style.setProperty('overflow-y', 'auto', 'important');
       panel.scrollTop = 0;
     }
     document.body.style.overflow = 'hidden';
     return false;
   };
-  function bindReadingButtons() {
-    document.querySelectorAll('[data-mcn-reading-open]').forEach(function(button) {
-      button.onclick = function(event) {
-        if (event) { event.preventDefault(); event.stopPropagation(); }
-        return window.mcnOpenDailyReading(button.getAttribute('data-mcn-reading-open'));
-      };
-    });
-    document.querySelectorAll('.mcn-reading-close').forEach(function(button) {
-      button.onclick = function(event) {
-        if (event) { event.preventDefault(); event.stopPropagation(); }
-        closeReading(button.closest('.mcn-reading-dialog'));
-        return false;
-      };
-    });
-    document.querySelectorAll('.mcn-reading-dialog').forEach(function(dialog) {
-      dialog.onclick = function(event) {
-        if (event.target === dialog) closeReading(dialog);
-      };
-    });
-  }
-  bindReadingButtons();
-  document.addEventListener('keydown', function(event) {
-    if (event.key === 'Escape') {
-      document.querySelectorAll('.mcn-reading-dialog').forEach(closeReading);
+  document.addEventListener('click', function (event) {
+    var opener = event.target.closest && event.target.closest('[data-mcn-reading-open]');
+    if (opener) {
+      event.preventDefault();
+      event.stopPropagation();
+      window.mcnOpenDailyReading(opener.getAttribute('data-mcn-reading-open'));
+      return;
     }
+    var closer = event.target.closest && event.target.closest('.mcn-reading-close');
+    if (closer) {
+      event.preventDefault();
+      closeReading(closer.closest('.mcn-reading-dialog'));
+      return;
+    }
+    var backdrop = event.target.classList && event.target.classList.contains('mcn-reading-dialog') ? event.target : null;
+    if (backdrop) closeReading(backdrop);
+  }, true);
+  document.addEventListener('keydown', function (event) {
+    if (event.key === 'Escape') document.querySelectorAll('.mcn-reading-dialog').forEach(closeReading);
   });
-  window.addEventListener('load', bindReadingButtons);
 })();
 </script>
 
