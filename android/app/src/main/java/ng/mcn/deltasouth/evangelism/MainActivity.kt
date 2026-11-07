@@ -1882,80 +1882,67 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             val menuBridge = """
                                 (function() {
                                   if (window.__mcnAndroidMenuBridge) return;
+                                  var nav = document.querySelector('.ds-site-nav');
+                                  var menu = document.querySelector('.ds-menu');
+                                  var trigger = document.querySelector('.ds-menu-trigger');
+                                  var panel = document.querySelector('.ds-menu-panel');
+                                  var toggle = document.querySelector('#dsMenuToggle');
+                                  var subToggle = document.querySelector('#dsFellowshipsToggle');
+                                  if (!nav || !menu || !trigger || !panel) return;
                                   window.__mcnAndroidMenuBridge = true;
-                                  function setOpen(menu, open) {
-                                    var toggle = menu.querySelector('#dsMenuToggle');
-                                    var panel = menu.querySelector('.ds-menu-panel');
-                                    if (toggle) {
-                                      toggle.checked = !!open;
-                                      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-                                      toggle.dispatchEvent(new Event('change', {bubbles:true}));
-                                    }
-                                    menu.classList.toggle('ds-menu-open', !!open);
-                                    if (panel) {
-                                      // Use inline layout in WebView so external CSS/cache cannot
-                                      // collapse the dropdown or leave its links outside the viewport.
-                                      panel.style.setProperty('display', open ? 'block' : 'none', 'important');
-                                      panel.style.setProperty('position', 'relative', 'important');
-                                      panel.style.setProperty('top', 'auto', 'important');
-                                      panel.style.setProperty('left', 'auto', 'important');
-                                      panel.style.setProperty('right', 'auto', 'important');
-                                      panel.style.setProperty('width', '100%', 'important');
-                                      panel.style.setProperty('height', 'auto', 'important');
-                                      panel.style.setProperty('max-height', '65vh', 'important');
-                                      panel.style.setProperty('overflow-y', 'auto', 'important');
-                                      panel.style.setProperty('padding', '6px 0', 'important');
-                                      panel.style.setProperty('box-sizing', 'border-box', 'important');
-                                      panel.style.setProperty('background', '#08245b', 'important');
-                                      panel.style.setProperty('z-index', '100000', 'important');
-                                      panel.querySelectorAll('a, .ds-menu-group-trigger').forEach(function(link) {
-                                        link.style.setProperty('display', 'block', 'important');
-                                        link.style.setProperty('visibility', 'visible', 'important');
-                                        link.style.setProperty('opacity', '1', 'important');
-                                        link.style.setProperty('min-height', '48px', 'important');
-                                        link.style.setProperty('padding', '13px 20px', 'important');
-                                        link.style.setProperty('color', '#ffffff', 'important');
-                                        link.style.setProperty('background', '#08245b', 'important');
-                                        link.style.setProperty('font-size', '16px', 'important');
-                                        link.style.setProperty('line-height', '1.4', 'important');
-                                        link.style.setProperty('text-decoration', 'none', 'important');
-                                        link.style.setProperty('box-sizing', 'border-box', 'important');
-                                      });
-                                      panel.querySelectorAll('.ds-menu-submenu a').forEach(function(link) {
-                                        link.style.setProperty('padding-left', '38px', 'important');
-                                        link.style.setProperty('background', '#061943', 'important');
-                                      });
-                                    }
+
+                                  // Detach the real navigation panel from the page's nested layout.
+                                  // This avoids WebView clipping/stacking bugs while preserving the
+                                  // original anchor nodes and their existing click handlers.
+                                  document.body.appendChild(panel);
+                                  panel.style.cssText += ';display:none!important;position:fixed!important;left:0!important;right:0!important;width:100vw!important;top:0!important;max-height:70vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;padding:8px 0!important;background:#08245b!important;border:1px solid rgba(255,255,255,.25)!important;z-index:2147483647!important;-webkit-overflow-scrolling:touch!important;';
+
+                                  panel.querySelectorAll('a,.ds-menu-group-trigger').forEach(function(item) {
+                                    item.style.cssText += ';display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;float:none!important;width:100%!important;min-height:48px!important;height:auto!important;box-sizing:border-box!important;padding:13px 20px!important;margin:0!important;color:#fff!important;background:#08245b!important;font:600 16px/1.4 Arial,sans-serif!important;text-align:left!important;text-decoration:none!important;border:0!important;border-bottom:1px solid rgba(255,255,255,.16)!important;';
+                                  });
+                                  panel.querySelectorAll('.ds-menu-submenu a').forEach(function(item) {
+                                    item.style.setProperty('padding-left','40px','important');
+                                    item.style.setProperty('background','#061943','important');
+                                  });
+
+                                  function closeMenu() {
+                                    if (toggle) toggle.checked = false;
+                                    menu.classList.remove('ds-menu-open');
+                                    panel.style.setProperty('display','none','important');
+                                    trigger.setAttribute('aria-expanded','false');
                                   }
-                                  document.addEventListener('click', function(event) {
-                                    var trigger = event.target && event.target.closest ? event.target.closest('.ds-menu-trigger') : null;
-                                    if (trigger) {
-                                      var menu = trigger.closest('.ds-menu');
-                                      if (!menu) return;
+                                  function openMenu() {
+                                    if (toggle) toggle.checked = true;
+                                    menu.classList.add('ds-menu-open');
+                                    var top = Math.max(0, nav.getBoundingClientRect().bottom);
+                                    panel.style.setProperty('top',top+'px','important');
+                                    panel.style.setProperty('max-height',Math.max(180,window.innerHeight-top)+'px','important');
+                                    panel.style.setProperty('display','block','important');
+                                    panel.style.setProperty('visibility','visible','important');
+                                    panel.style.setProperty('opacity','1','important');
+                                    trigger.setAttribute('aria-expanded','true');
+                                  }
+                                  trigger.addEventListener('click',function(event) {
+                                    event.preventDefault();
+                                    event.stopImmediatePropagation();
+                                    if (panel.style.display === 'none' || getComputedStyle(panel).display === 'none') openMenu();
+                                    else closeMenu();
+                                  },true);
+                                  panel.addEventListener('click',function(event) {
+                                    var groupLabel = event.target.closest('.ds-menu-group-trigger');
+                                    if (groupLabel && subToggle) {
                                       event.preventDefault();
-                                      event.stopImmediatePropagation();
-                                      var toggle = menu.querySelector('#dsMenuToggle');
-                                      setOpen(menu, !(toggle ? toggle.checked : menu.classList.contains('ds-menu-open')));
+                                      subToggle.checked = !subToggle.checked;
+                                      var submenu = panel.querySelector('.ds-menu-submenu');
+                                      if (submenu) submenu.style.setProperty('display',subToggle.checked?'block':'none','important');
                                       return;
                                     }
-                                    var fellowship = event.target && event.target.closest ? event.target.closest('.ds-menu-group-trigger') : null;
-                                    if (fellowship) {
-                                      var group = fellowship.closest('.ds-menu');
-                                      var subToggle = group && group.querySelector('#dsFellowshipsToggle');
-                                      if (subToggle) {
-                                        event.preventDefault();
-                                        event.stopImmediatePropagation();
-                                        subToggle.checked = !subToggle.checked;
-                                        subToggle.dispatchEvent(new Event('change', {bubbles:true}));
-                                        group.classList.toggle('ds-fellowships-open', subToggle.checked);
-                                      }
-                                    }
-                                  }, true);
-                                  document.addEventListener('keydown', function(event) {
-                                    if (event.key === 'Escape') {
-                                      document.querySelectorAll('.ds-menu.ds-menu-open').forEach(function(menu){setOpen(menu,false);});
-                                    }
-                                  });
+                                    var link = event.target.closest('a');
+                                    if (link) closeMenu();
+                                  },true);
+                                  document.addEventListener('keydown',function(event){if(event.key==='Escape')closeMenu();});
+                                  window.addEventListener('resize',function(){if(panel.style.display!=='none')openMenu();});
+                                  window.addEventListener('scroll',function(){if(panel.style.display!=='none')closeMenu();},{passive:true});
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(menuBridge, null)
