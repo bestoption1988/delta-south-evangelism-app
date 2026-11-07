@@ -1450,6 +1450,11 @@ html.mcn-android-app .daily-devotion-modal.is-open>.daily-devotion-modal-panel{
 .mcn-daily-card h2{margin:0;color:#10285a;font:800 clamp(17px,2.4vw,22px)/1.25 Arial,sans-serif;overflow-wrap:anywhere}
 .mcn-daily-preview{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;min-height:48px;margin:8px 0 12px;color:#172b4d;font:17px/1.45 Georgia,serif}
 .mcn-hymn-title{font-weight:700}
+.mcn-scripture-preview{-webkit-line-clamp:3;min-height:72px}
+.mcn-hymn-excerpt{-webkit-line-clamp:4;min-height:96px;margin-top:0}
+.mcn-daily-description{margin:4px 0 12px;color:#657087;font:13px/1.5 Arial,sans-serif}
+.mcn-daily-card .mcn-view-all{text-decoration:none}
+
 .mcn-daily-tune{margin:0 0 10px;color:#536782;font:13px/1.4 Arial,sans-serif}
 .mcn-daily-audio-wrap{margin:8px 0 12px;padding:10px 12px;border:1px solid #d8dfeb;border-radius:10px;background:#fff}
 .mcn-audio-label{display:block;margin:0 0 6px;color:#10285a;font:800 12px/1.4 Arial,sans-serif}
@@ -1457,4 +1462,4 @@ html.mcn-android-app .daily-devotion-modal.is-open>.daily-devotion-modal-panel{
 .mcn-audio-unavailable{font-size:12px;color:#8a5260}
 .mcn-view-all{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:8px 16px;border:0;border-radius:8px;background:#10285a;color:#fff;font:700 14px Arial,sans-serif;cursor:pointer;touch-action:manipulation}
 .mcn-view-all:active{background:#1b3e7b}
-@media(max-width:700px){.mcn-daily-cards{grid-template-columns:1fr}.mcn-daily-card{padding:15px 18px 16px;border-right:0;border-bottom:1px solid #d9dfeb}.mcn-daily-card:last-child{border-bottom:0}.mcn-daily-preview{min-height:0;-webkit-line-clamp:3}.mcn-daily-audio-wrap{padding:8px}.mcn-daily-audio{height:44px}}
+@media(max-width:700px){.mcn-daily-cards{grid-template-columns:1fr}.mcn-daily-card{padding:15px 18px 16px;border-right:0;border-bottom:1px solid #d9dfeb}.mcn-daily-card:last-child{border-bottom:0}.mcn-daily-preview{min-height:0;-webkit-line-clamp:3}.mcn-hymn-excerpt{-webkit-line-clamp:4;min-height:0}.mcn-daily-description{margin-top:6px}.mcn-daily-audio-wrap{padding:8px}.mcn-daily-audio{height:44px}}
