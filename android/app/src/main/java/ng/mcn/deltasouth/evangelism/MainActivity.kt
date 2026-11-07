@@ -1876,8 +1876,54 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             pageError = false
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
-                            // Homepage navigation uses native HTML details/summary controls.
-                            // No injected click handlers are attached from the Android WebView.
+                            // Android WebView fallback for the CSS-checkbox homepage menu.
+                            // Chrome uses the native label/checkbox behaviour; some embedded WebViews
+                            // fail to toggle visually clipped checkbox inputs when their labels are tapped.
+                            val menuBridge = """
+                                (function() {
+                                  if (window.__mcnAndroidMenuBridge) return;
+                                  window.__mcnAndroidMenuBridge = true;
+                                  function setOpen(menu, open) {
+                                    var toggle = menu.querySelector('#dsMenuToggle');
+                                    if (toggle) {
+                                      toggle.checked = !!open;
+                                      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+                                      toggle.dispatchEvent(new Event('change', {bubbles:true}));
+                                    }
+                                    menu.classList.toggle('ds-menu-open', !!open);
+                                  }
+                                  document.addEventListener('click', function(event) {
+                                    var trigger = event.target && event.target.closest ? event.target.closest('.ds-menu-trigger') : null;
+                                    if (trigger) {
+                                      var menu = trigger.closest('.ds-menu');
+                                      if (!menu) return;
+                                      event.preventDefault();
+                                      event.stopImmediatePropagation();
+                                      var toggle = menu.querySelector('#dsMenuToggle');
+                                      setOpen(menu, !(toggle ? toggle.checked : menu.classList.contains('ds-menu-open')));
+                                      return;
+                                    }
+                                    var fellowship = event.target && event.target.closest ? event.target.closest('.ds-menu-group-trigger') : null;
+                                    if (fellowship) {
+                                      var group = fellowship.closest('.ds-menu');
+                                      var subToggle = group && group.querySelector('#dsFellowshipsToggle');
+                                      if (subToggle) {
+                                        event.preventDefault();
+                                        event.stopImmediatePropagation();
+                                        subToggle.checked = !subToggle.checked;
+                                        subToggle.dispatchEvent(new Event('change', {bubbles:true}));
+                                        group.classList.toggle('ds-fellowships-open', subToggle.checked);
+                                      }
+                                    }
+                                  }, true);
+                                  document.addEventListener('keydown', function(event) {
+                                    if (event.key === 'Escape') {
+                                      document.querySelectorAll('.ds-menu.ds-menu-open').forEach(function(menu){setOpen(menu,false);});
+                                    }
+                                  });
+                                })();
+                            """.trimIndent()
+                            view.evaluateJavascript(menuBridge, null)
                             pageLoading = false
                         }
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
