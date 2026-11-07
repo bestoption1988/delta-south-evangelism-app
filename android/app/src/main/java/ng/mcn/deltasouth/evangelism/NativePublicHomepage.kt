@@ -98,11 +98,13 @@ fun NativePublicHomepage(
                 Spacer(Modifier.height(10.dp))
                 ElevatedCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("METHODIST CHURCH NIGERIA", style = MaterialTheme.typography.labelLarge)
-                        Text("DELTA SOUTH DIOCESE", style = MaterialTheme.typography.headlineSmall)
+                        Text("WELCOME TO", style = MaterialTheme.typography.labelLarge)
+                        Text(content["hero_heading"].asText().ifBlank { "METHODIST CHURCH NIGERIA" }, style = MaterialTheme.typography.headlineSmall)
+                        Text(content["hero_subheading"].asText().ifBlank { "DELTA SOUTH DIOCESE" }, style = MaterialTheme.typography.headlineMedium)
                         Text("WORSHIP · WITNESS · SERVICE · DISCIPLESHIP", style = MaterialTheme.typography.bodySmall)
-                        Text(content["hero_heading"].asText().ifBlank { "A Church on Fire for Christ" }, style = MaterialTheme.typography.titleLarge)
-                        Text(content["hero_subheading"].asText().ifBlank { "Transforming Lives and Impacting Nations." })
+                        Text("“Go into all the world and preach the Gospel to every creature.” — Mark 16:15")
+                        Text("A Church on Fire for Christ", style = MaterialTheme.typography.titleLarge)
+                        Text("Transforming Lives and Impacting Nations.")
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -277,12 +279,14 @@ fun NativePublicHomepage(
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Vision", style = MaterialTheme.typography.titleMedium)
-                        Text(content["vision"].asText())
+                        Text(content["vision"].asText().ifBlank { "To be spiritually vibrant and one of the largest Churches in Nigeria." })
                         Text("Mission", style = MaterialTheme.typography.titleMedium)
-                        listOf("mission_1", "mission_2", "mission_3").forEach { key ->
-                            val mission = content[key].asText()
-                            if (mission.isNotBlank()) Text("• $mission")
-                        }
+                        val missionItems = listOf("mission_1", "mission_2", "mission_3").map { content[it].asText() }.filter(String::isNotBlank)
+                        if (missionItems.isEmpty()) {
+                            Text("• To consistently win more souls for Christ.")
+                            Text("• To develop spiritually fulfilled members.")
+                            Text("• To remain very active in serving humanity.")
+                        } else missionItems.forEach { Text("• $it") }
                     }
                 }
                 Spacer(Modifier.height(28.dp))
