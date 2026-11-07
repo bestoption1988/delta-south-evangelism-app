@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261107-daily-tune2">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261107-popup-content3">
 
 <style>
 .pdf-book-preview {
@@ -140,17 +140,19 @@
 <div class="mcn-reading-dialog" id="mcnScriptureDialog" role="dialog" aria-modal="true" aria-labelledby="mcnScriptureTitle" aria-hidden="true" hidden>
   <div class="mcn-reading-panel" tabindex="-1">
     <button type="button" class="mcn-reading-close" aria-label="Close Scripture">×</button>
-    <span class="mcn-reading-kicker">SCRIPTURE OF THE DAY</span>
-    <h2 class="mcn-reading-title" id="mcnScriptureTitle">{{ day_verse.get("reference", "Scripture of the Day") }}</h2>
-    <div class="mcn-reading-text">{{ day_verse.get("text", "") }}</div>
+    <span class="mcn-reading-kicker">SCRIPTURE FOR TODAY</span>
+    <h2 class="mcn-reading-title" id="mcnScriptureTitle">Today's Bible Reading</h2>
+    <p class="mcn-reading-meta mcn-reading-reference"><b>Scripture reference:</b> {{ day_verse.get("reference", "Reference not supplied") }}</p>
+    <div class="mcn-reading-text">{{ day_verse.get("text") or day_verse.get("verse") or "The full Scripture text is not available in today's reading." }}</div>
     <a class="button blue-button" href="/devotional-centre/bible-verses">Browse the Scripture Library →</a>
   </div>
 </div>
 <div class="mcn-reading-dialog" id="mcnHymnDialog" role="dialog" aria-modal="true" aria-labelledby="mcnHymnTitle" aria-hidden="true" hidden>
   <div class="mcn-reading-panel" tabindex="-1">
     <button type="button" class="mcn-reading-close" aria-label="Close hymn">×</button>
-    <span class="mcn-reading-kicker">HYMN OF THE DAY</span>
-    <h2 class="mcn-reading-title" id="mcnHymnTitle">{{ hymn_number }}{% if day_hymn.get("title") and day_hymn.get("title") != hymn_number %} — {{ day_hymn.get("title") }}{% endif %}</h2>
+    <span class="mcn-reading-kicker">METHODIST HYMN FOR TODAY</span>
+    <p class="mcn-reading-number"><b>HYMN NO. {{ hymn_number }}</b></p>
+    <h2 class="mcn-reading-title" id="mcnHymnTitle">{{ day_hymn.get("title", "Hymn of the Day") }}</h2>
     {% if day_hymn.get("audio_tune_name") %}<p class="mcn-reading-meta"><b>Hymn tune:</b> {{ day_hymn.get("audio_tune_name") }}</p>{% endif %}
     {% if day_hymn.get("meter") %}<p class="mcn-reading-meta"><b>Meter:</b> {{ day_hymn.get("meter") }}</p>{% endif %}
     <div class="mcn-reading-lyrics">{{ day_hymn.get("lyrics", "") }}</div>
