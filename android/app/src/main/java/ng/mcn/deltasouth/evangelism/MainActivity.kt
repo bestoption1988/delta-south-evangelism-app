@@ -1885,12 +1885,47 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   window.__mcnAndroidMenuBridge = true;
                                   function setOpen(menu, open) {
                                     var toggle = menu.querySelector('#dsMenuToggle');
+                                    var panel = menu.querySelector('.ds-menu-panel');
                                     if (toggle) {
                                       toggle.checked = !!open;
                                       toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
                                       toggle.dispatchEvent(new Event('change', {bubbles:true}));
                                     }
                                     menu.classList.toggle('ds-menu-open', !!open);
+                                    if (panel) {
+                                      // Use inline layout in WebView so external CSS/cache cannot
+                                      // collapse the dropdown or leave its links outside the viewport.
+                                      panel.style.setProperty('display', open ? 'block' : 'none', 'important');
+                                      panel.style.setProperty('position', 'relative', 'important');
+                                      panel.style.setProperty('top', 'auto', 'important');
+                                      panel.style.setProperty('left', 'auto', 'important');
+                                      panel.style.setProperty('right', 'auto', 'important');
+                                      panel.style.setProperty('width', '100%', 'important');
+                                      panel.style.setProperty('height', 'auto', 'important');
+                                      panel.style.setProperty('max-height', '65vh', 'important');
+                                      panel.style.setProperty('overflow-y', 'auto', 'important');
+                                      panel.style.setProperty('padding', '6px 0', 'important');
+                                      panel.style.setProperty('box-sizing', 'border-box', 'important');
+                                      panel.style.setProperty('background', '#08245b', 'important');
+                                      panel.style.setProperty('z-index', '100000', 'important');
+                                      panel.querySelectorAll('a, .ds-menu-group-trigger').forEach(function(link) {
+                                        link.style.setProperty('display', 'block', 'important');
+                                        link.style.setProperty('visibility', 'visible', 'important');
+                                        link.style.setProperty('opacity', '1', 'important');
+                                        link.style.setProperty('min-height', '48px', 'important');
+                                        link.style.setProperty('padding', '13px 20px', 'important');
+                                        link.style.setProperty('color', '#ffffff', 'important');
+                                        link.style.setProperty('background', '#08245b', 'important');
+                                        link.style.setProperty('font-size', '16px', 'important');
+                                        link.style.setProperty('line-height', '1.4', 'important');
+                                        link.style.setProperty('text-decoration', 'none', 'important');
+                                        link.style.setProperty('box-sizing', 'border-box', 'important');
+                                      });
+                                      panel.querySelectorAll('.ds-menu-submenu a').forEach(function(link) {
+                                        link.style.setProperty('padding-left', '38px', 'important');
+                                        link.style.setProperty('background', '#061943', 'important');
+                                      });
+                                    }
                                   }
                                   document.addEventListener('click', function(event) {
                                     var trigger = event.target && event.target.closest ? event.target.closest('.ds-menu-trigger') : null;
