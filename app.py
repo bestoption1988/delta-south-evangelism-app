@@ -2942,13 +2942,29 @@ def _daily_scripture_and_hymn():
         else:
             hymn = {}
 
+        # Resolve the hymn number independently from its display title. Some
+        # collection records store the number as a separate field; older records
+        # embed it at the beginning of the title (for example, "1 YE servants...").
+        if hymn:
+            hymn_title = str(hymn.get("title") or "").strip()
+            stored_number = (
+                hymn.get("number")
+                or hymn.get("hymn_number")
+                or hymn.get("item_number")
+            )
+            hymn_number_match = re.match(r"^\s*(?:HYMN\s*)?(\d+)\b", hymn_title, re.IGNORECASE)
+            resolved_number = str(stored_number or (
+                hymn_number_match.group(1) if hymn_number_match else ""
+            )).strip()
+            if resolved_number:
+                hymn["number"] = resolved_number
+
         # Reuse the tune already stored with the matching Devotional Centre hymn.
         # The daily hymn JSON remains the source of the displayed lyrics.
         if hymn:
             try:
                 hymn_title = str(hymn.get("title") or "").strip()
-                hymn_number_match = re.search(r"(\d+)", hymn_title)
-                hymn_number = hymn_number_match.group(1) if hymn_number_match else ""
+                hymn_number = str(hymn.get("number") or "")
                 hymn_row = db().execute(
                     """SELECT audio_path,content_json FROM devotional_resources
                        WHERE LOWER(CAST(published AS TEXT)) IN ('1','true','t')
