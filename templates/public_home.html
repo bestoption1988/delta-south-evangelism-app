@@ -136,7 +136,7 @@
       <summary>View Full Scripture <span aria-hidden="true">▾</span></summary>
       <div class="android-daily-full-text">{{ daily_reading.get("verse", {}).get("text") or "Open the Bible and spend time in God’s Word today." }}</div>
     </details>
-    <a class="daily-preview-link" href="/devotional-centre">View All Scripture →</a>
+    <a class="daily-preview-link" href="/devotional-centre#uploaded-bible-library">View All Scripture →</a>
   </article>
 
   <article class="android-daily-card hymn-preview">
@@ -163,7 +163,7 @@
       </div>
       {% endif %}
     </details>
-    <a class="daily-preview-link" href="/devotional-centre">View All Hymns →</a>
+    <a class="daily-preview-link" href="/devotional-centre#english-methodist-hymns">View All Hymns →</a>
   </article>
 </section>
 
@@ -1024,7 +1024,7 @@
 /* Install the public-page offline cache for the standalone Android WebView and PWA. */
 (function () {
   if (!("serviceWorker" in navigator)) return;
-  var registrationPromise = navigator.serviceWorker.register("/mcn-offline-sw.js", {
+  var registrationPromise = navigator.serviceWorker.register("/service-worker.js", {
     scope: "/",
     updateViaCache: "none"
   }).then(function (registration) {
@@ -1053,6 +1053,14 @@
       worker.postMessage({ type: "CACHE_MCN_APP" }, [channel.port2]);
     });
   };
+
+  // Automatically cache the complete public devotional library and its uploaded
+  // media whenever this app is opened while connected. Saved copies remain on device.
+  window.addEventListener("load", function () {
+    if (navigator.onLine) window.mcnCacheEntireApp().catch(function (error) {
+      console.warn("MCN devotional offline cache could not be refreshed:", error);
+    });
+  }, { once: true });
 })();
 </script>
 
