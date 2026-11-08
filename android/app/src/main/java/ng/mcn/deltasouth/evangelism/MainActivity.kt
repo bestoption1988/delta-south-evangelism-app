@@ -1643,8 +1643,21 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
                             if (request.isForMainFrame) {
                                 pageLoading = false
-                                pageErrorDetails = "WebView error ${error.errorCode}: ${error.description}"
-                                pageError = true
+                                // Fall back to the on-device library whenever DNS/network fails.
+                                pageError = false
+                                pageErrorDetails = ""
+                                val requestedPath = request.url.path.orEmpty()
+                                val localPath = if (requestedPath.startsWith("/devotional-centre") ||
+                                    requestedPath == "/media-library") requestedPath else "/devotional-centre"
+                                val localHtml = OfflineDevotionalPage.render(
+                                    view.context,
+                                    localPath,
+                                    request.url.getQueryParameter("q").orEmpty(),
+                                    request.url.getQueryParameter("translation").orEmpty()
+                                )
+                                view.post {
+                                    view.loadDataWithBaseURL("https://offline.mcn-app/", localHtml, "text/html", "UTF-8", null)
+                                }
                             }
                         }
                         override fun onReceivedHttpError(view: WebView, request: android.webkit.WebResourceRequest, response: android.webkit.WebResourceResponse) {
@@ -1704,8 +1717,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     }, modifier = Modifier.fillMaxWidth()) { Text("Retry homepage") }
                     OutlinedButton(onClick = {
                         pageError = false
-                        webView?.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/devotional-centre")
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Open devotional library in this app") }
+                        val localHtml = OfflineDevotionalPage.render(appContext, "/devotional-centre")
+                        webView?.clearHistory()
+                        webView?.loadDataWithBaseURL("https://offline.mcn-app/", localHtml, "text/html", "UTF-8", null)
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Open downloaded devotional libraries offline") }
                 }
             }
         }
