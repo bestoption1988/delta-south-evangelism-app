@@ -3202,3 +3202,12 @@ html,body{
  #nav .mcn-dashboard-nav{width:min(360px,calc(100vw - 32px))!important}
  #nav .mcn-dashboard-panel{width:min(360px,calc(100vw - 32px))!important;max-height:68vh!important}
 }
+
+
+/* Dashboard menu overlay: panel is promoted to body by app.js so page cards
+   cannot cover or clip the full-height list on Android WebView. */
+body > #menuPanel.mcn-dashboard-panel{display:none!important;position:fixed!important;z-index:2147483647!important;box-sizing:border-box!important;flex-direction:column!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;background:#fff!important;border:1px solid #dce5df!important;border-radius:15px!important;padding:9px!important;box-shadow:0 14px 36px rgba(15,45,25,.22)!important}
+body > #menuPanel.mcn-dashboard-panel.open{display:flex!important}
+body > #menuPanel.mcn-dashboard-panel button{display:block!important;flex:0 0 auto!important;width:100%!important;min-height:48px!important;height:auto!important;padding:13px 14px!important;margin:0!important;border:0!important;border-radius:9px!important;background:#fff!important;color:#526057!important;font-size:15px!important;font-weight:650!important;line-height:1.4!important;text-align:left!important;white-space:normal!important;overflow-wrap:anywhere!important}
+body > #menuPanel.mcn-dashboard-panel button.active{background:#ecfdf3!important;color:#14532d!important}
+body > #menuPanel.mcn-dashboard-panel button[hidden]{display:none!important}
