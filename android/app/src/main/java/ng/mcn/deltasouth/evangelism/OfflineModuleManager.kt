@@ -357,6 +357,15 @@ object OfflineModuleManager {
         return true
     }
 
+    fun removeLegacyBibleFiles(context: Context) {
+        runCatching { File(context.filesDir, "offline_web_bible").deleteRecursively() }
+        runCatching { File(devotionalDirectory(context), "csb_pew_bible.pdf").delete() }
+        context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).edit()
+            .remove("last_web_bible_chapter_count")
+            .remove("last_web_bible_missing_count")
+            .apply()
+    }
+
     fun bibleModuleDirectory(context: Context): File =
         File(context.filesDir, "bible_modules").apply { mkdirs() }
 
