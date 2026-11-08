@@ -109,12 +109,13 @@ fun NativePublicHomepage(
     val hymn = reading["hymn"].asObject()
     val leadership = payload["leadership"].asObjects()
     val events = payload["events"].asObjects()
-    val churches = payload["churches"].asObjects().filterNot { church ->
-        val name = church["church_name"].asText().trim()
-        Regex("(?i)^.*\\b(local\\s+)?church\\s*\\d+$").matches(name)
-    }.sortedWith(compareBy<Map<String, Any?>> {
-        when (churchCircuitKey(it["circuit"].asText())) { "effurun" -> 0; "warri" -> 1; "sapele" -> 2; "steel town" -> 3; else -> 4 }
-    }.thenBy { it["church_name"].asText().lowercase() })
+    val circuitOrder = listOf("effurun", "warri", "sapele", "steel town")
+    val churches = payload["churches"].asObjects().sortedWith(compareBy<Map<String, Any?>> {
+        val index = circuitOrder.indexOf(churchCircuitKey(it["circuit"].asText()))
+        if (index < 0) circuitOrder.size else index
+    }.thenBy { churchCircuitKey(it["circuit"].asText()) }.thenBy { it["church_name"].asText().lowercase() })
+    val groupedChurches = churches.groupBy { churchCircuitKey(it["circuit"].asText()) }
+    val orderedCircuitNames = listOf("Effurun Circuit", "Warri Circuit", "Sapele Circuit", "Steel Town Circuit")
     val sermons = payload["sermons"].asObjects()
     val gallery = payload["gallery"].asObjects()
     val videos = payload["videos"].asObjects()
@@ -490,32 +491,68 @@ fun NativePublicHomepage(
                     }
                 }
                 item { SectionTitle("FIND A CHURCH") }
-                if (churches.isEmpty()) item { Text("Church directory records are being updated. Please check again soon.", color = Color.Gray) }
-                items(churches) { church ->
-                    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(church["church_name"].asText(), color = DioceseNavy, fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                            Text(church["circuit"].asText(), color = DioceseRed, fontWeight = FontWeight.SemiBold)
-                            Text(listOf(church["address"].asText(), church["town"].asText(), church["state"].asText()).filter(String::isNotBlank).joinToString(", "),
-                                color = CardText)
-                            Text(church["phone"].asText(), color = Color.Gray, fontSize = 13.sp)
-                            if (church["maps_url"].asText().isNotBlank()) OutlinedButton(onClick = {
-                                runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(church["maps_url"].asText()))) }
-                            }) { Text("Open Map") }
+                item { Text("Explore congregations across Effurun, Warri, Sapele and Steel Town circuits, followed by additional circuits created by the Diocese.", color = CardText) }
+                orderedCircuitNames.forEachIndexed { index, circuitName ->
+                    val key = circuitOrder[index]
+                    val circuitChurches = groupedChurches[key].orEmpty()
+                    item(key = "circuit-$key") {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(circuitName, color = DioceseNavy, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                            Box(Modifier.fillMaxWidth().height(4.dp).background(DioceseGold, RoundedCornerShape(4.dp)))
+                            if (circuitChurches.isEmpty()) Text("No local churches have been added to this circuit yet.", color = Color.Gray)
+                        }
+                    }
+                    items(circuitChurches) { church ->
+                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(church["church_name"].asText(), color = DioceseNavy, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(church["circuit"].asText().ifBlank { circuitName }, color = DioceseRed, fontWeight = FontWeight.SemiBold)
+                                val address = listOf(church["address"].asText(), church["town"].asText(), church["state"].asText()).filter(String::isNotBlank).joinToString(", ")
+                                if (address.isNotBlank()) Text("Address: $address", color = CardText)
+                                val phone = church["phone"].asText()
+                                if (phone.isNotBlank()) Text("Telephone: $phone", color = Color.Gray)
+                                val mapUrl = church["maps_url"].asText().ifBlank { "https://www.google.com/maps/search/?api=1&query=" + Uri.encode(church["church_name"].asText() + " " + address + " Delta State Nigeria") }
+                                OutlinedButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(mapUrl))) } }, modifier = Modifier.fillMaxWidth()) { Text("📍 Get Directions / Open Map") }
+                            }
                         }
                     }
                 }
+                groupedChurches.filterKeys { it !in circuitOrder }.toSortedMap().forEach { (key, circuitChurches) ->
+                    item(key = "other-circuit-$key") { Text(circuitChurches.firstOrNull()?.get("circuit").asText().ifBlank { key.replaceFirstChar { it.uppercase() } + " Circuit" }, color = DioceseNavy, fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                    items(circuitChurches) { church ->
+                        Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(14.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(church["church_name"].asText(), color = DioceseNavy, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(church["circuit"].asText(), color = DioceseRed, fontWeight = FontWeight.SemiBold)
+                                val address = listOf(church["address"].asText(), church["town"].asText(), church["state"].asText()).filter(String::isNotBlank).joinToString(", ")
+                                if (address.isNotBlank()) Text("Address: $address", color = CardText)
+                                val mapUrl = church["maps_url"].asText().ifBlank { "https://www.google.com/maps/search/?api=1&query=" + Uri.encode(church["church_name"].asText() + " " + address + " Delta State Nigeria") }
+                                OutlinedButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(mapUrl))) } }, modifier = Modifier.fillMaxWidth()) { Text("📍 Get Directions / Open Map") }
+                            }
+                        }
+                    }
+                }
+                if (churches.isEmpty()) item { Text("Church listings are being updated. Please contact the diocesan office for assistance.", color = Color.Gray) }
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = DioceseNavy), shape = RoundedCornerShape(18.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Text("ABOUT OUR DIOCESE", color = DioceseGold, fontWeight = FontWeight.Bold, fontSize = 19.sp)
-                            Text("Vision", color = Color.White, fontWeight = FontWeight.Bold)
-                            Text(content["vision"].asText().ifBlank { "To be spiritually vibrant and one of the largest Churches in Nigeria." }, color = Color.White)
-                            Text("Mission", color = Color.White, fontWeight = FontWeight.Bold)
-                            val mission = listOf("mission_1", "mission_2", "mission_3").map { content[it].asText() }.filter(String::isNotBlank)
-                            if (mission.isEmpty()) {
-                                Text("• To consistently win more souls for Christ.\n• To develop spiritually fulfilled members.\n• To remain active in serving humanity.", color = Color.White)
-                            } else mission.forEach { Text("• $it", color = Color.White) }
+                            Text("ABOUT OUR DIOCESE", color = DioceseGold, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                            Text(content["diocese_text"].asText().ifBlank {
+                                "The Delta South Diocese of the Methodist Church Nigeria is committed to worship, witness, service and discipleship; proclaiming Christ, nurturing believers, strengthening local churches and reaching communities across the Diocese."
+                            }, color = Color.White, fontSize = 15.sp)
+                            val contactEmail = content["contact_email"].asText().ifBlank { "info@mcn-deltasouth.org" }
+                            val contactPhone = content["contact_phone"].asText()
+                            val contactAddress = content["contact_address"].asText()
+                            Text("CONTACT DETAILS", color = DioceseGold, fontWeight = FontWeight.Bold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Email: $contactEmail", color = Color.White, modifier = Modifier.weight(1f))
+                                TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:$contactEmail"))) } }) { Text("Email", color = DioceseGold) }
+                            }
+                            if (contactPhone.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text("Phone: $contactPhone", color = Color.White, modifier = Modifier.weight(1f))
+                                TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$contactPhone"))) } }) { Text("Call", color = DioceseGold) }
+                            }
+                            if (contactAddress.isNotBlank()) Text("Office Address: $contactAddress", color = Color.White)
                         }
                     }
                 }
