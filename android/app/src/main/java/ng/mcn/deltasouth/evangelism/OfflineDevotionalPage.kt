@@ -1,5 +1,6 @@
 package ng.mcn.deltasouth.evangelism
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
 import android.net.Uri
 import android.webkit.WebResourceResponse
 import org.json.JSONArray
@@ -69,7 +70,7 @@ object OfflineDevotionalPage {
         return page(title,b.toString())
     }
     private fun collection(c:Context,slug:String,q:String):String {
-        val x=cs.firstOrNull{it.slug==slug||it.key==slug}?:return home(c);val rows=a(c,x.key);val b=StringBuilder("""<form method="get"><input name="q" placeholder="Search this collection" value="${e(q)}"><button>Search</button></form><p class="muted">${rows.length()} resources saved in this library</p>""")
+        val x=cs.firstOrNull{it.slug==slug||it.key==slug}?:return home(c);val rows=a(c,x.key);val b=StringBuilder("""<form method="get" action="/devotional-centre/collection/${Uri.encode(x.slug)}"><input name="q" placeholder="Search this collection" value="${e(q)}"><button type="submit">Search</button></form><p class="muted">${rows.length()} resources saved in this library</p>""")
         var count=0
         for(r in sortedRows(rows)){val p=r.optJSONObject("payload")?:JSONObject();val title=r.optString("title","Resource");val num=r.optString("item_number");val first=p.optString("firstline",p.optString("reference",p.optString("heading",p.optString("content",""))));if(q.isNotBlank()&&!("$title $num $first".contains(q,true)))continue
             val id=r.optString("resource_id","${x.key}:$num");val localHref="/devotional-centre/item/${Uri.encode(id)}";b.append("""<article class="item"><div class="muted">${e(x.title)} · ${e(num)}</div><h2>${e(title)}</h2><p class="muted">${e(first.take(200))}</p><a class="btn" href="$localHref">Open Saved Resource →</a></article>""");count++}
@@ -97,11 +98,44 @@ object OfflineDevotionalPage {
 const translation="$safe";
 const names=["Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","Judges","Ruth","1 Samuel","2 Samuel","1 Kings","2 Kings","1 Chronicles","2 Chronicles","Ezra","Nehemiah","Esther","Job","Psalms","Proverbs","Ecclesiastes","Song of Solomon","Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel","Hosea","Joel","Amos","Obadiah","Jonah","Micah","Nahum","Habakkuk","Zephaniah","Haggai","Zechariah","Malachi","Matthew","Mark","Luke","John","Acts","Romans","1 Corinthians","2 Corinthians","Galatians","Ephesians","Philippians","Colossians","1 Thessalonians","2 Thessalonians","1 Timothy","2 Timothy","Titus","Philemon","Hebrews","James","1 Peter","2 Peter","1 John","2 John","3 John","Jude","Revelation"];
 const book=document.getElementById("book"),status=document.getElementById("status"),verses=document.getElementById("verses");
-async function loadChapter(){const b=book.value,c=document.getElementById("chapter").value;status.textContent="Opening chapter…";try{const r=await fetch("/devotional-centre/holy-bible/chapter?translation="+encodeURIComponent(translation)+"&book="+b+"&chapter="+c);if(!r.ok)throw new Error("Chapter not available in local Bible");const data=await r.json();verses.textContent="";data.verses.forEach(v=>{const p=document.createElement("p");p.textContent=v.verse+". "+v.text;verses.appendChild(p)});status.textContent=(names[Number(b)-1]||("Book "+b))+" "+c+" · "+data.verses.length+" verses"}catch(e){status.textContent=e.message}}
-fetch("/devotional-centre/holy-bible/books?translation="+encodeURIComponent(translation)).then(r=>{if(!r.ok)throw new Error("Books unavailable offline");return r.json()}).then(data=>{data.books.forEach(x=>{const o=document.createElement("option");o.value=x.id;o.textContent=(names[Number(x.id)-1]||("Book "+x.id))+" ("+x.chapters+" chapters)";book.appendChild(o)});status.textContent="Bible loaded from this phone. Choose a book and chapter.";loadChapter()}).catch(e=>status.textContent=e.message);
+async function loadChapter(){const b=book.value,c=document.getElementById("chapter").value;status.textContent="Opening chapter…";try{const r=await fetch("/__mcn_offline/bible?kind=chapter&translation="+encodeURIComponent(translation)+"&book="+b+"&chapter="+c);if(!r.ok)throw new Error("Chapter not available in local Bible");const data=await r.json();verses.textContent="";data.verses.forEach(v=>{const p=document.createElement("p");p.textContent=v.verse+". "+v.text;verses.appendChild(p)});status.textContent=(names[Number(b)-1]||("Book "+b))+" "+c+" · "+data.verses.length+" verses"}catch(e){status.textContent=e.message}}
+fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translation)).then(r=>{if(!r.ok)throw new Error("Books unavailable offline");return r.json()}).then(data=>{data.books.forEach(x=>{const o=document.createElement("option");o.value=x.id;o.textContent=(names[Number(x.id)-1]||("Book "+x.id))+" ("+x.chapters+" chapters)";book.appendChild(o)});status.textContent="Bible loaded from this phone. Choose a book and chapter.";loadChapter()}).catch(e=>status.textContent=e.message);
 </script>"""
         return page("Offline Bible Reader",html)
     }
     private fun media(c:Context):String {val a=runCatching{JSONArray(File(d(c),"Church_Media/index.json").readText())}.getOrDefault(JSONArray());val b=StringBuilder();for(i in 0 until a.length()){val x=a.optJSONObject(i)?:continue;val f=x.optString("file");val url="/__mcn_offline/file/${Uri.encode(f)}";b.append("""<article class="item"><h2>${e(x.optString("title","Media"))}</h2><p class="muted">${e(x.optString("description"))}</p>""");when(x.optString("media_type")){"audio"->b.append("""<audio controls src="$url"></audio>""");"video"->b.append("""<video controls playsinline src="$url"></video>""");else->if(x.optString("mime_type").startsWith("image/"))b.append("""<img src="$url" style="max-width:100%">""")else b.append("""<a class="btn" href="$url" download>Open downloaded file</a>""")};b.append("</article>")};if(a.length()==0)b.append("<div class='paper'>No media files saved on this phone yet.</div>");return page("Church Media Library",b.toString())}
-    fun fileResponse(c:Context,url:String):WebResourceResponse?=runCatching{val u=Uri.parse(url);if(!u.path.orEmpty().startsWith("/__mcn_offline/file/"))return null;val name=Uri.decode(u.path!!.substringAfterLast('/'));if(name.isBlank()||name.contains("/")||name.contains(".."))return null;val f=(sequenceOf(d(c),File(d(c),"Church_Media"),File(d(c),"Bible")) + (d(c).listFiles()?.filter{it.isDirectory}?.asSequence()?:emptySequence())).map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0} ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0} ?: return null;val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"};WebResourceResponse(mime,null,f.inputStream())}.getOrNull()
-}
+    private fun bibleJsonResponse(c:Context,u:Uri):WebResourceResponse?=runCatching {
+        if(u.path!="/__mcn_offline/bible")return null
+        val code=u.getQueryParameter("translation")?.lowercase(Locale.ROOT).orEmpty()
+        val index=JSONArray(File(d(c),"Bible/index.json").readText())
+        val module=(0 until index.length()).mapNotNull{index.optJSONObject(it)}.firstOrNull{it.optString("id").equals(code,true)} ?: return null
+        val dbFile=File(File(d(c),"Bible"),module.optString("file")).takeIf{it.isFile&&it.length()>1024L} ?: return null
+        val db=SQLiteDatabase.openDatabase(dbFile.absolutePath,null,SQLiteDatabase.OPEN_READONLY)
+        val json=try {
+            if(u.getQueryParameter("kind")=="books") {
+                val books=JSONArray()
+                db.rawQuery("SELECT Book, MAX(Chapter) FROM Bible GROUP BY Book ORDER BY Book",null).use{cur->while(cur.moveToNext())books.put(JSONObject().put("id",cur.getInt(0)).put("chapters",cur.getInt(1)))}
+                JSONObject().put("translation",code).put("books",books).toString()
+            } else {
+                val book=u.getQueryParameter("book")?.toIntOrNull()?:return null
+                val chapter=u.getQueryParameter("chapter")?.toIntOrNull()?:return null
+                val verses=JSONArray()
+                db.rawQuery("SELECT Verse, Scripture FROM Bible WHERE Book=? AND Chapter=? ORDER BY Verse",arrayOf(book.toString(),chapter.toString())).use{cur->while(cur.moveToNext()){
+                    val body=cur.getString(1).orEmpty().replace(Regex("<RF>.*?<Rf>",RegexOption.IGNORE_CASE),"").replace(Regex("<[^>]*>"),"").replace(Regex("\\s+")," ").trim()
+                    verses.put(JSONObject().put("verse",cur.getInt(0)).put("text",body))
+                }}
+                JSONObject().put("translation",code).put("book",book).put("chapter",chapter).put("verses",verses).toString()
+            }
+        } finally { db.close() }
+        WebResourceResponse("application/json","UTF-8",200,"OK",mapOf("Access-Control-Allow-Origin" to "*"),json.byteInputStream())
+    }.getOrNull()
+    fun fileResponse(c:Context,url:String):WebResourceResponse?=runCatching{
+        val u=Uri.parse(url)
+        bibleJsonResponse(c,u)?.let{return it}
+        if(!u.path.orEmpty().startsWith("/__mcn_offline/file/"))return null
+        val name=Uri.decode(u.path!!.substringAfterLast('/'))
+        if(name.isBlank()||name.contains("/")||name.contains(".."))return null
+        val f=(sequenceOf(d(c),File(d(c),"Church_Media"),File(d(c),"Bible")) + (d(c).listFiles()?.filter{it.isDirectory}?.asSequence()?:emptySequence())).map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0} ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0} ?: return null
+        val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
+        WebResourceResponse(mime,null,f.inputStream())
+    }.getOrNull()
