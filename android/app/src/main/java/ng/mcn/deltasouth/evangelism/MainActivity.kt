@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
         OfflineModuleManager.removeLegacyBibleFiles(applicationContext)
         // Stage already-downloaded devotional collections into one local file per resource.
         // This migration is local-only and requires no network connection.
-        runCatching { OfflineModuleManager.migrateDevotionalResourcesToIndividualFiles(applicationContext) }
+        runCatching { OfflineModuleManager.migrateToCardFolders(applicationContext) }
         android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
             object : android.webkit.ServiceWorkerClient() {
                 override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
@@ -1400,11 +1400,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
                                 onOfflineDownload()
-                                return true
-                            }
-                            if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
-                                val html = OfflineDevotionalPage.render(view.context, "/devotional-centre")
-                                view.loadDataWithBaseURL(BuildConfig.API_BASE_URL, html, "text/html", "UTF-8", null)
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
