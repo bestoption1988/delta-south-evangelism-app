@@ -389,6 +389,34 @@ main{max-width:1100px;margin:auto;padding:18px}
   font-size:14px;
 }
 
+/* Android/mobile member portal: place the sidebar below the real header
+   and give the menu the full remaining screen height. */
+@media(max-width:850px){
+  .member-sidebar{
+    position:fixed!important;
+    top:var(--member-sidebar-top,150px)!important;
+    bottom:8px!important;
+    left:0!important;
+    width:min(320px,88vw)!important;
+    height:auto!important;
+    max-height:none!important;
+    box-sizing:border-box!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    -webkit-overflow-scrolling:touch!important;
+    overscroll-behavior:contain!important;
+    padding:12px 12px 24px!important;
+    z-index:2147483000!important;
+    background:#fff!important;
+    transform:translateX(-105%);
+  }
+  .member-sidebar.open{
+    transform:translateX(0)!important;
+  }
+  .member-nav{padding-bottom:20px!important}
+  .member-nav button{min-height:48px!important;flex:0 0 auto!important}
+}
+
 @media(max-width:850px){
   .member-portal-layout{
     display:block;
@@ -1893,7 +1921,15 @@ loadMemberAttendance();
 <script>
 function toggleMemberMenu(){
   const menu=document.getElementById("member-sidebar");
-  if(menu) menu.classList.toggle("open");
+  const header=document.querySelector(".member-topbar");
+  if(!menu)return;
+  if(window.innerWidth<=850){
+    const headerBottom=header?header.getBoundingClientRect().bottom:150;
+    menu.style.setProperty("--member-sidebar-top",Math.max(72,Math.round(headerBottom))+"px");
+  }
+  const opened=menu.classList.toggle("open");
+  const button=document.querySelector(".member-menu-btn");
+  if(button)button.setAttribute("aria-expanded",String(opened));
 }
 
 function memberGo(page,button){
