@@ -2844,6 +2844,21 @@ def _homepage_daily_reading():
         return {"date": "", "verse": {}, "hymn": {}}
 
 
+@app.get("/mcn-offline-sw.js")
+def mcn_offline_service_worker():
+    """Serve the public offline cache worker with permission to control the whole site."""
+    worker_path = os.path.join(ROOT, "static", "mcn-offline-sw.js")
+    try:
+        with open(worker_path, "r", encoding="utf-8") as worker_file:
+            worker_source = worker_file.read()
+    except OSError:
+        return Response("Offline worker unavailable", status=404, mimetype="text/plain")
+    response = Response(worker_source, mimetype="application/javascript")
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
 @app.get("/")
 def public_home():
     """Public diocesan homepage; no login required."""
