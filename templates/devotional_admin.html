@@ -8,12 +8,9 @@
 <p>Import the Devotional Kits ZIP. The package and imported media are saved in Naijacloud Object Storage, while searchable content and job progress are saved in Naijacloud PostgreSQL. The import queue can pick up saved jobs again after a web-service restart.</p>
 {% if message %}<p class="success">{{ message }}</p>{% endif %}{% if error %}<p class="error">{{ error }}</p>{% endif %}
 <p><a class="button" href="/admin/devotional-centre/resources">Manage Imported Resources</a></p>
-<section class="panel"><h2>Complete Holy Bible (WEB)</h2>
-<p class="muted">The Devotional Centre now provides the complete 66-book World English Bible (WEB), a public-domain translation. Members can read books, chapters and verses in the diocesan website without uploading a CSB PDF.</p>
-<p><a class="button" href="/devotional-centre/holy-bible">Open the Complete Bible Reader</a></p>
-<p class="muted">The uploaded World English Bible MyBible database is installed in Naijacloud Object Storage and read directly by the offline Bible reader. No external Bible API or web-rendered scripture is used.</p></section>
+
 <section class="panel"><h2>Import Devotional Kits</h2>
-<p class="muted">Choose the prepared Devotional Kits ZIP or the Bible package ZIP. Do not extract it first. For the Bible, the ZIP must include bibles/web.bbl.mybible. Upload progress will be shown first, followed by unpacking, media upload and database import stages.</p>
+<p class="muted">Choose the prepared Devotional Kits ZIP or the Bible package ZIP. Do not extract it first. The imported Bible package is the user-supplied bibles.zip; the WEB module is excluded. Upload progress will be shown first, followed by unpacking, media upload and database import stages.</p>
 <form id="devotional-upload-form" method="post" enctype="multipart/form-data">
 <input type="file" name="package" accept=".zip,application/zip" required>
 <p class="muted">Includes hymn books, Bible verses, canticles, Communion materials, creeds, music recordings and author photographs.</p>
