@@ -41,6 +41,7 @@ class MainActivity : ComponentActivity() {
         android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
             object : android.webkit.ServiceWorkerClient() {
                 override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
+                    OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString())?.let { return it }
                     if (!networkAvailable(applicationContext)) {
                         val localBible = OfflineModuleManager.cachedBibleModuleResponse(applicationContext, request.url.toString())
                         if (localBible != null) {
@@ -1352,6 +1353,7 @@ private fun KeyValueList(values: Map<String, Any?>) {
 @Composable
 private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
+    val onlineState by rememberUpdatedState(online)
     var pageError by remember { mutableStateOf(false) }
     var pageErrorDetails by remember { mutableStateOf("The connection to the diocesan website failed.") }
     var pageLoading by remember { mutableStateOf(true) }
@@ -1388,6 +1390,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                             val uri = request.url
+                            if (!onlineState && (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library")) {
+                                val html = OfflineDevotionalPage.render(view.context, uri.path.orEmpty(), uri.getQueryParameter("q").orEmpty())
+                                view.loadDataWithBaseURL(BuildConfig.API_BASE_URL, html, "text/html", "UTF-8", null)
+                                return true
+                            }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
                                 onOfflineDownload()
                                 return true
@@ -1422,6 +1429,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         @Suppress("DEPRECATION")
                         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                             val uri = android.net.Uri.parse(url)
+                            if (!onlineState && (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library")) {
+                                val html = OfflineDevotionalPage.render(view.context, uri.path.orEmpty(), uri.getQueryParameter("q").orEmpty())
+                                view.loadDataWithBaseURL(BuildConfig.API_BASE_URL, html, "text/html", "UTF-8", null)
+                                return true
+                            }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
                                 onOfflineDownload()
                                 return true
@@ -1435,7 +1447,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             return uri.scheme != "http" && uri.scheme != "https"
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                            if (!online) {
+                            OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
+                            if (!onlineState) {
                                 val localBible = OfflineModuleManager.cachedBibleModuleResponse(ctx, request.url.toString())
                                 if (localBible != null) {
                                     return android.webkit.WebResourceResponse(
