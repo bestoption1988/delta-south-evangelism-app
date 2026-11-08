@@ -1401,7 +1401,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // installed app still has usable local libraries. Keep navigation
                             // inside the app and show the on-device library instead of a raw 404.
                             if (uri.path.isNullOrBlank() || uri.path == "/") {
-                                val html = OfflineDevotionalPage.render(view.context, "/devotional-centre")
+                                val html = OfflineDevotionalPage.render(view.context, "/")
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
                                 return true
                             }
@@ -1648,7 +1648,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 pageErrorDetails = ""
                                 val requestedPath = request.url.path.orEmpty()
                                 val localPath = if (requestedPath.startsWith("/devotional-centre") ||
-                                    requestedPath == "/media-library") requestedPath else "/devotional-centre"
+                                    requestedPath == "/media-library") requestedPath else "/"
                                 val localHtml = OfflineDevotionalPage.render(
                                     view.context,
                                     localPath,
@@ -1665,7 +1665,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 (request.url.path.isNullOrBlank() || request.url.path == "/")) {
                                 pageLoading = false
                                 pageError = false
-                                val localLibrary = OfflineDevotionalPage.render(view.context, "/devotional-centre")
+                                val localLibrary = OfflineDevotionalPage.render(view.context, "/")
                                 view.post {
                                     view.loadDataWithBaseURL("https://offline.mcn-app/", localLibrary, "text/html", "UTF-8", null)
                                 }
@@ -1679,7 +1679,13 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         }
                     }
                     webChromeClient = WebChromeClient()
-                    loadUrl(BuildConfig.API_BASE_URL)
+                    if (online) {
+                        loadUrl(BuildConfig.API_BASE_URL)
+                    } else {
+                        val localHome = OfflineDevotionalPage.render(ctx, "/")
+                        loadDataWithBaseURL("https://offline.mcn-app/", localHome, "text/html", "UTF-8", null)
+                        pageLoading = false
+                    }
                     webView = this
                 }
             },
@@ -1689,7 +1695,14 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     view.settings.cacheMode = cacheMode
                     if (!view.url.isNullOrBlank()) view.reload()
                 }
-                if (view.url.isNullOrBlank()) view.loadUrl(BuildConfig.API_BASE_URL)
+                if (view.url.isNullOrBlank()) {
+                    if (online) view.loadUrl(BuildConfig.API_BASE_URL)
+                    else {
+                        val localHome = OfflineDevotionalPage.render(view.context, "/")
+                        view.loadDataWithBaseURL("https://offline.mcn-app/", localHome, "text/html", "UTF-8", null)
+                        pageLoading = false
+                    }
+                }
             }
         )
         if (pageLoading) {
