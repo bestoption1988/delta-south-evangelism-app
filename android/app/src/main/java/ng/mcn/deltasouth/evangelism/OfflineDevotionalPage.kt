@@ -34,7 +34,10 @@ object OfflineDevotionalPage {
     }
     private fun home(c:Context):String {
         val b=StringBuilder("<div class='grid'>")
-        cs.forEach{x->b.append("""<a class="card" href="/devotional-centre/collection/${x.slug}"><div class="icon">${x.icon}</div><h2>${e(x.title)}</h2><p class="muted">Browse downloaded resources in this original library.</p><span class="pill">${a(c,x.key).length()} downloaded</span></a>""")}
+        cs.forEach{x->
+            val target=when(x.key){"communion_english"->"/devotional-centre/communion-document/english";"communion_yoruba"->"/devotional-centre/communion-document/yoruba";else->"/devotional-centre/collection/${x.slug}"}
+            b.append("""<a class="card" href="$target"><div class="icon">${x.icon}</div><h2>${e(x.title)}</h2><p class="muted">Browse downloaded resources in this original library.</p><span class="pill">${a(c,x.key).length()} downloaded</span></a>""")
+        }
         val n=runCatching{JSONArray(File(d(c),"Bible/index.json").readText()).length()}.getOrDefault(0)
         val m=runCatching{JSONArray(File(d(c),"Church_Media/index.json").readText()).length()}.getOrDefault(0)
         b.append("""<a class="card" href="/devotional-centre/holy-bible"><div class="icon">📖</div><h2>Uploaded Bible Library</h2><span class="pill">$n modules saved</span></a><a class="card" href="/media-library"><div class="icon">🎧</div><h2>Church Media Library</h2><span class="pill">$m files saved</span></a></div>""")
