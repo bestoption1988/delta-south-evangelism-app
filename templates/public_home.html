@@ -568,69 +568,7 @@
   <div class="copyright">© <span id="year"></span> Methodist Church Nigeria, Delta South Diocese. All rights reserved.</div>
 </footer>
 
-<!-- Floating Member Care button: public homepage -->
-<button id="publicMemberCareButton" type="button" aria-label="Open public Member Care chat" aria-controls="publicMemberCarePanel" title="Member Care">
-  <span class="public-care-icon" aria-hidden="true">💬</span><span class="public-care-label">Member Care</span>
-</button>
 
-<style>
-  #publicMemberCareButton {
-    appearance: none; cursor: pointer;
-    position: fixed;
-    right: max(18px, env(safe-area-inset-right));
-    bottom: max(20px, env(safe-area-inset-bottom));
-    z-index: 99980;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    min-height: 54px;
-    padding: 0 20px;
-    border-radius: 999px;
-    background: #086b3c;
-    color: #fff;
-    font: 700 15px/1.2 system-ui, sans-serif;
-    text-decoration: none;
-    box-shadow: 0 6px 24px rgba(0,0,0,.24);
-    border: 2px solid rgba(255,255,255,.92);
-    transition: transform .18s ease, box-shadow .18s ease;
-  }
-
-  #publicMemberCareButton:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 9px 28px rgba(0,0,0,.28);
-  }
-
-  #publicMemberCareButton:focus-visible {
-    outline: 3px solid #e7bd54;
-    outline-offset: 3px;
-  }
-
-  #publicMemberCareButton .public-care-icon {
-    font-size: 23px;
-    line-height: 1;
-  }
-
-  @media (max-width: 480px) {
-    #publicMemberCareButton {
-      right: 12px;
-      bottom: max(14px, env(safe-area-inset-bottom));
-      min-height: 50px;
-      padding: 0 16px;
-      font-size: 14px;
-    }
-  }
-
-  @media (max-width: 600px) and (orientation: landscape) {
-    #publicMemberCareButton {
-      min-height: 44px;
-      bottom: 10px;
-    }
-  }
-</style>
-
-
-<script src="{{ url_for('static', filename='public-member-care.js') }}?v=20261016-guest-chat"></script>
 <script>
 (() => {
   const submenu = document.getElementById("mcnFellowshipsSubmenu");
@@ -649,13 +587,6 @@
   }
   if (isAndroidApp) {
     // Keep the APK on the same responsive layout as the working mobile browser.
-    // Native-only quick actions remain available without enabling Android CSS overrides.
-    const quickActions = document.createElement("div");
-    quickActions.id = "mcnAppQuickActions";
-    quickActions.innerHTML = '<a href="mcn-app://offline" aria-label="Save offline">Offline</a><a href="mcn-app://staff-login" aria-label="Staff sign in">Staff</a>';
-    document.body.appendChild(quickActions);
-    quickActions.querySelector('a[href="mcn-app://offline"]').addEventListener("click", event => { event.preventDefault(); Promise.resolve(window.mcnCacheEntireApp ? window.mcnCacheEntireApp() : null).finally(() => { window.location.href = "mcn-app://offline"; }); });
-    quickActions.querySelector('a[href="mcn-app://staff-login"]').addEventListener("click", event => { event.preventDefault(); window.location.href = "mcn-app://staff-login"; });
     if (saveOffline) saveOffline.style.display = "none";
     if (staffSignIn) staffSignIn.style.display = "none";
   }
@@ -1017,7 +948,6 @@
   start();
 })();
 </script>
-<footer style="text-align:center;padding:24px 14px;font:14px Arial,sans-serif;background:#f4f6fa"><a href="/privacy-policy">Privacy Policy</a> · <a href="/account-deletion">Account and Data Deletion</a> · <a href="mailto:bestoption1988@gmail.com">Support</a></footer>
 <script src="{{ url_for('static', filename='daily-reading.js') }}?v=20261107-ticker-modal1" defer></script>
 
 <script>
