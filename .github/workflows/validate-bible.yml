@@ -6,6 +6,10 @@ on:
     paths:
       - "app.py"
       - "templates/devotional_holy_bible.html"
+      - "templates/devotional_centre.html"
+      - "templates/devotional_admin.html"
+      - "android/app/src/main/java/ng/mcn/deltasouth/evangelism/OfflineModuleManager.kt"
+      - "android/app/src/main/java/ng/mcn/deltasouth/evangelism/MainActivity.kt"
       - ".github/workflows/validate-bible.yml"
   workflow_dispatch:
 jobs:
@@ -18,6 +22,22 @@ jobs:
           python-version: "3.12"
       - name: Compile Flask application
         run: python -m py_compile app.py
+      - name: Verify only uploaded MyBible modules are enabled
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          app = Path("app.py").read_text(encoding="utf-8")
+          manager = Path("android/app/src/main/java/ng/mcn/deltasouth/evangelism/OfflineModuleManager.kt").read_text(encoding="utf-8")
+          activity = Path("android/app/src/main/java/ng/mcn/deltasouth/evangelism/MainActivity.kt").read_text(encoding="utf-8")
+          holy = Path("templates/devotional_holy_bible.html").read_text(encoding="utf-8")
+          assert '"web": ("web.bbl.mybible"' not in app
+          assert "_CSB_BIBLE_OBJECT_KEY" not in app
+          assert "api_offline_bible_modules" in app and "api_offline_bible_module" in app
+          assert "downloadBibleModules" in manager and "cachedBibleModuleResponse" in manager
+          assert "PublicOfflineLibrary" not in activity and "offline_web_bible" not in activity
+          assert "World English Bible" not in holy and "CSB" not in holy
+          print("Verified: no WEB or CSB PDF reader; uploaded MyBible modules are the only Bible source.")
+          PY
       - name: Check Bible package modules and SQLite files
         run: |
           python - <<'PY'
