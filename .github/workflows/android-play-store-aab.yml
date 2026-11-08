@@ -49,17 +49,43 @@ jobs:
           test -s android/app/release-key.jks
           chmod 600 android/app/release-key.jks
 
+      - name: Download Gradle 8.11.1 with retries and fallback
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/gradle-dist"
+          cd "$RUNNER_TEMP/gradle-dist"
+          download_gradle() {
+            local url="$1"
+            for attempt in 1 2 3 4 5 6; do
+              echo "Downloading Gradle (attempt $attempt): $url"
+              if curl --fail --location --show-error --silent \
+                --connect-timeout 30 --max-time 600 \
+                --retry 3 --retry-all-errors --retry-delay 8 \
+                "$url" -o gradle-8.11.1-bin.zip; then
+                if unzip -tq gradle-8.11.1-bin.zip >/dev/null 2>&1; then
+                  return 0
+                fi
+                rm -f gradle-8.11.1-bin.zip
+              fi
+              sleep 10
+            done
+            return 1
+          }
+          download_gradle "https://downloads.gradle.org/distributions/gradle-8.11.1-bin.zip" ||
+            download_gradle "https://services.gradle.org/distributions/gradle-8.11.1-bin.zip"
+          unzip -q gradle-8.11.1-bin.zip
+          echo "$RUNNER_TEMP/gradle-dist/gradle-8.11.1/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/gradle-dist/gradle-8.11.1/bin/gradle" --version
+
       - name: Build signed release AAB
         env:
           ANDROID_KEYSTORE_PATH: release-key.jks
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        uses: gradle/gradle-build-action@v3
-        with:
-          gradle-version: '8.11.1'
-          build-root-directory: android
-          arguments: clean bundleRelease assembleRelease
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace -p android clean bundleRelease assembleRelease
 
       - name: Verify AAB signature
         run: |
