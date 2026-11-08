@@ -1830,15 +1830,48 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
-                            if (request.url.scheme == "mcn-app" && request.url.host == "offline") {
+                            val uri = request.url
+                            if (uri.scheme == "mcn-app" && uri.host == "offline") {
                                 onOfflineDownload()
                                 return true
                             }
-                            if (request.url.scheme == "mcn-app" && request.url.host == "staff-login") {
-                                onStaffLogin()
+                            if (uri.scheme == "mcn-app" && uri.host == "staff-login") {
+                                // Keep authentication on the original diocesan web pages.
+                                // Do not replace registration, login or password-reset screens
+                                // with a separate native form.
+                                val loginUrl = android.net.Uri.parse(BuildConfig.API_BASE_URL)
+                                    .buildUpon().appendPath("login").build()
+                                view.loadUrl(loginUrl.toString())
                                 return true
                             }
-                            return super.shouldOverrideUrlLoading(view, request)
+                            // All website navigation stays inside this WebView, including links
+                            // to other diocesan pages and pages opened with target=_blank.
+                            if (uri.scheme == "http" || uri.scheme == "https") return false
+                            // Let phone/email handlers work without launching a browser.
+                            if (uri.scheme == "tel" || uri.scheme == "mailto") {
+                                runCatching {
+                                    view.context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                                }
+                                return true
+                            }
+                            // Prevent unknown/custom links from handing the user to a browser.
+                            return true
+                        }
+
+                        @Suppress("DEPRECATION")
+                        override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                            val uri = android.net.Uri.parse(url)
+                            if (uri.scheme == "mcn-app" && uri.host == "offline") {
+                                onOfflineDownload()
+                                return true
+                            }
+                            if (uri.scheme == "mcn-app" && uri.host == "staff-login") {
+                                val loginUrl = android.net.Uri.parse(BuildConfig.API_BASE_URL)
+                                    .buildUpon().appendPath("login").build()
+                                view.loadUrl(loginUrl.toString())
+                                return true
+                            }
+                            return uri.scheme != "http" && uri.scheme != "https"
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
                             if (!online) {
