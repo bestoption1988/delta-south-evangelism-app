@@ -215,7 +215,6 @@ private fun NativeDioceseApp() {
                     downloadBusy = true
                     downloadMessage = "Preparing your offline modules…"
                     val result = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAll(appContext) }
-                    downloadedModules = result.downloaded
                     if (result.downloaded > 0) prefs.edit().putBoolean("initial_download_complete", true).apply()
                     downloadMessage = "Initial download: ${result.downloaded} saved, ${result.unavailable} not available for this account, ${result.failed} failed."
                     downloadBusy = false
