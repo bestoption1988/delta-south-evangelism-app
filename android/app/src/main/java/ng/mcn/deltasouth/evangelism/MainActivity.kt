@@ -1,3 +1,4 @@
+// Release build trigger: mobile navigation and offline reader fixes.
 package ng.mcn.deltasouth.evangelism
 
 import android.os.Bundle
