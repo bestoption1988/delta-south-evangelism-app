@@ -369,7 +369,7 @@ object OfflineModuleManager {
 
     fun removeLegacyBibleFiles(context: Context) {
         runCatching { File(context.filesDir, "offline_web_bible").deleteRecursively() }
-        runCatching { File(devotionalDirectory(context), "csb_pew_bible.pdf").delete() }
+        runCatching { File(bibleModuleDirectory(context), "csb_pew_bible.pdf").delete() }
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).edit()
             .remove("last_web_bible_chapter_count")
             .remove("last_web_bible_missing_count")
@@ -377,7 +377,7 @@ object OfflineModuleManager {
     }
 
     fun bibleModuleDirectory(context: Context): File =
-        File(context.filesDir, "bible_modules").apply { mkdirs() }
+        File(devotionalDirectory(context), "Bible").apply { mkdirs() }
 
     fun downloadBibleModules(context: Context, onProgress: (String, Int) -> Unit = { _, _ -> }): Int {
         Backend.initialize(context.applicationContext)
@@ -561,7 +561,7 @@ object OfflineModuleManager {
             fetchLegacyMediaCatalogue(longClient)
         }
         val items = org.json.JSONObject(json).optJSONArray("items") ?: JSONArray()
-        val directory = File(context.filesDir, "offline_media")
+        val directory = File(devotionalDirectory(context), "Church_Media")
         if (!directory.exists()) directory.mkdirs()
         val oldIndex = runCatching { JSONArray(File(directory, "index.json").readText()) }.getOrDefault(JSONArray())
         val oldEntries = linkedMapOf<String, JSONObject>()
