@@ -320,17 +320,19 @@ fun NativePublicHomepage(
                 }
                 item {
                     Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("OUR VISION & MISSION", color = Color(0xFF667085), fontWeight = FontWeight.Bold, letterSpacing = 2.sp)
-                            Text("Vision", color = DioceseNavy, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                            Text(content["vision"].asText().ifBlank { "To be spiritually vibrant and one of the largest Churches in Nigeria." }, color = CardText)
-                            Text("Mission", color = DioceseNavy, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                            val missionItems = listOf("mission_1", "mission_2", "mission_3").map { content[it].asText() }.filter(String::isNotBlank)
-                            (if (missionItems.isEmpty()) listOf("To consistently win more souls for Christ.", "To develop spiritually fulfilled members.", "To remain very active in serving humanity.") else missionItems)
-                                .forEach { Text("•  $it", color = CardText) }
-                            Button(onClick = { openPage("/#about") }, colors = ButtonDefaults.buttonColors(containerColor = DioceseGold)) {
-                                Text("Learn More About Our Diocese →", color = DioceseNavy)
-                            }
+                        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("MISSION MAP", color = DioceseNavy, fontSize = 25.sp, fontWeight = FontWeight.ExtraBold)
+                            Text("5–10 Year Church Planting Strategic Map", color = DioceseNavy, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                            Text("Explore the Diocese's church-planting axes, strategic locations, and opportunities to reach more communities.", color = CardText)
+                            AsyncImage(model = imageUrl("uploads/mission-map.png"),
+                                contentDescription = "Delta South Diocese 5–10 Year Church Planting Strategic Map",
+                                modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp, max = 520.dp)
+                                    .clip(RoundedCornerShape(12.dp)).clickable { openPage("/static/uploads/mission-map.png") },
+                                contentScale = ContentScale.Fit)
+                            Text("11 Church Planting Axes · 70+ Strategic Locations · 1 Mission", color = DioceseNavy, fontWeight = FontWeight.Bold)
+                            Text("Rolling target: five new churches per year — 25 in five years and 50 in ten years.", color = CardText)
+                            Button(onClick = { openPage("/static/uploads/mission-map.png") }, modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(containerColor = DioceseNavy)) { Text("View Full Mission Map ↗") }
                         }
                     }
                 }
