@@ -36,11 +36,11 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Render the app immediately. Large offline-library migrations must never run
+        // on Android's main thread, or the launch screen can remain stuck.
         Backend.initialize(applicationContext)
-        OfflineModuleManager.removeLegacyBibleFiles(applicationContext)
-        // Keep existing downloads and move them into one permanent folder per library card.
-        // This migration runs on-device and requires no internet connection.
-        runCatching { OfflineModuleManager.migrateToCardFolders(applicationContext) }
+        setContent { MaterialTheme { NativeDioceseApp() } }
+
         android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
             object : android.webkit.ServiceWorkerClient() {
                 override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
@@ -59,8 +59,12 @@ class MainActivity : ComponentActivity() {
                 }
             }
         )
-        OfflineModuleManager.scheduleAutomaticUpdates(applicationContext)
-        setContent { MaterialTheme { NativeDioceseApp() } }
+        // Clean legacy files and migrate existing downloads after first render, on IO.
+        lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { OfflineModuleManager.removeLegacyBibleFiles(applicationContext) }
+            runCatching { OfflineModuleManager.migrateToCardFolders(applicationContext) }
+            runCatching { OfflineModuleManager.scheduleAutomaticUpdates(applicationContext) }
+        }
     }
 }
 
