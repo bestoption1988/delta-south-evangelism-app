@@ -1717,7 +1717,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     }, modifier = Modifier.fillMaxWidth()) { Text("Retry homepage") }
                     OutlinedButton(onClick = {
                         pageError = false
-                        val localHtml = OfflineDevotionalPage.render(appContext, "/devotional-centre")
+                        val localHtml = OfflineDevotionalPage.render(context, "/devotional-centre")
                         webView?.clearHistory()
                         webView?.loadDataWithBaseURL("https://offline.mcn-app/", localHtml, "text/html", "UTF-8", null)
                     }, modifier = Modifier.fillMaxWidth()) { Text("Open downloaded devotional libraries offline") }
