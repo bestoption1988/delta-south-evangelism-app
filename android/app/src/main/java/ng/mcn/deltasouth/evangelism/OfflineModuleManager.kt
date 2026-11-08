@@ -13,6 +13,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import okhttp3.Request
+import android.database.sqlite.SQLiteDatabase
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -197,17 +198,18 @@ object OfflineModuleManager {
             failed++
         }
         report("Lectionary saved")
-        // The app's official Bible reader uses the public-domain World English Bible (WEB).
-        // Save all 1,189 chapters so the same reader can work without a network connection.
+        // Save the user's uploaded MyBible modules into the phone's Bible library.
         try {
-            onProgress("Downloading World English Bible chapters…", completedSteps * 100 / totalSteps)
-            val savedChapters = downloadWebBible(context)
-            if (savedChapters > 0) downloaded++
-            else failed++
+            onProgress("Downloading uploaded Bible library modules…", completedSteps * 100 / totalSteps)
+            val savedBibleModules = downloadBibleModules(context) { stage, percent ->
+                onProgress(stage, ((completedSteps + percent / 100f) * 100 / totalSteps).toInt().coerceIn(0, 99))
+            }
+            if (savedBibleModules > 0) downloaded++
+            else unavailable++
         } catch (_: Exception) {
             failed++
         }
-        report("WEB Bible saved")
+        report("Uploaded Bible library saved")
         try {
             mediaDownloaded = downloadPublishedMedia(context, null) { stage, percent -> onProgress(stage, ((completedSteps + percent / 100f) * 100 / totalSteps).toInt().coerceIn(0, 99)) }
         } catch (_: Exception) {
@@ -355,132 +357,120 @@ object OfflineModuleManager {
         return true
     }
 
-    private fun webBibleChapterFileName(bookId: Int, chapter: Int): String = "${bookId}_${chapter}.json"
+    fun bibleModuleDirectory(context: Context): File =
+        File(context.filesDir, "bible_modules").apply { mkdirs() }
 
-    fun downloadWebBible(context: Context): Int {
-        val directory = File(context.filesDir, "offline_web_bible").apply { mkdirs() }
-        val baseUrl = BuildConfig.API_BASE_URL.trimEnd('/')
-        val client = Backend.client.newBuilder()
-            .connectTimeout(20, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .callTimeout(40, TimeUnit.SECONDS)
-            .build()
-        val prefs = context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-        prefs.edit().putInt("last_web_bible_chapter_count", 0).putInt("last_web_bible_missing_count", 0).apply()
-
-        val booksRequest = Request.Builder()
-            .url("$baseUrl/devotional-centre/holy-bible/books")
-            .header("Accept", "application/json")
-            .get()
-            .build()
-        val booksJson = client.newCall(booksRequest).execute().use { response ->
-            val body = response.body?.string().orEmpty()
-            if (!response.isSuccessful) {
-                val detail = runCatching { JSONObject(body).optString("error") }.getOrDefault("")
-                throw IllegalStateException(detail.ifBlank { "The uploaded WEB Bible database is not installed on the server. Upload the WEB bibles.zip package in Devotional Centre administration first." })
-            }
-            JSONObject(body)
+    fun downloadBibleModules(context: Context, onProgress: (String, Int) -> Unit = { _, _ -> }): Int {
+        Backend.initialize(context.applicationContext)
+        val listRequest = Request.Builder()
+            .url(BuildConfig.API_BASE_URL + "api/offline/bible-modules")
+            .get().build()
+        val modulesJson = Backend.client.newCall(listRequest).execute().use { response ->
+            if (!response.isSuccessful) throw IllegalStateException("Uploaded Bible library HTTP " + response.code)
+            JSONObject(response.body?.string() ?: "{}")
         }
-        val books = booksJson.optJSONArray("books")
-            ?: throw IllegalStateException("The installed WEB Bible returned no book list.")
-        if (books.length() != 66) {
-            throw IllegalStateException("The installed WEB Bible is incomplete: expected 66 books but found ${books.length()}.")
-        }
-        val booksFile = File(directory, "books.json")
-        val booksTemporary = File(directory, "books.json.part")
-        booksTemporary.writeText(booksJson.toString())
-        if (booksFile.exists()) booksFile.delete()
-        if (!booksTemporary.renameTo(booksFile)) {
-            booksTemporary.copyTo(booksFile, overwrite = true)
-            booksTemporary.delete()
-        }
-
-        val tasks = mutableListOf<Pair<Int, Int>>()
-        for (index in 0 until books.length()) {
-            val book = books.getJSONObject(index)
-            val bookId = book.optInt("id")
-            val chapters = book.optInt("chapters")
-            if (bookId in 1..66 && chapters > 0) {
-                for (chapter in 1..chapters) tasks.add(Pair(bookId, chapter))
-            }
-        }
-        if (tasks.isEmpty()) throw IllegalStateException("The installed WEB Bible contains no chapters.")
-
-        val executor = Executors.newFixedThreadPool(3)
-        try {
-            val futures = tasks.map { (bookId, chapter) ->
-                executor.submit<Boolean> {
-                    val target = File(directory, webBibleChapterFileName(bookId, chapter))
-                    if (target.exists() && target.length() > 0L) return@submit true
-                    runCatching {
-                        val request = Request.Builder()
-                            .url("$baseUrl/devotional-centre/holy-bible/chapter?book=$bookId&chapter=$chapter")
-                            .header("Accept", "application/json")
-                            .get()
-                            .build()
-                        client.newCall(request).execute().use { response ->
-                            if (!response.isSuccessful) return@use false
-                            val body = response.body?.string().orEmpty()
-                            if (body.isBlank() || JSONObject(body).optJSONArray("verses")?.length() == 0) return@use false
-                            val temporary = File(directory, target.name + ".part")
-                            temporary.writeText(body)
-                            if (target.exists()) target.delete()
-                            if (!temporary.renameTo(target)) {
-                                temporary.copyTo(target, overwrite = true)
-                                temporary.delete()
-                            }
-                            true
-                        }
-                    }.getOrDefault(false)
+        val modules = modulesJson.optJSONArray("modules") ?: JSONArray()
+        val directory = bibleModuleDirectory(context)
+        val index = JSONArray()
+        var saved = 0
+        val available = (0 until modules.length()).mapNotNull { modules.optJSONObject(it) }
+            .filter { it.optString("id").isNotBlank() && it.optString("id") != "web" }
+        available.forEachIndexed { position, module ->
+            val code = module.optString("id").lowercase(Locale.ROOT)
+            val title = module.optString("title", code.uppercase(Locale.ROOT))
+            val filename = module.optString("filename").ifBlank { code + ".bbl.mybible" }
+            val safeFilename = filename.substringAfterLast('/').replace(Regex("[^A-Za-z0-9._-]"), "_")
+            val target = File(directory, safeFilename)
+            if (!target.isFile || target.length() < 1024L) {
+                val temporary = File(directory, safeFilename + ".part")
+                val request = Request.Builder()
+                    .url(BuildConfig.API_BASE_URL + "api/offline/bible-module/" + code)
+                    .get().build()
+                Backend.client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw IllegalStateException("Bible module " + code + " HTTP " + response.code)
+                    val body = response.body ?: throw IllegalStateException("Empty Bible module " + code)
+                    body.byteStream().use { input -> temporary.outputStream().use { output -> input.copyTo(output) } }
                 }
+                if (temporary.length() < 1024L || !temporary.inputStream().use { input ->
+                    val header = ByteArray(16); input.read(header); String(header, Charsets.US_ASCII).startsWith("SQLite format 3")
+                }) {
+                    temporary.delete()
+                    throw IllegalStateException("Invalid uploaded Bible module: " + code)
+                }
+                if (target.exists()) target.delete()
+                if (!temporary.renameTo(target)) temporary.copyTo(target, overwrite = true).also { temporary.delete() }
             }
-            val saved = futures.count { future -> runCatching { future.get() }.getOrDefault(false) }
-            val missing = tasks.size - saved
-            prefs.edit()
-                .putInt("last_web_bible_chapter_count", saved)
-                .putInt("last_web_bible_missing_count", missing)
-                .apply()
-            if (saved == 0) throw IllegalStateException("No WEB Bible chapters could be downloaded from the installed diocesan Bible database.")
-            return saved
-        } finally {
-            executor.shutdownNow()
+            index.put(JSONObject().put("id", code).put("title", title).put("file", safeFilename))
+            saved++
+            onProgress("Bible library: " + title, ((position + 1) * 100 / available.size.coerceAtLeast(1)))
         }
+        val indexFile = File(directory, "index.json")
+        val temporaryIndex = File(directory, "index.json.part")
+        temporaryIndex.writeText(index.toString())
+        if (indexFile.exists()) indexFile.delete()
+        if (!temporaryIndex.renameTo(indexFile)) temporaryIndex.copyTo(indexFile, overwrite = true).also { temporaryIndex.delete() }
+        context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+            .edit().putInt("last_uploaded_bible_module_count", saved).apply()
+        return saved
     }
 
-    fun cachedWebBibleBooks(context: Context, requestUrl: String): File? {
+    private fun localBibleModule(context: Context, code: String): File? {
+        if (code.isBlank() || code.equals("web", ignoreCase = true)) return null
+        val indexFile = File(bibleModuleDirectory(context), "index.json")
+        if (!indexFile.isFile) return null
+        val index = JSONArray(indexFile.readText())
+        for (i in 0 until index.length()) {
+            val item = index.optJSONObject(i) ?: continue
+            if (item.optString("id").equals(code, ignoreCase = true)) {
+                val file = File(bibleModuleDirectory(context), item.optString("file"))
+                return file.takeIf { it.isFile && it.length() > 1024L }
+            }
+        }
+        return null
+    }
+
+    fun cachedBibleModuleResponse(context: Context, requestUrl: String): ByteArray? {
         return runCatching {
             val uri = android.net.Uri.parse(requestUrl)
-            if (uri.path != "/devotional-centre/holy-bible/books") return null
-            File(File(context.filesDir, "offline_web_bible"), "books.json")
-                .takeIf { it.isFile && it.length() > 0L }
+            val path = uri.path.orEmpty()
+            if (path != "/devotional-centre/holy-bible/books" &&
+                path != "/devotional-centre/holy-bible/chapter") return null
+            val code = uri.getQueryParameter("translation")?.lowercase(Locale.ROOT).orEmpty()
+            val file = localBibleModule(context, code) ?: return null
+            val db = SQLiteDatabase.openDatabase(file.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+            try {
+                val result = if (path.endsWith("/books")) {
+                    val books = JSONArray()
+                    db.rawQuery("SELECT Book, MAX(Chapter) AS chapters FROM Bible GROUP BY Book ORDER BY Book", null).use { cursor ->
+                        while (cursor.moveToNext()) {
+                            books.put(JSONObject().put("id", cursor.getInt(0)).put("chapters", cursor.getInt(1)))
+                        }
+                    }
+                    JSONObject().put("translation", code).put("books", books).toString()
+                } else {
+                    val book = uri.getQueryParameter("book")?.toIntOrNull() ?: return null
+                    val chapter = uri.getQueryParameter("chapter")?.toIntOrNull() ?: return null
+                    val verses = JSONArray()
+                    db.rawQuery(
+                        "SELECT Verse, Scripture FROM Bible WHERE Book=? AND Chapter=? ORDER BY Verse",
+                        arrayOf(book.toString(), chapter.toString())
+                    ).use { cursor ->
+                        while (cursor.moveToNext()) {
+                            val scripture = cursor.getString(1).orEmpty()
+                                .replace(Regex("<RF>.*?<Rf>", RegexOption.IGNORE_CASE), "")
+                                .replace(Regex("<[^>]*>"), "")
+                                .replace(Regex("\\s+"), " ").trim()
+                            verses.put(JSONObject().put("verse", cursor.getInt(0)).put("text", scripture))
+                        }
+                    }
+                    JSONObject().put("translation", code).put("book", book)
+                        .put("chapter", chapter).put("verses", verses).toString()
+                }
+                result.toByteArray(Charsets.UTF_8)
+            } finally {
+                db.close()
+            }
         }.getOrNull()
-    }
-
-    fun cachedWebBibleChapter(context: Context, requestUrl: String): File? {
-        return runCatching {
-            val uri = android.net.Uri.parse(requestUrl)
-            if (uri.path != "/devotional-centre/holy-bible/chapter") return null
-            val bookId = uri.getQueryParameter("book")?.toIntOrNull() ?: return null
-            val chapter = uri.getQueryParameter("chapter")?.toIntOrNull() ?: return null
-            if (bookId !in 1..66 || chapter < 1) return null
-            File(File(context.filesDir, "offline_web_bible"), webBibleChapterFileName(bookId, chapter))
-                .takeIf { it.isFile && it.length() > 0L }
-        }.getOrNull()
-    }
-
-    fun downloadCsbBible(context: Context): Boolean {
-        val request = Request.Builder().url(BuildConfig.API_BASE_URL + "api/offline/csb-bible").get().build()
-        val json = Backend.client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw IllegalStateException("CSB Bible HTTP " + response.code)
-            response.body?.string() ?: throw IllegalStateException("Empty CSB Bible response")
-        }
-        val signedUrl = JSONObject(json).optString("download_url")
-        if (signedUrl.isBlank()) throw IllegalStateException("The uploaded CSB Bible is not available.")
-        val target = File(devotionalDirectory(context), "csb_pew_bible.pdf")
-        if (!downloadSignedFile(Backend.client, signedUrl, target)) {
-            throw IllegalStateException("The CSB Bible download failed.")
-        }
-        return true
     }
 
     private fun mediaExtension(path: String, type: String): String {
