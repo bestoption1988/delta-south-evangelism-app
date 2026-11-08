@@ -1207,3 +1207,28 @@ html.mcn-android-app .daily-preview-audio-label {
 html.mcn-android-app .daily-preview-audio {
   display:block!important;width:100%!important;max-width:100%!important;min-height:46px!important;
 }
+
+
+/* Keep Android utility controls with the footer copyright, not at the screen edge. */
+html.mcn-android-app #mcnAppQuickActions {
+  position:relative!important;
+  inset:auto!important;
+  grid-column:1/-1!important;
+  justify-self:start!important;
+  display:flex!important;
+  margin:8px 0 0!important;
+  min-height:34px!important;
+}
+html.mcn-android-app #publicMemberCareButton {
+  position:relative!important;
+  inset:auto!important;
+  grid-column:1/-1!important;
+  justify-self:end!important;
+  display:flex!important;
+  margin:8px 0 0!important;
+  min-height:42px!important;
+}
+@media(max-width:700px) {
+  footer { grid-template-columns:1fr 1fr!important; }
+  html.mcn-android-app #publicMemberCareButton { margin-right:0!important; }
+}
