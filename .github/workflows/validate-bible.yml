@@ -12,8 +12,6 @@ on:
       - "templates/devotional_collection.html"
       - "templates/devotional_item.html"
       - "static/mcn-offline-sw.js"
-      - "templates/devotional_centre.html"
-      - "templates/devotional_admin.html"
       - "android/app/src/main/java/ng/mcn/deltasouth/evangelism/OfflineModuleManager.kt"
       - "android/app/src/main/java/ng/mcn/deltasouth/evangelism/MainActivity.kt"
       - ".github/workflows/validate-bible.yml"
@@ -42,40 +40,7 @@ jobs:
           assert 'window.mcnCacheEntireApp().catch' in home
           assert 'mcn-delta-south-shell-v9' in worker
           assert 'CACHE_MCN_APP' in worker and 'cacheEntireApp' in worker
-          assert r'/\.supabase\.(co|in)
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          app = Path("app.py").read_text(encoding="utf-8")
-          manager = Path("android/app/src/main/java/ng/mcn/deltasouth/evangelism/OfflineModuleManager.kt").read_text(encoding="utf-8")
-          activity = Path("android/app/src/main/java/ng/mcn/deltasouth/evangelism/MainActivity.kt").read_text(encoding="utf-8")
-          holy = Path("templates/devotional_holy_bible.html").read_text(encoding="utf-8")
-          assert '"web": ("web.bbl.mybible"' not in app
-          assert "_CSB_BIBLE_OBJECT_KEY" not in app
-          assert "api_offline_bible_modules" in app and "api_offline_bible_module" in app
-          assert "downloadBibleModules" in manager and "cachedBibleModuleResponse" in manager
-          assert "PublicOfflineLibrary" not in activity and "offline_web_bible" not in activity
-          assert "World English Bible" not in holy and "CSB" not in holy
-          print("Verified: no WEB or CSB PDF reader; uploaded MyBible modules are the only Bible source.")
-          PY
-      - name: Check Bible package modules and SQLite files
-        run: |
-          python - <<'PY'
-          import zipfile, sqlite3
-          archive = zipfile.ZipFile("bibles.zip") if __import__("os").path.exists("bibles.zip") else None
-          if archive is None:
-              print("Uploaded Bible ZIP is supplied at runtime, not committed to the repository.")
-          else:
-              modules = [n for n in archive.namelist() if n.endswith(".bbl.mybible")]
-              assert len(modules) == 17, f"Expected 17 modules, found {len(modules)}"
-              for name in modules:
-                  db = sqlite3.connect(":memory:")
-                  db.deserialize(archive.read(name))
-                  assert db.execute("SELECT COUNT(*) FROM Bible").fetchone()[0] > 0, name
-                  db.close()
-              print(f"Validated {len(modules)} Bible modules.")
-          PY
- in worker
+          assert 'supabase' in worker and '(co|in)' in worker
           print("Verified daily links and automatic offline caching for uploaded devotional pages and media.")
           PY
       - name: Verify only uploaded MyBible modules are enabled
@@ -97,8 +62,8 @@ jobs:
       - name: Check Bible package modules and SQLite files
         run: |
           python - <<'PY'
-          import zipfile, sqlite3
-          archive = zipfile.ZipFile("bibles.zip") if __import__("os").path.exists("bibles.zip") else None
+          import os, zipfile, sqlite3
+          archive = zipfile.ZipFile("bibles.zip") if os.path.exists("bibles.zip") else None
           if archive is None:
               print("Uploaded Bible ZIP is supplied at runtime, not committed to the repository.")
           else:
