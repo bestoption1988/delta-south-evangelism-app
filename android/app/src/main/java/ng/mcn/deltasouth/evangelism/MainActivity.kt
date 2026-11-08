@@ -1813,7 +1813,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     settings.userAgentString = settings.userAgentString + " MCNDeltaSouthAndroid"
                     settings.domStorageEnabled = true
                     settings.loadsImagesAutomatically = true
-                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    // Never allow target=_blank or window.open() to create a second browser window.
+                    // All diocesan pages and links must remain in this app's single WebView.
+                    settings.javaScriptCanOpenWindowsAutomatically = false
                     settings.setSupportMultipleWindows(false)
                     settings.mediaPlaybackRequiresUserGesture = false
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
@@ -1893,6 +1895,32 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             pageErrorDetails = "Connecting to the diocesan website…"
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
+                            // Keep every ordinary website link, form and popup navigation
+                            // inside this standalone app instead of handing it to Chrome.
+                            val keepNavigationInsideApp = """
+                                (function() {
+                                  document.querySelectorAll('a[target],form[target]').forEach(function(el) {
+                                    var target = (el.getAttribute('target') || '').toLowerCase();
+                                    if (target === '_blank' || target === '_new' || target === 'external') {
+                                      el.setAttribute('target','_self');
+                                    }
+                                  });
+                                  document.addEventListener('click',function(event) {
+                                    var link = event.target.closest('a[href]');
+                                    if (!link) return;
+                                    var href = link.getAttribute('href') || '';
+                                    if (/^https?:/i.test(href) && link.target && link.target.toLowerCase() !== '_self') {
+                                      event.preventDefault();
+                                      window.location.assign(link.href);
+                                    }
+                                  },true);
+                                  window.open = function(url) {
+                                    if (url) window.location.assign(url);
+                                    return window;
+                                  };
+                                })();
+                            """.trimIndent()
+                            view.evaluateJavascript(keepNavigationInsideApp, null)
                             // Keep the strategic Mission Map at the bottom of the standalone
                             // Android homepage, immediately before the footer, even when WebView
                             // serves an older cached homepage document.
