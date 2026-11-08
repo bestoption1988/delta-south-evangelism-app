@@ -1567,6 +1567,41 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(keepNavigationInsideApp, null)
+
+                            // Android standalone dashboard menu: replace the accumulated
+                            // experimental mobile-menu scripts with one predictable controller.
+                            val cleanStandaloneDashboardMenu = """
+                              (function(){
+                                var nav=document.getElementById('nav');
+                                var panel=document.getElementById('menuPanel');
+                                var toggle=document.getElementById('menuToggle');
+                                if(!nav||!panel||!toggle||window.__mcnCleanDashboardMenu)return;
+                                window.__mcnCleanDashboardMenu=true;
+                                document.querySelectorAll('#mobileNavToggle').forEach(function(n){n.remove();});
+                                var css=document.createElement('style');
+                                css.textContent=
+                                  '#nav{display:block!important;position:relative!important;overflow:visible!important;z-index:9999!important}'+
+                                  '#nav .nav-dropdown{display:block!important;position:relative!important;width:min(360px,calc(100vw - 40px))!important;overflow:visible!important}'+
+                                  '#nav #menuToggle{display:flex!important;visibility:visible!important;opacity:1!important;width:100%!important;min-height:52px!important;align-items:center!important;justify-content:space-between!important;touch-action:manipulation!important}'+
+                                  '#nav #menuPanel{display:none!important;position:absolute!important;top:calc(100% + 6px)!important;left:0!important;right:auto!important;width:100%!important;max-height:65vh!important;overflow:auto!important;z-index:10000!important;background:#fff!important;border:1px solid #d9e2dc!important;border-radius:10px!important;padding:8px!important;box-shadow:none!important}'+
+                                  '#nav #menuPanel.mcn-clean-open{display:flex!important;flex-direction:column!important}'+
+                                  '#nav #menuPanel button{display:block!important;width:100%!important;min-height:44px!important;flex:0 0 auto!important;text-align:left!important;white-space:normal!important;animation:none!important;transition:none!important}'+
+                                  '#nav #menuPanel button[hidden]{display:none!important}';
+                                document.head.appendChild(css);
+                                function closeMenu(){panel.classList.remove('mcn-clean-open');toggle.setAttribute('aria-expanded','false');}
+                                toggle.addEventListener('click',function(ev){
+                                  ev.preventDefault();ev.stopImmediatePropagation();
+                                  var open=!panel.classList.contains('mcn-clean-open');
+                                  panel.classList.toggle('mcn-clean-open',open);
+                                  toggle.setAttribute('aria-expanded',String(open));
+                                },true);
+                                panel.addEventListener('click',function(ev){if(ev.target.closest('button'))closeMenu();});
+                                document.addEventListener('click',function(ev){if(!nav.contains(ev.target))closeMenu();});
+                                window.addEventListener('resize',closeMenu);
+                              })();
+                            """.trimIndent()
+                            view.evaluateJavascript(cleanStandaloneDashboardMenu, null)
+
                             // Keep the strategic Mission Map at the bottom of the standalone
                             // Android homepage, immediately before the footer, even when WebView
                             // serves an older cached homepage document.
