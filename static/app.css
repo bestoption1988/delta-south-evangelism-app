@@ -3124,3 +3124,17 @@ html,body{
   }
 }
 /* END MCN DESKTOP NAVIGATION VISIBILITY FIX */
+
+
+/* Dashboard menu overlay: detached to body to avoid Android WebView clipping. */
+#nav.mcn-dashboard-nav{display:block!important;position:relative!important;z-index:12000!important;overflow:visible!important;padding:10px 16px!important;background:#fff!important;border-bottom:1px solid #e2e8e4!important}
+#nav .mcn-dashboard-nav{position:relative!important;display:block!important;width:min(360px,100%)!important;max-width:100%!important;overflow:visible!important}
+#nav .mcn-dashboard-toggle{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;width:100%!important;min-height:56px!important;padding:12px 16px!important;border:1px solid #dce5df!important;border-radius:14px!important;background:#fff!important;color:#14532d!important;font-size:19px!important;font-weight:800!important;box-shadow:0 3px 14px rgba(15,45,25,.08)!important;touch-action:manipulation!important}
+#nav .mcn-menu-icon{font-size:24px!important;line-height:1}
+#nav .mcn-dashboard-toggle #menuCurrent{flex:1!important;min-width:0!important;white-space:nowrap!important}
+body > #menuPanel.mcn-dashboard-panel{display:none!important;position:fixed!important;z-index:2147483647!important;box-sizing:border-box!important;flex-direction:column!important;overflow-x:hidden!important;overflow-y:auto!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;background:#fff!important;border:1px solid #dce5df!important;border-radius:15px!important;padding:9px!important;box-shadow:0 14px 36px rgba(15,45,25,.22)!important}
+body > #menuPanel.mcn-dashboard-panel.open{display:flex!important}
+body > #menuPanel.mcn-dashboard-panel button{display:block!important;flex:0 0 auto!important;width:100%!important;min-height:48px!important;height:auto!important;padding:13px 14px!important;margin:0!important;border:0!important;border-radius:9px!important;background:#fff!important;color:#526057!important;font-size:15px!important;font-weight:650!important;line-height:1.4!important;text-align:left!important;white-space:normal!important;overflow-wrap:anywhere!important}
+body > #menuPanel.mcn-dashboard-panel button.active{background:#ecfdf3!important;color:#14532d!important}
+body > #menuPanel.mcn-dashboard-panel button[hidden]{display:none!important}
+@media(max-width:700px){#nav.mcn-dashboard-nav{padding:9px 16px!important}}
