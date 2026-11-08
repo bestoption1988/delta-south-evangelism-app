@@ -68,13 +68,6 @@ private fun NativeDioceseApp() {
     var downloadMessage by remember { mutableStateOf("") }
     var downloadProgress by remember { mutableIntStateOf(0) }
     var downloadStage by remember { mutableStateOf("Waiting to download…") }
-    var downloadedModules by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_downloaded_count", 0)) }
-    var mediaDownloadedCount by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_media_downloaded_count", 0)) }
-    var offlineMediaRows by remember { mutableStateOf(emptyList<Map<String, String>>()) }
-    var devotionalResourceCount by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_resources_count", 0)) }
-    var devotionalAudioCount by remember { mutableIntStateOf(appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_audio_count", 0)) }
-    var offlineDevotionalRows by remember { mutableStateOf(emptyList<Map<String, String>>()) }
-    var selectedDevotional by remember { mutableStateOf<Map<String, String>?>(null) }
     var pendingAttendanceCount by remember { mutableIntStateOf(OfflineAttendanceQueue.pendingCount(appContext)) }
     DisposableEffect(appContext) {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -230,58 +223,6 @@ private fun NativeDioceseApp() {
             }
         }
     }
-    LaunchedEffect(selected, devotionalResourceCount, devotionalAudioCount) {
-        if (selected == "Downloads") {
-            offlineMediaRows = withContext(Dispatchers.IO) {
-                runCatching {
-                    val file = File(OfflineModuleManager.offlineMediaDirectory(appContext), "index.json")
-                    val array = if (file.exists()) JSONArray(file.readText()) else JSONArray()
-                    (0 until array.length()).mapNotNull { index ->
-                        val item = array.optJSONObject(index) ?: return@mapNotNull null
-                        mapOf(
-                            "title" to item.optString("title"),
-                            "description" to item.optString("description"),
-                            "mime_type" to item.optString("mime_type"),
-                            "media_type" to item.optString("media_type"),
-                            "file" to item.optString("file")
-                        )
-                    }
-                }.getOrDefault(emptyList())
-            }
-            offlineDevotionalRows = withContext(Dispatchers.IO) {
-                runCatching {
-                    val directory = File(appContext.filesDir, "offline_devotional")
-                    val collections = listOf("english_hymns", "yoruba_hymns", "akokun", "bible_verses", "canticles", "communion_english", "communion_yoruba", "creeds")
-                    val output = mutableListOf<Map<String, String>>()
-                    collections.forEach { collection ->
-                        val file = File(directory, collection + ".json")
-                        if (file.exists()) {
-                            val array = JSONArray(file.readText())
-                            for (index in 0 until array.length()) {
-                                val item = array.optJSONObject(index) ?: continue
-                                val payload = item.optJSONObject("payload") ?: runCatching { JSONObject(item.optString("content_json", "{}")) }.getOrDefault(JSONObject())
-                                val body = buildString {
-                                    listOf("reference", "heading", "verse", "content", "firstline", "lyrics", "chorus").forEach { key ->
-                                        val value = payload.optString(key)
-                                        if (value.isNotBlank()) append(value).append("\n\n")
-                                    }
-                                    val stanzas = payload.optJSONArray("stanzas")
-                                    if (stanzas != null) for (s in 0 until stanzas.length()) append(stanzas.optString(s)).append("\n\n")
-                                }.trim()
-                                output.add(mapOf(
-                                    "title" to item.optString("title", "Church resource"),
-                                    "collection" to collection.replace('_', ' '),
-                                    "content" to body,
-                                    "audio_file" to item.optString("audio_file")
-                                ))
-                            }
-                        }
-                    }
-                    output
-                }.getOrDefault(emptyList())
-            }
-        }
-    }
     BackHandler(enabled = signedIn && selected != "Home") { selected = "Home"; message = "" }
     val role = (profile["role"] ?: "").toString()
     val financeRoles = setOf("Admin", "Finance Officer", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")
@@ -309,10 +250,6 @@ private fun NativeDioceseApp() {
                             }
                         }
                         result.onSuccess { summary ->
-                            downloadedModules = summary.downloaded
-                            mediaDownloadedCount = summary.mediaDownloaded
-                            devotionalResourceCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_resources_count", 0)
-                            devotionalAudioCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_audio_count", 0)
                             val offlinePrefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
                             val bibleModules = offlinePrefs.getInt("last_uploaded_bible_module_count", 0)
                             downloadMessage = "Offline package updated: ${summary.downloaded} data sets, ${summary.mediaDownloaded} media files, ${bibleModules} uploaded Bible modules, ${summary.unavailable} account-restricted items and ${summary.failed} failed modules."
@@ -402,7 +339,7 @@ private fun NativeDioceseApp() {
             if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
         }
     } else {        val tabs = buildList {
-            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Updates", "Member Care", "Directory", "Downloads"))
+            addAll(listOf("Home", "Profile", "Attendance", "Giving", "Feed", "Updates", "Member Care", "Directory"))
             if (role == "Member") add("ID Card")
             if (role in setOf("Admin", "Evangelism Minister", "Planting Officer", "Circuit Coordinator", "Local Church Evangelism Officer")) add("Attendance Register")
             if (role in setOf("Admin", "Bishop / Diocesan Executive", "Evangelism Minister", "Planting Officer", "Diocesan Secretary", "Circuit Coordinator", "Local Church Evangelism Officer", "Auditor")) add("Members")
@@ -431,170 +368,6 @@ private fun NativeDioceseApp() {
                             .onSuccess { dashboard = it }.onFailure { message = it.message ?: "Dashboard could not load." }
                     }
                     DashboardCards(dashboard)
-                }
-                "Downloads" -> {
-                    Text("Offline Download Centre", style = MaterialTheme.typography.titleLarge)
-                    Text("Download the information your account is permitted to access. Saved API data is encrypted on this phone and remains available when you are offline.")
-                    Spacer(Modifier.height(8.dp))
-                    Text("Downloaded data sets: $downloadedModules")
-                    Text("Offline media files: $mediaDownloadedCount")
-                    Text("Attendance records waiting to sync: $pendingAttendanceCount")
-                    Text(if (online) "Internet connection available" else "Offline — saved information remains available")
-                    Button(
-                        enabled = online && !downloadBusy,
-                        onClick = {
-                            downloadBusy = true
-                            downloadMessage = "Downloading available modules…"
-                            scope.launch {
-                                val result = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAll(appContext) }
-                                downloadedModules = result.downloaded
-                                mediaDownloadedCount = result.mediaDownloaded
-                                devotionalResourceCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_resources_count", 0)
-                                offlineMediaRows = withContext(Dispatchers.IO) {
-                                    runCatching {
-                                        val file = File(OfflineModuleManager.offlineMediaDirectory(appContext), "index.json")
-                                        val array = if (file.exists()) JSONArray(file.readText()) else JSONArray()
-                                        (0 until array.length()).mapNotNull { index ->
-                                            val item = array.optJSONObject(index) ?: return@mapNotNull null
-                                            mapOf("title" to item.optString("title"), "description" to item.optString("description"), "mime_type" to item.optString("mime_type"), "media_type" to item.optString("media_type"), "file" to item.optString("file"))
-                                        }
-                                    }.getOrDefault(emptyList())
-                                }
-                                downloadMessage = "Completed: ${result.downloaded} data sets, ${result.mediaDownloaded} media files downloaded, ${result.unavailable} unavailable to this account, ${result.failed} failed."
-                                downloadBusy = false
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (downloadBusy) "Downloading…" else "Download All Modules") }
-                    Text("Devotional & Worship Centre", style = MaterialTheme.typography.titleMedium)
-                    Text("Saved devotional readings: $devotionalResourceCount")
-                    Text("Hymn audio records checked: $devotionalAudioCount")
-                    Button(
-                        enabled = online && !downloadBusy,
-                        onClick = {
-                            downloadBusy = true
-                            downloadMessage = "Downloading hymns, Scripture, canticles, Communion and creeds…"
-                            scope.launch {
-                                val count = withContext(Dispatchers.IO) {
-                                    val saved = OfflineModuleManager.downloadAllDevotionalResources(appContext)
-                                    OfflineModuleManager.downloadLectionary(appContext)
-                                    saved
-                                }
-                                devotionalResourceCount = count
-                                downloadMessage = "$count devotional resources and the 2027 lectionary saved for offline use."
-                                downloadBusy = false
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Download Hymns, Scripture & Worship Books") }
-                    Button(
-                        enabled = online && !downloadBusy,
-                        onClick = {
-                            downloadBusy = true
-                            downloadMessage = "Downloading hymn recordings…"
-                            scope.launch {
-                                val count = withContext(Dispatchers.IO) { OfflineModuleManager.downloadHymnAudio(appContext) }
-                                devotionalAudioCount = count
-                                downloadMessage = "Hymn audio download finished. $count hymn records checked."
-                                downloadBusy = false
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Download Hymn Audio") }
-                    Text("The complete Bible is available in the Offline Worship & Scripture Library. Open the public homepage and choose the offline library to read saved chapters.")
-                    Text("Download published media by module", style = MaterialTheme.typography.titleMedium)
-                    val downloadMediaModule: (String, String) -> Unit = { mediaType, label ->
-                        downloadBusy = true
-                        downloadMessage = "Downloading $label for offline use…"
-                        scope.launch {
-                            val saved = withContext(Dispatchers.IO) {
-                                OfflineModuleManager.downloadMediaCategory(appContext, mediaType)
-                            }
-                            offlineMediaRows = withContext(Dispatchers.IO) {
-                                runCatching {
-                                    val file = File(OfflineModuleManager.offlineMediaDirectory(appContext), "index.json")
-                                    val array = if (file.exists()) JSONArray(file.readText()) else JSONArray()
-                                    (0 until array.length()).mapNotNull { index ->
-                                        val item = array.optJSONObject(index) ?: return@mapNotNull null
-                                        mapOf("title" to item.optString("title"), "description" to item.optString("description"), "mime_type" to item.optString("mime_type"), "media_type" to item.optString("media_type"), "file" to item.optString("file"))
-                                    }
-                                }.getOrDefault(emptyList())
-                            }
-                            mediaDownloadedCount = offlineMediaRows.size
-                            downloadMessage = if (saved > 0) "$saved $label item(s) saved for offline use." else "No new published $label files could be downloaded. Check that the files are published in the Church Media Library."
-                            downloadBusy = false
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(
-                            enabled = online && !downloadBusy,
-                            onClick = { downloadMediaModule("audio", "audio") },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Audio") }
-                        Button(
-                            enabled = online && !downloadBusy,
-                            onClick = { downloadMediaModule("video", "video") },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Video") }
-                        Button(
-                            enabled = online && !downloadBusy,
-                            onClick = { downloadMediaModule("document", "document") },
-                            modifier = Modifier.weight(1f)
-                        ) { Text("Documents") }
-                    }
-                    Button(
-                        enabled = online && pendingAttendanceCount > 0 && !downloadBusy,
-                        onClick = {
-                            downloadBusy = true
-                            scope.launch {
-                                val synced = withContext(Dispatchers.IO) { OfflineAttendanceQueue.syncPending(appContext) }
-                                pendingAttendanceCount = OfflineAttendanceQueue.pendingCount(appContext)
-                                downloadMessage = "$synced queued attendance records synchronized. $pendingAttendanceCount remain pending."
-                                downloadBusy = false
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Synchronize Queued Attendance") }
-                    Text("Automatic updates run every 6 hours whenever Wi-Fi or mobile data is available. You can also download updates now.")
-                    if (downloadMessage.isNotBlank()) Text(downloadMessage, style = MaterialTheme.typography.bodySmall)
-                    Text("Saved media — available without internet", style = MaterialTheme.typography.titleMedium)
-                    if (offlineMediaRows.isEmpty()) Text("No published media has been downloaded yet.")
-                    offlineMediaRows.forEach { item ->
-                        ElevatedCard(Modifier.fillMaxWidth()) {
-                            Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(item["title"] ?: "Church media", style = MaterialTheme.typography.bodyLarge)
-                                    Text(item["media_type"] ?: "Media", style = MaterialTheme.typography.bodySmall)
-                                }
-                                Button(onClick = {
-                                    runCatching {
-                                        val file = File(OfflineModuleManager.offlineMediaDirectory(appContext), item["file"] ?: "")
-                                        require(file.exists()) { "This media file is not saved on this phone." }
-                                        val uri = FileProvider.getUriForFile(appContext, appContext.packageName + ".fileprovider", file)
-                                        val intent = Intent(Intent.ACTION_VIEW).setDataAndType(uri, item["mime_type"] ?: "*/*")
-                                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        appContext.startActivity(intent)
-                                    }.onFailure { downloadMessage = it.message ?: "No compatible viewer is installed." }
-                                }) { Text("Open") }
-                            }
-                        }
-                    }
-                    Text("Saved devotional readings — available without internet", style = MaterialTheme.typography.titleMedium)
-                    if (offlineDevotionalRows.isEmpty()) Text("Download the devotional collections above to read hymns, Scripture and worship materials offline.")
-                    LazyColumn(modifier = Modifier.heightIn(max = 460.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(offlineDevotionalRows.take(80)) { item ->
-                            ElevatedCard(Modifier.fillMaxWidth()) {
-                                Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Column(Modifier.weight(1f)) {
-                                        Text(item["title"] ?: "Church resource", style = MaterialTheme.typography.bodyLarge)
-                                        Text(item["collection"] ?: "Devotional", style = MaterialTheme.typography.bodySmall)
-                                    }
-                                    TextButton(onClick = { selectedDevotional = item }) { Text("Read") }
-                                }
-                            }
-                        }
-                    }
-                    Text("For security, financial actions, approvals, messages and other changes still need a live connection. Offline mode does not invent or replay transactions.")
                 }
                 "Profile" -> {
                     Text("My Membership Profile", style = MaterialTheme.typography.titleLarge)
