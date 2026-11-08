@@ -7,6 +7,9 @@ on:
       - postgres-migration-integration
     paths:
       - 'android/**'
+      - 'app.py'
+      - 'templates/**'
+      - 'static/mcn-offline-sw.js'
       - '.github/workflows/android-play-store-aab.yml'
 
 permissions:
