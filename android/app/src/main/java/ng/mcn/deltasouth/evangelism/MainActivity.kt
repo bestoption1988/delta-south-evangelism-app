@@ -328,6 +328,7 @@ private fun NativeDioceseApp() {
                     }
                 }
             },
+            onOpenOfflineLibrary = { showOfflineLibrary = true },
             onBackPressed = { }
         )
     } else if (!signedIn && showOfflineLibrary) {
@@ -1795,7 +1796,7 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
 }
 
 @Composable
-private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onOpenOfflineLibrary: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
     var pageErrorDetails by remember { mutableStateOf("The connection to the diocesan website failed.") }
@@ -1835,6 +1836,14 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             val uri = request.url
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
                                 onOfflineDownload()
+                                return true
+                            }
+                            if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
+                                onOpenOfflineLibrary()
+                                return true
+                            }
+                            if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
+                                onOpenOfflineLibrary()
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "staff-login") {
@@ -2015,8 +2024,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                       window.setTimeout(function() {
                                         if (href === '#' || href === '') {
                                           if (link.id === 'saveOfflineApp') {
-                                            if (window.mcnCacheEntireApp) window.mcnCacheEntireApp();
-                                            window.location.href = 'mcn-app://offline';
+                                            Promise.resolve(window.mcnCacheEntireApp ? window.mcnCacheEntireApp() : null).finally(function() { window.location.href = 'mcn-app://offline'; });
                                           }
                                           return;
                                         }
@@ -2029,7 +2037,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                           return;
                                         }
                                         if (href.indexOf('mcn-app://') === 0) {
-                                          window.location.href = href;
+                                          if (href === 'mcn-app://offline') {
+                                            Promise.resolve(window.mcnCacheEntireApp ? window.mcnCacheEntireApp() : null).finally(function() { window.location.href = href; });
+                                          } else {
+                                            window.location.href = href;
+                                          }
                                           return;
                                         }
                                         window.location.assign(new URL(href, document.baseURI).href);
@@ -2097,12 +2109,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         webView?.clearHistory()
                         webView?.reload()
                     }, modifier = Modifier.fillMaxWidth()) { Text("Retry homepage") }
-                    OutlinedButton(onClick = {
-                        runCatching {
-                            val browserIntent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(BuildConfig.API_BASE_URL))
-                            context.startActivity(browserIntent)
-                        }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Open website in browser") }
+                    OutlinedButton(onClick = onOpenOfflineLibrary, modifier = Modifier.fillMaxWidth()) { Text("Open downloaded offline library") }
                 }
             }
         }
