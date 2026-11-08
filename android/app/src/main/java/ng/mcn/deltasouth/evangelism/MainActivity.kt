@@ -1630,19 +1630,33 @@ private fun loadOfflineMediaRows(context: Context): List<Map<String, String>> = 
     }
 }.getOrDefault(emptyList())
 
+private val OFFLINE_WEB_BIBLE_BOOK_NAMES = listOf(
+    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth",
+    "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
+    "Nehemiah", "Esther", "Job", "Psalms", "Proverbs", "Ecclesiastes", "Song of Solomon",
+    "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
+    "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah",
+    "Malachi", "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians",
+    "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians",
+    "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", "James",
+    "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation"
+)
+
 private fun loadOfflineBibleBooks(context: Context): List<Map<String, String>> {
     return runCatching {
         val file = File(File(context.filesDir, "offline_web_bible"), "books.json")
         if (!file.isFile || file.length() <= 0L) return emptyList()
         val array = JSONObject(file.readText()).optJSONArray("books") ?: JSONArray()
-        (0 until array.length()).mapNotNull { index ->
+        val books = (0 until array.length()).mapNotNull { index ->
             val book = array.optJSONObject(index) ?: return@mapNotNull null
             val id = book.optInt("id")
             val name = book.optString("name").ifBlank { book.optString("title") }
+                .ifBlank { OFFLINE_WEB_BIBLE_BOOK_NAMES.getOrNull(id - 1).orEmpty() }
             val chapters = book.optInt("chapters")
             if (id !in 1..66 || name.isBlank() || chapters < 1) null
             else mapOf("id" to id.toString(), "name" to name, "chapters" to chapters.toString())
-        }
+        }.sortedBy { it["id"]?.toIntOrNull() ?: Int.MAX_VALUE }
+        if (books.size != 66) emptyList() else books
     }.getOrDefault(emptyList())
 }
 
