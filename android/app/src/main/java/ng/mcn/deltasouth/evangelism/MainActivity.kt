@@ -1397,6 +1397,14 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                             val uri = request.url
+                            // The online server may return 404 for its homepage while the
+                            // installed app still has usable local libraries. Keep navigation
+                            // inside the app and show the on-device library instead of a raw 404.
+                            if (uri.path.isNullOrBlank() || uri.path == "/") {
+                                val html = OfflineDevotionalPage.render(view.context, "/devotional-centre")
+                                view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
+                                return true
+                            }
                             if (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library") {
                                 val html = OfflineDevotionalPage.render(view.context, uri.path.orEmpty(), uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
                                 view.loadDataWithBaseURL(BuildConfig.API_BASE_URL, html, "text/html", "UTF-8", null)
@@ -1437,6 +1445,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         @Suppress("DEPRECATION")
                         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                             val uri = android.net.Uri.parse(url)
+                            if (uri.path.isNullOrBlank() || uri.path == "/") {
+                                val html = OfflineDevotionalPage.render(view.context, "/devotional-centre")
+                                view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
+                                return true
+                            }
                             if (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library") {
                                 val html = OfflineDevotionalPage.render(view.context, uri.path.orEmpty(), uri.getQueryParameter("q").orEmpty())
                                 view.loadDataWithBaseURL(BuildConfig.API_BASE_URL, html, "text/html", "UTF-8", null)
@@ -1635,6 +1648,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             }
                         }
                         override fun onReceivedHttpError(view: WebView, request: android.webkit.WebResourceRequest, response: android.webkit.WebResourceResponse) {
+                            if (request.isForMainFrame && response.statusCode == 404 &&
+                                (request.url.path.isNullOrBlank() || request.url.path == "/")) {
+                                pageLoading = false
+                                pageError = false
+                                val localLibrary = OfflineDevotionalPage.render(view.context, "/devotional-centre")
+                                view.post {
+                                    view.loadDataWithBaseURL("https://offline.mcn-app/", localLibrary, "text/html", "UTF-8", null)
+                                }
+                                return
+                            }
                             if (request.isForMainFrame && response.statusCode >= 400) {
                                 pageLoading = false
                                 pageErrorDetails = "The website returned HTTP ${response.statusCode}."
