@@ -2,6 +2,9 @@ name: Build Delta South Evangelism Android APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - postgres-migration-integration
   pull_request:
     paths:
       - "android/**"
