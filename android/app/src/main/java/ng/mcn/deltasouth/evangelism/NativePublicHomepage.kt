@@ -212,7 +212,7 @@ fun NativePublicHomepage(
                                         val audio = hymn["audio_url"].asText()
                                         if (audio.isNotBlank()) Button(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(audio))) } }, modifier = Modifier.fillMaxWidth()) { Text("▶ Play Hymn Tune") }
                                     }
-                                    TextButton(onClick = { openPage("/devotional-centre") }) { Text("View All Scripture & Hymns") }
+                                    TextButton(onClick = { onOpenOfflineLibrary() }) { Text("View All Scripture & Hymns") }
                                 }
                             }
                         )
