@@ -127,10 +127,19 @@
     {% elif day_hymn.get("meter") %}
       <p class="mcn-daily-tune"><b>Meter:</b> {{ day_hymn.get("meter") }}</p>
     {% endif %}
-    {% if day_hymn.get("audio_url") %}
+    {% set hymn_tunes = day_hymn.get("other_tunes") or [] %}
+    {% if day_hymn.get("audio_url") or hymn_tunes %}
       <div class="mcn-daily-audio-wrap">
-        <span class="mcn-audio-label">▶ Play Hymn Tune{% if day_hymn.get("audio_tune_name") %}: {{ day_hymn.get("audio_tune_name") }}{% endif %}</span>
-        <audio class="mcn-daily-audio" aria-label="Play Methodist hymn tune" controls preload="none" playsinline src="{{ day_hymn.get('audio_url') }}">Your browser does not support audio playback.</audio>
+        {% if day_hymn.get("audio_url") %}
+          <span class="mcn-audio-label">▶ Main Hymn Tune{% if day_hymn.get("audio_tune_name") %}: {{ day_hymn.get("audio_tune_name") }}{% endif %}</span>
+          <audio class="mcn-daily-audio" aria-label="Play main Methodist hymn tune" controls preload="none" playsinline src="{{ day_hymn.get('audio_url') }}">Your browser does not support audio playback.</audio>
+        {% endif %}
+        {% for tune in hymn_tunes %}
+          {% if tune.get("audio_url") %}
+            <span class="mcn-audio-label mcn-alternate-tune-label">▶ {{ tune.get("musicTitle") or tune.get("tuneName") or tune.get("musicName") or tune.get("tune") or ("Alternative tune " ~ loop.index) }}</span>
+            <audio class="mcn-daily-audio" aria-label="Play alternative Methodist hymn tune" controls preload="none" playsinline src="{{ tune.get('audio_url') }}">Your browser does not support audio playback.</audio>
+          {% endif %}
+        {% endfor %}
       </div>
     {% else %}
       <p class="mcn-daily-tune mcn-audio-unavailable">Hymn tune recording is not currently available.</p>
