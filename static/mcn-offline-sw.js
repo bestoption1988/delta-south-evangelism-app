@@ -128,7 +128,7 @@ self.addEventListener("fetch", event => {
   const url = new URL(request.url);
 
   if (url.origin !== self.location.origin) {
-    if (url.protocol === "https:" && (/\.supabase\.co$/i.test(url.hostname))) {
+    if (url.protocol === "https:" && (/\.supabase\\.(co|in)$/i.test(url.hostname))) {
       event.respondWith((async () => {
         const cache = await caches.open(ASSET_CACHE);
         const cached = await cache.match(request);
