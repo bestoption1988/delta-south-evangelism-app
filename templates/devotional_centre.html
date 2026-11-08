@@ -22,7 +22,7 @@ footer{text-align:center;color:#7c8799;font-size:12px;margin-top:35px}
 {% set db_key = {'english-hymns':'english_hymns','yoruba-hymns':'yoruba_hymns','akokun':'akokun','bible-verses':'bible_verses','canticles':'canticles','communion':'communion_english','yoruba-communion':'communion_yoruba','creeds':'creeds'}.get(slug,'') %}
 <a class="tile" href="{{ url_for('devotional_centre_collection', collection_slug=slug) }}"><div class="icon">{{ icon }}</div><h3>{{ title }}</h3><p>{{ description }}</p><span class="count">{{ counts.get(db_key, 0) }} resources</span></a>
 {% endfor %}
-<a class="tile" href="/devotional-centre/holy-bible"><div class="icon">📖</div><h3>Complete Holy Bible</h3><p>Read all 66 books and chapters from the installed offline WEB Bible database. No external Bible API is required.</p><span class="count">WEB · Offline · 66 books</span></a>
+<a class="tile" href="/devotional-centre/holy-bible"><div class="icon">📖</div><h3>Uploaded Bible Library</h3><p>Read the Bible modules supplied in the diocesan bibles.zip package. Downloaded modules remain available offline in this library.</p><span class="count">Diocesan Bible package · Offline</span></a>
 <a class="tile" href="/devotional-centre/lectionary"><div class="icon">📅</div><h3>Yearly Lectionary</h3><p>Follow the appointed readings for Sundays, feast days and special services in 2027.</p><span class="count">YEAR B · 2027 / YEAR C · 2028</span></a>
 </div>
 <a class="admin" href="/admin/devotional-centre">Administrator: Import & Manage Library</a>
