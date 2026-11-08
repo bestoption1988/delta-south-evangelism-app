@@ -15,7 +15,7 @@ button{background:#123767;color:#fff;border:0;font-weight:800;cursor:pointer}.na
 .admin{margin-top:18px;background:#fff;border:1px solid #d9e2ee;border-radius:14px;padding:17px}.admin h2{margin:0 0 6px;font-size:19px}.admin p{margin:4px 0 12px;color:#5b6678}.progress{height:9px;background:#e8edf4;border-radius:20px;overflow:hidden;margin-top:10px}.progress span{display:block;height:100%;width:0;background:#0b8058;transition:width .2s}.success{color:#087443;font-weight:700}.errorText{color:#a11b1b;font-weight:700}
 @media(max-width:600px){.controls{grid-template-columns:1fr 1fr}.controls .go{grid-column:1/-1}.verse{font-size:17px}}
 </style></head><body>
-<header><div class="wrap"><a href="/devotional-centre">← Devotional & Worship Centre</a><h1>📖 Holy Bible Library</h1><div>Offline Bible translations · Downloaded into the diocesan app</div></div></header>
+<header><div class="wrap"><a href="/devotional-centre">← Devotional & Worship Centre</a><h1>📖 Holy Bible Library</h1><div>Uploaded diocesan Bible modules · Available offline</div></div></header>
 <main>
 {% if translations %}
 <section class="controls">
@@ -32,14 +32,14 @@ button{background:#123767;color:#fff;border:0;font-weight:800;cursor:pointer}.na
 {% if is_admin %}
 <section class="admin">
 <h2>Administrator: install Bible package</h2>
-<p>Select the original <strong>bibles.zip</strong> file. The app will import every recognised MyBible module in it, not just WEB. Upload is split into small chunks for mobile reliability.</p>
+<p>Select the original <strong>bibles.zip</strong> file. The app imports the recognised MyBible modules in your supplied package, excluding the WEB module. Upload is split into small chunks for mobile reliability.</p>
 <input id="bibleZip" type="file" accept=".zip,application/zip">
-<button id="uploadBibles" type="button" style="margin-top:10px">Install all Bible translations</button>
+<button id="uploadBibles" type="button" style="margin-top:10px">Install uploaded Bible modules</button>
 <div class="progress"><span id="progressBar"></span></div>
 <div id="uploadStatus" class="note" aria-live="polite"></div>
 </section>
 {% endif %}
-<p class="note">Bible modules are read from the diocesan private Object Storage after installation. Some uploaded modules may contain only selected books (for example, a New Testament-only edition); the reader shows the books actually present in each module.</p>
+<p class="note">Only the Bible modules imported from the supplied bibles.zip package are listed here. Downloaded modules are saved on this phone and chapters open from local storage when offline.</p>
 </main>
 <script>
 const bookNames=["","Genesis","Exodus","Leviticus","Numbers","Deuteronomy","Joshua","Judges","Ruth","1 Samuel","2 Samuel","1 Kings","2 Kings","1 Chronicles","2 Chronicles","Ezra","Nehemiah","Esther","Job","Psalms","Proverbs","Ecclesiastes","Song of Solomon","Isaiah","Jeremiah","Lamentations","Ezekiel","Daniel","Hosea","Joel","Amos","Obadiah","Jonah","Micah","Nahum","Habakkuk","Zephaniah","Haggai","Zechariah","Malachi","Matthew","Mark","Luke","John","Acts","Romans","1 Corinthians","2 Corinthians","Galatians","Ephesians","Philippians","Colossians","1 Thessalonians","2 Thessalonians","1 Timothy","2 Timothy","Titus","Philemon","Hebrews","James","1 Peter","2 Peter","1 John","2 John","3 John","Jude","Revelation"];
