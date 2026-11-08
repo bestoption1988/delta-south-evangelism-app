@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         Backend.initialize(applicationContext)
+        OfflineModuleManager.removeLegacyBibleFiles(applicationContext)
         android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
             object : android.webkit.ServiceWorkerClient() {
                 override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
