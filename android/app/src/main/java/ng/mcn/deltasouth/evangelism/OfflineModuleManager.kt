@@ -236,6 +236,50 @@ object OfflineModuleManager {
     private fun devotionalDirectory(context: Context): File =
         File(context.filesDir, "offline_devotional").apply { mkdirs() }
 
+    /**
+     * Converts previously downloaded collection JSON into one local file per resource.
+     * This migration runs entirely on-device and also works with no internet connection.
+     */
+    fun migrateDevotionalResourcesToIndividualFiles(context: Context): Int {
+        val directory = devotionalDirectory(context)
+        var staged = 0
+        devotionalCollections.forEach { collection ->
+            val indexFile = File(directory, collection + ".json")
+            if (!indexFile.isFile) return@forEach
+            runCatching {
+                val items = JSONArray(indexFile.readText())
+                val folder = File(directory, collection).apply { mkdirs() }
+                for (i in 0 until items.length()) {
+                    val item = items.optJSONObject(i) ?: continue
+                    val id = item.optString("resource_id").ifBlank { collection + "_" + i }
+                    val safeId = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
+                    val target = File(folder, safeId + ".json")
+                    if (!target.isFile || target.length() == 0L) {
+                        val temporary = File(folder, safeId + ".json.part")
+                        temporary.writeText(item.toString())
+                        if (target.exists()) target.delete()
+                        if (!temporary.renameTo(target)) {
+                            temporary.copyTo(target, overwrite = true)
+                            temporary.delete()
+                        }
+                    }
+                    item.put("offline_file", collection + "/" + target.name)
+                    staged++
+                }
+                val temporaryIndex = File(directory, collection + ".json.part")
+                temporaryIndex.writeText(items.toString())
+                if (indexFile.exists()) indexFile.delete()
+                if (!temporaryIndex.renameTo(indexFile)) {
+                    temporaryIndex.copyTo(indexFile, overwrite = true)
+                    temporaryIndex.delete()
+                }
+            }
+        }
+        context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+            .edit().putInt("last_individual_devotional_files_count", staged).apply()
+        return staged
+    }
+
     fun downloadAllDevotionalResources(context: Context): Int {
         var total = 0
         val failures = mutableListOf<String>()
