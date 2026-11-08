@@ -654,16 +654,16 @@
     quickActions.id = "mcnAppQuickActions";
     quickActions.innerHTML = '<a href="mcn-app://offline" aria-label="Save offline">Offline</a><a href="mcn-app://staff-login" aria-label="Staff sign in">Staff</a>';
     document.body.appendChild(quickActions);
-    quickActions.querySelector('a[href="mcn-app://offline"]').addEventListener("click", event => { event.preventDefault(); window.location.href = "mcn-app://offline"; });
+    quickActions.querySelector('a[href="mcn-app://offline"]').addEventListener("click", event => { event.preventDefault(); Promise.resolve(window.mcnCacheEntireApp ? window.mcnCacheEntireApp() : null).finally(() => { window.location.href = "mcn-app://offline"; }); });
     quickActions.querySelector('a[href="mcn-app://staff-login"]').addEventListener("click", event => { event.preventDefault(); window.location.href = "mcn-app://staff-login"; });
     if (saveOffline) saveOffline.style.display = "none";
     if (staffSignIn) staffSignIn.style.display = "none";
   }
 
   if (saveOffline) {
-    saveOffline.addEventListener("click", event => {
+    saveOffline.addEventListener("click", async event => {
       event.preventDefault();
-      if (window.mcnCacheEntireApp) window.mcnCacheEntireApp();
+      if (window.mcnCacheEntireApp) await window.mcnCacheEntireApp();
       if (navigator.userAgent.indexOf("MCNDeltaSouthAndroid") !== -1) {
         window.location.href = "mcn-app://offline";
       } else {
@@ -1019,5 +1019,42 @@
 </script>
 <footer style="text-align:center;padding:24px 14px;font:14px Arial,sans-serif;background:#f4f6fa"><a href="/privacy-policy">Privacy Policy</a> · <a href="/account-deletion">Account and Data Deletion</a> · <a href="mailto:bestoption1988@gmail.com">Support</a></footer>
 <script src="{{ url_for('static', filename='daily-reading.js') }}?v=20261107-ticker-modal1" defer></script>
+
+<script>
+/* Install the public-page offline cache for the standalone Android WebView and PWA. */
+(function () {
+  if (!("serviceWorker" in navigator)) return;
+  var registrationPromise = navigator.serviceWorker.register("/mcn-offline-sw.js", {
+    scope: "/",
+    updateViaCache: "none"
+  }).then(function (registration) {
+    return navigator.serviceWorker.ready.then(function () { return registration; });
+  }).catch(function (error) {
+    console.warn("MCN offline page cache could not be installed:", error);
+    return null;
+  });
+
+  window.mcnCacheEntireApp = async function () {
+    var registration = await registrationPromise;
+    if (!registration) return { ok: false, pages: 0 };
+    var worker = navigator.serviceWorker.controller || registration.active || registration.waiting;
+    if (!worker) return { ok: false, pages: 0 };
+    return await new Promise(function (resolve) {
+      var channel = new MessageChannel();
+      var settled = false;
+      var finish = function (result) {
+        if (settled) return;
+        settled = true;
+        channel.port1.close();
+        resolve(result || { ok: false, pages: 0 });
+      };
+      channel.port1.onmessage = function (event) { finish(event.data); };
+      window.setTimeout(function () { finish({ ok: false, pages: 0, timeout: true }); }, 120000);
+      worker.postMessage({ type: "CACHE_MCN_APP" }, [channel.port2]);
+    });
+  };
+})();
+</script>
+
 </body>
 </html>
