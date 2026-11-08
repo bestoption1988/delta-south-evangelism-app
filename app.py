@@ -2784,11 +2784,60 @@ def _homepage_daily_reading():
             today = datetime.now().date()
         day_number = today.toordinal()
         verse = verses[day_number % len(verses)] if verses else {}
-        hymn = hymns[(day_number * 7) % len(hymns)] if hymns else {}
+        hymn = dict(hymns[(day_number * 7) % len(hymns)]) if hymns and isinstance(hymns[(day_number * 7) % len(hymns)], dict) else {}
+        # Attach the published Devotional Centre recording to the selected daily
+        # hymn. The JSON collection supplies the daily hymn text; the catalogue
+        # supplies its actual tune audio and signed Naijacloud media URL.
+        if hymn:
+            hymn_number = str(
+                hymn.get("number") or hymn.get("hymn_number")
+                or hymn.get("item_number") or ""
+            ).strip()
+            hymn_title = str(hymn.get("title") or "").strip()
+            try:
+                hymn_row = db().execute(
+                    """SELECT * FROM devotional_resources
+                       WHERE collection='english_hymns' AND published=1
+                         AND (
+                           (? <> '' AND item_number=?)
+                           OR (? <> '' AND LOWER(title)=LOWER(?))
+                         )
+                       ORDER BY CASE
+                         WHEN ? <> '' AND item_number=? THEN 0 ELSE 1
+                       END, updated_at DESC
+                       LIMIT 1""",
+                    (hymn_number, hymn_number, hymn_title, hymn_title,
+                     hymn_number, hymn_number),
+                ).fetchone()
+                if hymn_row:
+                    resource = dict(hymn_row)
+                    payload = json.loads(resource.get("content_json") or "{}")
+                    main_audio = resource.get("audio_path") or payload.get("musicFilePath") or ""
+                    hymn["audio_url"] = _dc_signed(main_audio)
+                    hymn["audio_tune_name"] = (
+                        payload.get("musicTitle") or payload.get("tuneName")
+                        or payload.get("musicName") or payload.get("tune")
+                        or "Main tune"
+                    )
+                    hymn["other_tunes"] = []
+                    for tune in payload.get("otherTunes") or []:
+                        if isinstance(tune, dict):
+                            tune_path = tune.get("musicFilePath") or tune.get("audio_path") or ""
+                            signed = _dc_signed(tune_path)
+                            if signed:
+                                hymn["other_tunes"].append({
+                                    "audio_url": signed,
+                                    "musicTitle": tune.get("musicTitle") or "",
+                                    "tuneName": tune.get("tuneName") or "",
+                                    "musicName": tune.get("musicName") or "",
+                                    "tune": tune.get("tune") or "",
+                                })
+            except Exception:
+                app.logger.exception("Could not attach the daily hymn tune from the Devotional Centre catalogue")
         return {
             "date": today.strftime("%A, %d %B %Y"),
             "verse": verse if isinstance(verse, dict) else {},
-            "hymn": hymn if isinstance(hymn, dict) else {},
+            "hymn": hymn,
         }
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         app.logger.exception("Homepage daily Scripture and hymn could not be loaded")
