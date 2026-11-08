@@ -17,9 +17,7 @@ function toggle(ev){if(ev){ev.preventDefault();ev.stopPropagation();}if(panel.hi
 panel.querySelector(".pc-close").addEventListener("click",close);
 if(launch.parentElement!==document.body)document.body.appendChild(launch);
 launch.type="button";
-launch.onclick=toggle;
-launch.addEventListener("click",toggle,true);
-launch.addEventListener("pointerup",function(ev){ev.preventDefault();ev.stopPropagation();if(panel.hidden)open();},true);
+launch.onclick=null;
 launch.style.setProperty("pointer-events","auto","important");
 launch.style.setProperty("position","fixed","important");
 launch.style.setProperty("right","12px","important");
