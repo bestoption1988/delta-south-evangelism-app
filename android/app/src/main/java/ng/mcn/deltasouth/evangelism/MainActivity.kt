@@ -1445,8 +1445,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         @Suppress("DEPRECATION")
                         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                             val uri = android.net.Uri.parse(url)
-                            if (uri.path.isNullOrBlank() || uri.path == "/") {
-                                val html = OfflineDevotionalPage.render(view.context, "/devotional-centre")
+                            if ((uri.scheme == "mcn-app" && uri.host == "home") || uri.path.isNullOrBlank() || uri.path == "/") {
+                                val html = OfflineDevotionalPage.render(view.context, "/")
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
                                 return true
                             }
