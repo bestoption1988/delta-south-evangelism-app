@@ -1400,7 +1400,13 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
-                                view.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/devotional-centre")
+                                val html = OfflineDevotionalPage.render(view.context, "/devotional-centre")
+                                view.loadDataWithBaseURL(BuildConfig.API_BASE_URL, html, "text/html", "UTF-8", null)
+                                return true
+                            }
+                            if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
+                                val html = OfflineDevotionalPage.render(view.context, "/devotional-centre")
+                                view.loadDataWithBaseURL(BuildConfig.API_BASE_URL, html, "text/html", "UTF-8", null)
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "staff-login") {
