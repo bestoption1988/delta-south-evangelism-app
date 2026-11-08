@@ -1623,10 +1623,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 view.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/devotional-centre")
                                 return true
                             }
-                            if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
-                                view.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/devotional-centre")
-                                return true
-                            }
                             if (uri.scheme == "mcn-app" && uri.host == "staff-login") {
                                 // Keep authentication on the original diocesan web pages.
                                 // Do not replace registration, login or password-reset screens
