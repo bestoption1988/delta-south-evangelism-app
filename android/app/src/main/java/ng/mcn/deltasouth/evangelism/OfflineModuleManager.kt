@@ -234,50 +234,12 @@ object OfflineModuleManager {
     )
 
     private fun devotionalDirectory(context: Context): File =
-        File(context.filesDir, "offline_devotional").apply { mkdirs() }
+        File(context.filesDir, "offline_storage").apply { mkdirs() }
 
-    /**
-     * Converts previously downloaded collection JSON into one local file per resource.
-     * This migration runs entirely on-device and also works with no internet connection.
-     */
-    fun migrateDevotionalResourcesToIndividualFiles(context: Context): Int {
-        val directory = devotionalDirectory(context)
-        var staged = 0
-        devotionalCollections.forEach { collection ->
-            val indexFile = File(directory, collection + ".json")
-            if (!indexFile.isFile) return@forEach
-            runCatching {
-                val items = JSONArray(indexFile.readText())
-                val folder = File(directory, collection).apply { mkdirs() }
-                for (i in 0 until items.length()) {
-                    val item = items.optJSONObject(i) ?: continue
-                    val id = item.optString("resource_id").ifBlank { collection + "_" + i }
-                    val safeId = id.replace(Regex("[^A-Za-z0-9_-]"), "_")
-                    val target = File(folder, safeId + ".json")
-                    if (!target.isFile || target.length() == 0L) {
-                        val temporary = File(folder, safeId + ".json.part")
-                        temporary.writeText(item.toString())
-                        if (target.exists()) target.delete()
-                        if (!temporary.renameTo(target)) {
-                            temporary.copyTo(target, overwrite = true)
-                            temporary.delete()
-                        }
-                    }
-                    item.put("offline_file", collection + "/" + target.name)
-                    staged++
-                }
-                val temporaryIndex = File(directory, collection + ".json.part")
-                temporaryIndex.writeText(items.toString())
-                if (indexFile.exists()) indexFile.delete()
-                if (!temporaryIndex.renameTo(indexFile)) {
-                    temporaryIndex.copyTo(indexFile, overwrite = true)
-                    temporaryIndex.delete()
-                }
-            }
-        }
-        context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-            .edit().putInt("last_individual_devotional_files_count", staged).apply()
-        return staged
+    /** One permanent on-device storage folder for each devotional card. */
+    fun devotionalCardFolder(context: Context, collection: String): File {
+        require(collection in devotionalCollections)
+        return File(devotionalDirectory(context), collection).apply { mkdirs() }
     }
 
     fun downloadAllDevotionalResources(context: Context): Int {
@@ -301,7 +263,8 @@ object OfflineModuleManager {
     fun downloadDevotionalCollection(context: Context, collection: String, includeAudio: Boolean = false, onProgress: (String, Int) -> Unit = { _, _ -> }): Int {
         require(collection in devotionalCollections)
         Backend.initialize(context.applicationContext)
-        val directory = devotionalDirectory(context)
+        // Every library card owns one folder. Its index and hymn recordings stay together.
+        val directory = devotionalCardFolder(context, collection)
         val longClient = Backend.client.newBuilder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(300, TimeUnit.SECONDS)
@@ -353,32 +316,21 @@ object OfflineModuleManager {
                     }
                     item.put("payload", payload)
                 }
-                // Stage every devotional resource as its own file on the phone.
-                // Each library card will link directly to this local file-backed resource.
-                val resourceId = item.optString("resource_id").ifBlank { collection + "_" + allItems.length() }
-                val safeResourceId = resourceId.replace(Regex("[^A-Za-z0-9_-]"), "_")
-                val collectionFolder = File(directory, collection).apply { mkdirs() }
-                val stagedResource = File(collectionFolder, safeResourceId + ".json")
-                val stagedTemporary = File(collectionFolder, safeResourceId + ".json.part")
-                stagedTemporary.writeText(item.toString())
-                if (stagedResource.exists()) stagedResource.delete()
-                if (!stagedTemporary.renameTo(stagedResource)) {
-                    stagedTemporary.copyTo(stagedResource, overwrite = true)
-                    stagedTemporary.delete()
-                }
-                item.put("offline_file", collection + "/" + stagedResource.name)
+                item.remove("offline_file")
                 allItems.put(item)
             }
             page++
         } while (page <= pages)
-        val target = File(directory, collection + ".json")
-        val temporary = File(directory, collection + ".json.part")
+        val target = File(directory, "resources.json")
+        val temporary = File(directory, "resources.json.part")
         temporary.writeText(allItems.toString())
         if (target.exists()) target.delete()
         if (!temporary.renameTo(target)) {
             temporary.copyTo(target, overwrite = true)
             temporary.delete()
         }
+        context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+            .edit().putInt("stored_" + collection + "_count", allItems.length()).apply()
         return if (includeAudio) audioDownloaded else allItems.length()
     }
 
@@ -411,7 +363,7 @@ object OfflineModuleManager {
             response.body?.string() ?: throw IllegalStateException("Empty lectionary")
         }
         val content = JSONObject(json).optString("content")
-        File(devotionalDirectory(context), "lectionary_2027.txt").writeText(content)
+        File(File(devotionalDirectory(context), "Lectionary").apply { mkdirs() }, "lectionary_2027.txt").writeText(content)
         return true
     }
 
