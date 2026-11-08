@@ -38,6 +38,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Backend.initialize(applicationContext)
         OfflineModuleManager.removeLegacyBibleFiles(applicationContext)
+        // Stage already-downloaded devotional collections into one local file per resource.
+        // This migration is local-only and requires no network connection.
+        runCatching { OfflineModuleManager.migrateDevotionalResourcesToIndividualFiles(applicationContext) }
         android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
             object : android.webkit.ServiceWorkerClient() {
                 override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
