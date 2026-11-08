@@ -242,6 +242,43 @@ object OfflineModuleManager {
         return File(devotionalDirectory(context), collection).apply { mkdirs() }
     }
 
+    /**
+     * Move the previous offline cache into the new one-folder-per-card layout.
+     * Runs locally at app start; no internet and no user action required.
+     */
+    fun migrateToCardFolders(context: Context): Int {
+        val old = File(context.filesDir, "offline_devotional")
+        val root = devotionalDirectory(context)
+        var migrated = 0
+        devotionalCollections.forEach { collection ->
+            val folder = devotionalCardFolder(context, collection)
+            val oldIndex = File(old, collection + ".json")
+            val newIndex = File(folder, "resources.json")
+            if (!newIndex.isFile && oldIndex.isFile) {
+                oldIndex.copyTo(newIndex, overwrite = true)
+                migrated++
+            }
+            val oldResourceFolder = File(old, collection)
+            if (oldResourceFolder.isDirectory) {
+                oldResourceFolder.copyRecursively(folder, overwrite = true)
+                migrated++
+            }
+            // Older hymn downloads were stored at the root; preserve them with their hymn card.
+            if (collection in listOf("english_hymns", "yoruba_hymns", "akokun")) {
+                old.listFiles()?.filter { it.isFile && it.name.startsWith("hymn_") }?.forEach { source ->
+                    runCatching { source.copyTo(File(folder, source.name), overwrite = true) }
+                }
+            }
+        }
+        val oldBible = File(context.filesDir, "bible_modules")
+        val newBible = bibleModuleDirectory(context)
+        if (oldBible.isDirectory) oldBible.copyRecursively(newBible, overwrite = true)
+        val oldMedia = File(context.filesDir, "offline_media")
+        val newMedia = File(root, "Church_Media").apply { mkdirs() }
+        if (oldMedia.isDirectory) oldMedia.copyRecursively(newMedia, overwrite = true)
+        return migrated
+    }
+
     fun downloadAllDevotionalResources(context: Context): Int {
         var total = 0
         val failures = mutableListOf<String>()
