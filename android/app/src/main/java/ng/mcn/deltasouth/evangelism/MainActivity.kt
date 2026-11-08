@@ -1515,53 +1515,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             """.trimIndent()
                             view.evaluateJavascript(keepNavigationInsideApp, null)
 
-                            // One direct Android dashboard menu controller.
-                            // It uses explicit inline display state to avoid CSS/animation
-                            // conflicts in the standalone WebView; web app files are untouched.
-                            if (url?.contains("/login") != true) {
-                                val androidDashboardMenu = """
-                                  (function(){
-                                    var nav=document.getElementById('nav');
-                                    var panel=document.getElementById('menuPanel');
-                                    var toggle=document.getElementById('menuToggle');
-                                    if(!nav||!panel||!toggle)return;
-                                    var old=document.getElementById('mcn-android-dashboard-menu-style');
-                                    if(old)old.remove();
-                                    var style=document.createElement('style');
-                                    style.id='mcn-android-dashboard-menu-style';
-                                    style.textContent=
-                                      '#nav{display:block!important;position:relative!important;overflow:visible!important;z-index:10000!important}'+
-                                      '#nav .nav-dropdown{display:block!important;position:relative!important;width:min(360px,calc(100vw - 40px))!important;overflow:visible!important}'+
-                                      '#nav #menuToggle{display:flex!important;visibility:visible!important;opacity:1!important;width:100%!important;min-height:52px!important;align-items:center!important;justify-content:space-between!important;touch-action:manipulation!important}'+
-                                      '#nav #menuPanel{position:static!important;width:100%!important;max-height:65vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;margin-top:8px!important;background:#fff!important;border:1px solid #d9e2dc!important;border-radius:10px!important;padding:8px!important;box-shadow:none!important}'+
-                                      '#nav #menuPanel button{display:block!important;width:100%!important;min-height:44px!important;flex:0 0 auto!important;text-align:left!important;white-space:normal!important;animation:none!important;transition:none!important}'+
-                                      '#nav #menuPanel button[hidden]{display:none!important}'+
-                                      '#nav #mobileNavToggle,#nav .mobile-nav-toggle-final,#nav .mobile-nav-toggle{display:none!important}';
-                                    document.head.appendChild(style);
-                                    var opened=false;
-                                    function render(){
-                                      panel.style.setProperty('display',opened?'flex':'none','important');
-                                      panel.style.setProperty('flex-direction','column','important');
-                                      toggle.setAttribute('aria-expanded',opened?'true':'false');
-                                      toggle.setAttribute('aria-label',opened?'Close dashboard menu':'Open dashboard menu');
-                                    }
-                                    toggle.onclick=function(ev){
-                                      ev.preventDefault();
-                                      ev.stopPropagation();
-                                      opened=!opened;
-                                      render();
-                                    };
-                                    panel.addEventListener('click',function(ev){
-                                      if(ev.target.closest('button')){opened=false;render();}
-                                    },true);
-                                    document.addEventListener('click',function(ev){
-                                      if(!nav.contains(ev.target)){opened=false;render();}
-                                    },true);
-                                    render();
-                                  })();
-                                """.trimIndent()
-                                view.evaluateJavascript(androidDashboardMenu, null)
-                            }
+                            // Use the same single menu controller as the web dashboard.
+                            // The app.js click handler toggles #menuPanel.open; no competing
+                            // WebView onclick override is installed here.
 
                             // Keep the strategic Mission Map at the bottom of the standalone
                             // Android homepage, immediately before the footer, even when WebView
