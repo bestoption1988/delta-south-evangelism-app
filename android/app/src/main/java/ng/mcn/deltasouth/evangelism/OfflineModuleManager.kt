@@ -309,6 +309,20 @@ object OfflineModuleManager {
                     }
                     item.put("payload", payload)
                 }
+                // Stage every devotional resource as its own file on the phone.
+                // Each library card will link directly to this local file-backed resource.
+                val resourceId = item.optString("resource_id").ifBlank { collection + "_" + allItems.length() }
+                val safeResourceId = resourceId.replace(Regex("[^A-Za-z0-9_-]"), "_")
+                val collectionFolder = File(directory, collection).apply { mkdirs() }
+                val stagedResource = File(collectionFolder, safeResourceId + ".json")
+                val stagedTemporary = File(collectionFolder, safeResourceId + ".json.part")
+                stagedTemporary.writeText(item.toString())
+                if (stagedResource.exists()) stagedResource.delete()
+                if (!stagedTemporary.renameTo(stagedResource)) {
+                    stagedTemporary.copyTo(stagedResource, overwrite = true)
+                    stagedTemporary.delete()
+                }
+                item.put("offline_file", collection + "/" + stagedResource.name)
                 allItems.put(item)
             }
             page++
