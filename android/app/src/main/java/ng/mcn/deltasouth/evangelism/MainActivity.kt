@@ -1643,20 +1643,22 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         override fun onReceivedError(view: WebView, request: android.webkit.WebResourceRequest, error: android.webkit.WebResourceError) {
                             if (request.isForMainFrame) {
                                 pageLoading = false
-                                // Fall back to the on-device library whenever DNS/network fails.
-                                pageError = false
-                                pageErrorDetails = ""
                                 val requestedPath = request.url.path.orEmpty()
-                                val localPath = if (requestedPath.startsWith("/devotional-centre") ||
-                                    requestedPath == "/media-library") requestedPath else "/"
-                                val localHtml = OfflineDevotionalPage.render(
-                                    view.context,
-                                    localPath,
-                                    request.url.getQueryParameter("q").orEmpty(),
-                                    request.url.getQueryParameter("translation").orEmpty()
-                                )
-                                view.post {
-                                    view.loadDataWithBaseURL("https://offline.mcn-app/", localHtml, "text/html", "UTF-8", null)
+                                if (requestedPath.startsWith("/devotional-centre") || requestedPath == "/media-library") {
+                                    pageError = false
+                                    pageErrorDetails = ""
+                                    val localHtml = OfflineDevotionalPage.render(
+                                        view.context,
+                                        requestedPath,
+                                        request.url.getQueryParameter("q").orEmpty(),
+                                        request.url.getQueryParameter("translation").orEmpty()
+                                    )
+                                    view.post {
+                                        view.loadDataWithBaseURL("https://offline.mcn-app/", localHtml, "text/html", "UTF-8", null)
+                                    }
+                                } else {
+                                    pageErrorDetails = "The main diocesan homepage is not saved in this phone's WebView cache yet. Connect once to load it, then it can be reopened offline."
+                                    pageError = true
                                 }
                             }
                         }
@@ -1664,11 +1666,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             if (request.isForMainFrame && response.statusCode == 404 &&
                                 (request.url.path.isNullOrBlank() || request.url.path == "/")) {
                                 pageLoading = false
-                                pageError = false
-                                val localLibrary = OfflineDevotionalPage.render(view.context, "/")
-                                view.post {
-                                    view.loadDataWithBaseURL("https://offline.mcn-app/", localLibrary, "text/html", "UTF-8", null)
-                                }
+                                pageErrorDetails = "The main diocesan homepage returned HTTP 404. A different page will not be substituted."
+                                pageError = true
                                 return
                             }
                             if (request.isForMainFrame && response.statusCode >= 400) {
