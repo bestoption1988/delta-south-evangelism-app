@@ -33,8 +33,17 @@ object OfflineDevotionalPage {
         if(p.startsWith("/devotional-centre/offline-bible"))return bibleReader(c,translation)
         if(p.startsWith("/devotional-centre/collection/"))return collection(c,Uri.decode(p.substringAfterLast('/')),q)
         if(p.startsWith("/devotional-centre/item/"))return item(c,Uri.decode(p.substringAfterLast('/')))
-        if(p=="/devotional-centre/lectionary"){val f=File(File(d(c),"Lectionary"),"lectionary_2027.txt");return page("Yearly Lectionary","<article class='paper'>${e(if(f.isFile)f.readText() else "Not downloaded yet.")}</article>")}
+        if(p=="/devotional-centre/lectionary")return lectionary(c)
         return home(c)
+    }
+    private fun lectionary(c:Context):String {
+        val file = File(File(d(c), "Lectionary"), "lectionary_2027.txt")
+        if (!file.isFile || file.length() == 0L) {
+            return page("Yearly Lectionary", "<article class='paper'>The lectionary has not yet been downloaded to this phone. Connect once and use Save Offline to include it.</article>")
+        }
+        val content = e(file.readText())
+        val body = """<div class='item'><strong>YEAR B · 2027 / YEAR C · 2028</strong><p class='muted'>Diocesan appointed readings · Saved on this phone · No internet required</p><input id='lectionarySearch' type='search' placeholder='Search date, Sunday, feast or Bible reference' style='width:100%;margin:8px 0'><p id='lectionaryCount' class='muted'>All appointed readings shown</p></div><article id='lectionaryText' class='paper' style='font:16px/1.65 Georgia,serif;white-space:pre-wrap'>$content</article><script>(function(){const q=document.getElementById('lectionarySearch'),box=document.getElementById('lectionaryText'),count=document.getElementById('lectionaryCount'),original=box.textContent;function run(){const term=q.value.trim().toLocaleLowerCase();if(!term){box.textContent=original;count.textContent='All appointed readings shown';return;}const sections=original.split(/\\n\\s*\\n/).filter(x=>x.toLocaleLowerCase().includes(term));box.textContent=sections.join('\\n\\n');count.textContent=sections.length+' matching reading sections';}q.addEventListener('input',run);})();</script>"""
+        return page("Yearly Lectionary", body)
     }
     private fun home(c:Context):String {
         val b=StringBuilder("<div class='grid'>")
@@ -45,6 +54,10 @@ object OfflineDevotionalPage {
         val n=runCatching{JSONArray(File(d(c),"Bible/index.json").readText()).length()}.getOrDefault(0)
         val m=runCatching{JSONArray(File(d(c),"Church_Media/index.json").readText()).length()}.getOrDefault(0)
         b.append("""<a class="card" href="/devotional-centre/holy-bible"><div class="icon">📖</div><h2>Uploaded Bible Library</h2><span class="pill">$n modules saved</span></a><a class="card" href="/media-library"><div class="icon">🎧</div><h2>Church Media Library</h2><span class="pill">$m files saved</span></a></div>""")
+        val lectionaryFile = File(File(d(c), "Lectionary"), "lectionary_2027.txt")
+        val lectionarySaved = lectionaryFile.isFile && lectionaryFile.length() > 0L
+        val lectionaryLabel = if (lectionarySaved) "YEAR B · 2027 / YEAR C · 2028 · Offline" else "Download required"
+        b.append("""<a class="card" href="/devotional-centre/lectionary"><div class="icon">📅</div><h2>Yearly Lectionary</h2><p class="muted">Read appointed Scripture readings for Sundays, feast days and special services. Available without internet after saving.</p><span class="pill">$lectionaryLabel</span></a>""")
         return page("Devotional & Worship Centre",b.toString())
     }
     private fun communionDocument(c:Context,key:String,title:String):String {
