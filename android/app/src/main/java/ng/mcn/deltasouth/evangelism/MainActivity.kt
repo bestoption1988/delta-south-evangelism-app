@@ -13,7 +13,6 @@ import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.lifecycle.lifecycleScope
 import androidx.compose.ui.viewinterop.AndroidView
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -61,11 +60,11 @@ class MainActivity : ComponentActivity() {
             }
         )
         // Clean legacy files and migrate existing downloads after first render, on IO.
-        lifecycleScope.launch(Dispatchers.IO) {
+        Thread {
             runCatching { OfflineModuleManager.removeLegacyBibleFiles(applicationContext) }
             runCatching { OfflineModuleManager.migrateToCardFolders(applicationContext) }
             runCatching { OfflineModuleManager.scheduleAutomaticUpdates(applicationContext) }
-        }
+        }.start()
     }
 }
 
