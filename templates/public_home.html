@@ -148,10 +148,18 @@
       {% if daily_reading.get("hymn", {}).get("tune_name") or daily_reading.get("hymn", {}).get("tune") %}
       <p class="daily-preview-tune">Hymn tune: {{ daily_reading.get("hymn", {}).get("tune_name") or daily_reading.get("hymn", {}).get("tune") }}</p>
       {% endif %}
-      {% if daily_reading.get("hymn", {}).get("audio_url") %}
+      {% set daily_hymn = daily_reading.get("hymn", {}) %}
+      {% if daily_hymn.get("audio_url") or daily_hymn.get("other_tunes") %}
       <div class="daily-preview-audio-wrap">
-        <span class="daily-preview-audio-label">▶ Play Hymn Tune</span>
-        <audio class="daily-preview-audio" controls preload="none" playsinline src="{{ daily_reading.get('hymn', {}).get('audio_url') }}">Your browser does not support audio playback.</audio>
+        {% if daily_hymn.get("audio_url") %}
+        <span class="daily-preview-audio-label">▶ Play Hymn Tune{% if daily_hymn.get("audio_tune_name") %}: {{ daily_hymn.get("audio_tune_name") }}{% endif %}</span>
+        <audio class="daily-preview-audio" controls preload="none" playsinline src="{{ daily_hymn.get('audio_url') }}">Your browser does not support audio playback.</audio>
+        {% endif %}
+        {% for tune in daily_hymn.get("other_tunes") or [] %}
+          {% set tune_label = tune.get("musicTitle") or tune.get("tuneName") or tune.get("musicName") or tune.get("tune") or ("Alternative tune " ~ loop.index) %}
+          <span class="daily-preview-audio-label">▶ {{ tune_label }}</span>
+          <audio class="daily-preview-audio" controls preload="none" playsinline src="{{ tune.get('audio_url') }}">Your browser does not support audio playback.</audio>
+        {% endfor %}
       </div>
       {% endif %}
     </details>
