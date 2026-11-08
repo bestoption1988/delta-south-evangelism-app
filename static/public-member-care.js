@@ -1,5 +1,6 @@
 (() => {
 "use strict";
+// Fresh standalone Member Care widget release 2026-11-08.
 if (window.__mcnFreshMemberCare) return;
 window.__mcnFreshMemberCare = true;
 const $ = (s,r=document)=>r.querySelector(s);
