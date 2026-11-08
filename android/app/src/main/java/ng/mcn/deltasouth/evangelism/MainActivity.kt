@@ -1860,6 +1860,27 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             pageErrorDetails = "Connecting to the diocesan website…"
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
+                            // Keep the strategic Mission Map at the bottom of the standalone
+                            // Android homepage, immediately before the footer, even when WebView
+                            // serves an older cached homepage document.
+                            val missionMapPlacement = """
+                                (function() {
+                                  var map = document.querySelector('#mission-map, .mission-map-section');
+                                  var footer = document.querySelector('footer');
+                                  if (!map || !footer || !footer.parentNode) return;
+                                  if (map.nextElementSibling !== footer) {
+                                    footer.parentNode.insertBefore(map, footer);
+                                  }
+                                  map.style.setProperty('display','block','important');
+                                  map.style.setProperty('width','100%','important');
+                                  map.style.setProperty('visibility','visible','important');
+                                  map.style.setProperty('opacity','1','important');
+                                  map.style.setProperty('position','relative','important');
+                                  map.style.setProperty('clear','both','important');
+                                  map.style.setProperty('margin-bottom','0','important');
+                                })();
+                            """.trimIndent()
+                            view.evaluateJavascript(missionMapPlacement, null)
                             // Android WebView fallback for the CSS-checkbox homepage menu.
                             // Chrome uses the native label/checkbox behaviour; some embedded WebViews
                             // fail to toggle visually clipped checkbox inputs when their labels are tapped.
