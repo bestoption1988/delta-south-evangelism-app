@@ -1488,6 +1488,59 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             pageErrorDetails = "Connecting to the diocesan website…"
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
+                            // Standalone app only: replace conflicting legacy mobile-menu effects
+                            // with one accessible in-flow dashboard navigation. Do not modify
+                            // the already-working web dashboard, role filters or page handlers.
+                            if (url?.contains("/login") != true) {
+                                val cleanDashboardMenu = """
+                                    (function() {
+                                      var nav = document.getElementById('nav');
+                                      var panel = document.getElementById('menuPanel');
+                                      var toggle = document.getElementById('menuToggle');
+                                      if (!nav || !panel || !toggle || window.__mcnCleanDashboardMenu) return;
+                                      window.__mcnCleanDashboardMenu = true;
+                                      var wrapper = toggle.closest('.nav-dropdown');
+                                      if (!wrapper) return;
+                                      var style = document.createElement('style');
+                                      style.id = 'mcn-android-clean-dashboard-menu';
+                                      style.textContent = [
+                                        '#nav{position:relative!important;display:block!important;overflow:visible!important;z-index:100!important;box-shadow:none!important}',
+                                        '#nav .nav-dropdown{display:block!important;position:static!important;width:100%!important;overflow:visible!important}',
+                                        '#nav #menuToggle{display:flex!important;visibility:visible!important;opacity:1!important;position:relative!important;width:100%!important;transform:none!important;transition:none!important}',
+                                        '#nav #menuPanel{display:none!important;position:static!important;inset:auto!important;width:100%!important;max-height:65vh!important;overflow-y:auto!important;box-sizing:border-box!important;transform:none!important;transition:none!important;animation:none!important;box-shadow:none!important;margin-top:8px!important}',
+                                        '#nav #menuPanel.mcn-app-open{display:flex!important;flex-direction:column!important}',
+                                        '#nav #menuPanel button{display:block!important;width:100%!important;min-height:44px!important;white-space:normal!important;transform:none!important;transition:none!important;text-align:left!important}',
+                                        '#nav #menuPanel button[hidden]{display:none!important}',
+                                        '#nav #mobileNavToggle,#nav .mobile-nav-toggle-final,#nav .mobile-nav-toggle{display:none!important}'
+                                      ].join('');
+                                      document.head.appendChild(style);
+                                      nav.classList.remove('mobile-nav-open');
+                                      panel.classList.remove('open');
+                                      panel.classList.remove('mcn-app-open');
+                                      toggle.removeAttribute('style');
+                                      toggle.setAttribute('aria-expanded','false');
+                                      toggle.addEventListener('click',function(ev){
+                                        ev.preventDefault();
+                                        ev.stopImmediatePropagation();
+                                        var opened = panel.classList.toggle('mcn-app-open');
+                                        toggle.setAttribute('aria-expanded',String(opened));
+                                      },true);
+                                      panel.addEventListener('click',function(ev){
+                                        if(ev.target.closest('button,a')){
+                                          panel.classList.remove('mcn-app-open');
+                                          toggle.setAttribute('aria-expanded','false');
+                                        }
+                                      },true);
+                                      document.addEventListener('click',function(ev){
+                                        if(!nav.contains(ev.target)){
+                                          panel.classList.remove('mcn-app-open');
+                                          toggle.setAttribute('aria-expanded','false');
+                                        }
+                                      },true);
+                                    })();
+                                """.trimIndent()
+                                view.evaluateJavascript(cleanDashboardMenu, null)
+                            }
                             // Keep every ordinary website link, form and popup navigation
                             // inside this standalone app instead of handing it to Chrome.
                             val keepNavigationInsideApp = """
