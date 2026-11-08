@@ -507,20 +507,7 @@ private fun NativeDioceseApp() {
                         },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Download Hymn Audio") }
-                    Button(
-                        enabled = online && !downloadBusy,
-                        onClick = {
-                            runCatching {
-                                val bibleUrl = BuildConfig.API_BASE_URL + "devotional-centre/holy-bible"
-                                appContext.startActivity(
-                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(bibleUrl))
-                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                )
-                                downloadMessage = "Opening the World English Bible (WEB) reader."
-                            }.onFailure { downloadMessage = it.message ?: "Could not open the WEB Bible reader." }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text("Open World English Bible (WEB)") }
+                    Text("The complete Bible is available in the Offline Worship & Scripture Library. Open the public homepage and choose the offline library to read saved chapters.")
                     Text("Download published media by module", style = MaterialTheme.typography.titleMedium)
                     val downloadMediaModule: (String, String) -> Unit = { mediaType, label ->
                         downloadBusy = true
@@ -1643,6 +1630,43 @@ private fun loadOfflineMediaRows(context: Context): List<Map<String, String>> = 
     }
 }.getOrDefault(emptyList())
 
+private fun loadOfflineBibleBooks(context: Context): List<Map<String, String>> {
+    return runCatching {
+        val file = File(File(context.filesDir, "offline_web_bible"), "books.json")
+        if (!file.isFile || file.length() <= 0L) return emptyList()
+        val array = JSONObject(file.readText()).optJSONArray("books") ?: JSONArray()
+        (0 until array.length()).mapNotNull { index ->
+            val book = array.optJSONObject(index) ?: return@mapNotNull null
+            val id = book.optInt("id")
+            val name = book.optString("name").ifBlank { book.optString("title") }
+            val chapters = book.optInt("chapters")
+            if (id !in 1..66 || name.isBlank() || chapters < 1) null
+            else mapOf("id" to id.toString(), "name" to name, "chapters" to chapters.toString())
+        }
+    }.getOrDefault(emptyList())
+}
+
+private fun loadOfflineBibleVerses(context: Context, bookId: Int, chapter: Int): List<Pair<String, String>> {
+    return runCatching {
+        val file = File(File(context.filesDir, "offline_web_bible"), "${bookId}_${chapter}.json")
+        if (!file.isFile || file.length() <= 0L) return emptyList()
+        val array = JSONObject(file.readText()).optJSONArray("verses") ?: JSONArray()
+        (0 until array.length()).mapNotNull { index ->
+            val item = array.opt(index)
+            if (item is JSONObject) {
+                val number = item.optString("number").ifBlank { item.optString("verse").ifBlank { (index + 1).toString() } }
+                val text = item.optString("text").ifBlank {
+                    item.optString("verse_text").ifBlank { item.optString("content") }
+                }
+                if (text.isBlank()) null else number to text
+            } else {
+                val text = item?.toString().orEmpty()
+                if (text.isBlank()) null else (index + 1).toString() to text
+            }
+        }
+    }.getOrDefault(emptyList())
+}
+
 @Composable
 private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
     val context = LocalContext.current
@@ -1654,6 +1678,16 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
     var resources by remember { mutableStateOf(loadOfflineDevotionalRows(context)) }
     var media by remember { mutableStateOf(loadOfflineMediaRows(context)) }
     var selected by remember { mutableStateOf<Map<String, String>?>(null) }
+    var bibleBooks by remember { mutableStateOf(loadOfflineBibleBooks(context)) }
+    var bibleDialog by remember { mutableStateOf(false) }
+    var selectedBookId by remember { mutableIntStateOf(bibleBooks.firstOrNull()?.get("id")?.toIntOrNull() ?: 1) }
+    var selectedChapter by remember { mutableIntStateOf(1) }
+    var bibleVerses by remember { mutableStateOf(loadOfflineBibleVerses(context, selectedBookId, selectedChapter)) }
+    var bookMenuExpanded by remember { mutableStateOf(false) }
+    var chapterMenuExpanded by remember { mutableStateOf(false) }
+    val selectedBook = bibleBooks.firstOrNull { it["id"] == selectedBookId.toString() }
+    BackHandler(enabled = bibleDialog) { bibleDialog = false }
+
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -1664,20 +1698,30 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
         Text("Download public hymns, Scripture, worship books, recordings and church media while connected. Saved readings remain on this phone.")
         Button(enabled = online && !busy, onClick = {
             busy = true
-            message = "Downloading all devotional collections…"
+            message = "Downloading hymns, worship books and all 66 books of the Bible…"
+            downloadProgress = 0
             scope.launch {
                 val result = withContext(Dispatchers.IO) {
                     runCatching {
                         val count = OfflineModuleManager.downloadAllDevotionalResources(context)
                         OfflineModuleManager.downloadLectionary(context)
-                        count
+                        val chapters = OfflineModuleManager.downloadWebBible(context)
+                        count to chapters
                     }
                 }
                 resources = withContext(Dispatchers.IO) { loadOfflineDevotionalRows(context) }
-                message = result.fold({ "${it} devotional resources are saved." }, { it.message ?: "Some resources could not be downloaded." })
+                bibleBooks = withContext(Dispatchers.IO) { loadOfflineBibleBooks(context) }
+                val savedChapters = context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+                    .getInt("last_web_bible_chapter_count", 0)
+                message = result.fold(
+                    { "${it.first} devotional resources and ${it.second} Bible chapters saved on this phone." },
+                    { "Download could not be completed: ${it.message ?: "Please try again."} ${savedChapters} Bible chapters are currently saved." }
+                )
                 busy = false
             }
-        }, modifier = Modifier.fillMaxWidth()) { Text("Download Hymns, Scripture & Worship Books") }
+        }, modifier = Modifier.fillMaxWidth()) {
+            Text(if (busy) "Downloading…" else "Download Hymns, Scripture, Worship Books & Bible")
+        }
         Button(enabled = online && !busy, onClick = {
             busy = true
             downloadProgress = 0
@@ -1694,16 +1738,20 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
                 busy = false
             }
         }, modifier = Modifier.fillMaxWidth()) { Text("Download Hymn Audio") }
-        Button(enabled = online && !busy, onClick = {
-            runCatching {
-                val bibleUrl = BuildConfig.API_BASE_URL + "devotional-centre/holy-bible"
-                context.startActivity(
-                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(bibleUrl))
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                )
-                message = "Opening the World English Bible (WEB) reader. Scripture text loads from the WEB public-domain Bible service."
-            }.onFailure { message = it.message ?: "Could not open the WEB Bible reader." }
-        }, modifier = Modifier.fillMaxWidth()) { Text("Open World English Bible (WEB)") }
+
+        Button(onClick = {
+            bibleBooks = loadOfflineBibleBooks(context)
+            if (bibleBooks.isEmpty()) {
+                message = if (online) "The Bible has not yet been downloaded. Use Download Hymns, Scripture, Worship Books & Bible first."
+                    else "No offline Bible is saved yet. Connect to the internet and download the Bible first."
+            } else {
+                selectedBookId = bibleBooks.first()["id"]!!.toInt()
+                selectedChapter = 1
+                bibleVerses = loadOfflineBibleVerses(context, selectedBookId, selectedChapter)
+                bibleDialog = true
+            }
+        }, modifier = Modifier.fillMaxWidth()) { Text("Read Offline Bible — No Internet Required") }
+
         Text("Church Media Library", style = MaterialTheme.typography.titleMedium)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             listOf("audio", "video", "document").forEach { type ->
@@ -1769,6 +1817,58 @@ private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
             }
         }
     }
+
+    if (bibleDialog) {
+        AlertDialog(
+            onDismissRequest = { bibleDialog = false },
+            title = { Text("Offline Holy Bible (WEB)") },
+            text = {
+                Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("This Bible is read directly from the chapters saved on this phone. No website or internet connection is used.")
+                    Box {
+                        OutlinedButton(onClick = { bookMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text(selectedBook?.get("name") ?: "Choose Bible book")
+                        }
+                        DropdownMenu(expanded = bookMenuExpanded, onDismissRequest = { bookMenuExpanded = false }) {
+                            bibleBooks.forEach { book ->
+                                DropdownMenuItem(text = { Text(book["name"] ?: "Book") }, onClick = {
+                                    selectedBookId = book["id"]!!.toInt()
+                                    selectedChapter = 1
+                                    bibleVerses = loadOfflineBibleVerses(context, selectedBookId, selectedChapter)
+                                    bookMenuExpanded = false
+                                })
+                            }
+                        }
+                    }
+                    Box {
+                        OutlinedButton(onClick = { chapterMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Chapter $selectedChapter")
+                        }
+                        DropdownMenu(expanded = chapterMenuExpanded, onDismissRequest = { chapterMenuExpanded = false }) {
+                            (1..(selectedBook?.get("chapters")?.toIntOrNull() ?: 1)).forEach { chapter ->
+                                DropdownMenuItem(text = { Text("Chapter $chapter") }, onClick = {
+                                    selectedChapter = chapter
+                                    bibleVerses = loadOfflineBibleVerses(context, selectedBookId, selectedChapter)
+                                    chapterMenuExpanded = false
+                                })
+                            }
+                        }
+                    }
+                    if (bibleVerses.isEmpty()) {
+                        Text("This chapter is not saved on this phone yet. Connect to the internet and download the Bible to save all chapters.")
+                    } else {
+                        bibleVerses.forEach { (number, verse) ->
+                            Text("$number. $verse", style = MaterialTheme.typography.bodyLarge)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { bibleDialog = false }) { Text("Close Bible") }
+            }
+        )
+    }
+
     selected?.let { item ->
         AlertDialog(
             onDismissRequest = { selected = null },
