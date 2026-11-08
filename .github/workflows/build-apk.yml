@@ -2,18 +2,6 @@ name: Build Delta South Evangelism Android APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - postgres-migration-integration
-    paths:
-      - "android/**"
-      - ".github/workflows/build-apk.yml"
-      - "app.py"
-      - "templates/**"
-      - "static/**"
-      - "data/**"
-      - "requirements.txt"
   pull_request:
     paths:
       - "android/**"
