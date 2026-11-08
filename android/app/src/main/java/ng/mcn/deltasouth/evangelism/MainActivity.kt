@@ -41,13 +41,12 @@ class MainActivity : ComponentActivity() {
             object : android.webkit.ServiceWorkerClient() {
                 override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
                     if (!networkAvailable(applicationContext)) {
-                        val cachedBible = OfflineModuleManager.cachedWebBibleBooks(applicationContext, request.url.toString())
-                            ?: OfflineModuleManager.cachedWebBibleChapter(applicationContext, request.url.toString())
-                        if (cachedBible != null) {
+                        val localBible = OfflineModuleManager.cachedBibleModuleResponse(applicationContext, request.url.toString())
+                        if (localBible != null) {
                             return android.webkit.WebResourceResponse(
                                 "application/json", "UTF-8", 200, "OK",
                                 mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Methods" to "GET, OPTIONS"),
-                                cachedBible.inputStream()
+                                java.io.ByteArrayInputStream(localBible)
                             )
                         }
                     }
@@ -97,7 +96,6 @@ private fun NativeDioceseApp() {
     var password by remember { mutableStateOf("") }
     var signedIn by remember { mutableStateOf(false) }
     var showStaffLogin by remember { mutableStateOf(false) }
-    var showOfflineLibrary by remember { mutableStateOf(false) }
     var mustChangePassword by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
@@ -288,7 +286,7 @@ private fun NativeDioceseApp() {
     val financeRoles = setOf("Admin", "Finance Officer", "Auditor", "Evangelism Minister", "Bishop / Diocesan Executive", "Diocesan Secretary")
     val canReview = role == "Admin" || role == "Evangelism Minister"
 
-    if (!signedIn && !showStaffLogin && !showOfflineLibrary) {
+    if (!signedIn && !showStaffLogin) {
         PublicDiocesanHomepage(
             online = online,
             offlineDownloadBusy = downloadBusy,
@@ -315,10 +313,8 @@ private fun NativeDioceseApp() {
                             devotionalResourceCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_resources_count", 0)
                             devotionalAudioCount = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE).getInt("last_devotional_audio_count", 0)
                             val offlinePrefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-                            val webChapters = offlinePrefs.getInt("last_web_bible_chapter_count", 0)
-                            val missingWebChapters = offlinePrefs.getInt("last_web_bible_missing_count", 0)
-                            downloadMessage = "Offline package updated: ${summary.downloaded} data sets, ${summary.mediaDownloaded} media files, ${webChapters} WEB Bible chapters, ${summary.unavailable} account-restricted items and ${summary.failed} failed modules."
-                            if (missingWebChapters > 0) downloadMessage += " ${missingWebChapters} WEB Bible chapters need another download."
+                            val bibleModules = offlinePrefs.getInt("last_uploaded_bible_module_count", 0)
+                            downloadMessage = "Offline package updated: ${summary.downloaded} data sets, ${summary.mediaDownloaded} media files, ${bibleModules} uploaded Bible modules, ${summary.unavailable} account-restricted items and ${summary.failed} failed modules."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }.onFailure { error ->
                             downloadMessage = error.message ?: "The offline package could not be completed."
@@ -328,11 +324,8 @@ private fun NativeDioceseApp() {
                     }
                 }
             },
-            onOpenOfflineLibrary = { showOfflineLibrary = true },
             onBackPressed = { }
         )
-    } else if (!signedIn && showOfflineLibrary) {
-        PublicOfflineLibrary(online = online, onBack = { showOfflineLibrary = false })
     } else if (!signedIn && mustChangePassword) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
             Text("Password update required", style = MaterialTheme.typography.headlineSmall)
@@ -1583,334 +1576,8 @@ private fun KeyValueList(values: Map<String, Any?>) {
 
 
 
-private fun loadOfflineDevotionalRows(context: Context): List<Map<String, String>> {
-    val directory = File(context.filesDir, "offline_devotional")
-    val collections = listOf("english_hymns", "yoruba_hymns", "akokun", "bible_verses", "canticles", "communion_english", "communion_yoruba", "creeds")
-    val output = mutableListOf<Map<String, String>>()
-    collections.forEach { collection ->
-        val file = File(directory, collection + ".json")
-        if (!file.exists()) return@forEach
-        runCatching {
-            val array = JSONArray(file.readText())
-            for (index in 0 until array.length()) {
-                val item = array.optJSONObject(index) ?: continue
-                val payload = item.optJSONObject("payload") ?: JSONObject()
-                val body = buildString {
-                    listOf("reference", "heading", "verse", "content", "firstline", "lyrics", "chorus").forEach { key ->
-                        val value = payload.optString(key)
-                        if (value.isNotBlank()) append(value).append("\n\n")
-                    }
-                    val stanzas = payload.optJSONArray("stanzas")
-                    if (stanzas != null) for (s in 0 until stanzas.length()) append(stanzas.optString(s)).append("\n\n")
-                }.trim()
-                output.add(mapOf(
-                    "title" to item.optString("title", "Church resource"),
-                    "collection" to collection.replace('_', ' '),
-                    "content" to body,
-                    "audio_file" to item.optString("audio_file")
-                ))
-            }
-        }
-    }
-    return output
-}
-
-private fun loadOfflineMediaRows(context: Context): List<Map<String, String>> = runCatching {
-    val file = File(OfflineModuleManager.offlineMediaDirectory(context), "index.json")
-    val array = if (file.exists()) JSONArray(file.readText()) else JSONArray()
-    (0 until array.length()).mapNotNull { index ->
-        val item = array.optJSONObject(index) ?: return@mapNotNull null
-        mapOf(
-            "title" to item.optString("title"),
-            "description" to item.optString("description"),
-            "mime_type" to item.optString("mime_type"),
-            "media_type" to item.optString("media_type"),
-            "file" to item.optString("file")
-        )
-    }
-}.getOrDefault(emptyList())
-
-private val OFFLINE_WEB_BIBLE_BOOK_NAMES = listOf(
-    "Genesis", "Exodus", "Leviticus", "Numbers", "Deuteronomy", "Joshua", "Judges", "Ruth",
-    "1 Samuel", "2 Samuel", "1 Kings", "2 Kings", "1 Chronicles", "2 Chronicles", "Ezra",
-    "Nehemiah", "Esther", "Job", "Psalms", "Proverbs", "Ecclesiastes", "Song of Solomon",
-    "Isaiah", "Jeremiah", "Lamentations", "Ezekiel", "Daniel", "Hosea", "Joel", "Amos",
-    "Obadiah", "Jonah", "Micah", "Nahum", "Habakkuk", "Zephaniah", "Haggai", "Zechariah",
-    "Malachi", "Matthew", "Mark", "Luke", "John", "Acts", "Romans", "1 Corinthians",
-    "2 Corinthians", "Galatians", "Ephesians", "Philippians", "Colossians", "1 Thessalonians",
-    "2 Thessalonians", "1 Timothy", "2 Timothy", "Titus", "Philemon", "Hebrews", "James",
-    "1 Peter", "2 Peter", "1 John", "2 John", "3 John", "Jude", "Revelation"
-)
-
-private fun loadOfflineBibleBooks(context: Context): List<Map<String, String>> {
-    return runCatching {
-        val file = File(File(context.filesDir, "offline_web_bible"), "books.json")
-        if (!file.isFile || file.length() <= 0L) return emptyList()
-        val array = JSONObject(file.readText()).optJSONArray("books") ?: JSONArray()
-        val books = (0 until array.length()).mapNotNull { index ->
-            val book = array.optJSONObject(index) ?: return@mapNotNull null
-            val id = book.optInt("id")
-            val name = book.optString("name").ifBlank { book.optString("title") }
-                .ifBlank { OFFLINE_WEB_BIBLE_BOOK_NAMES.getOrNull(id - 1).orEmpty() }
-            val chapters = book.optInt("chapters")
-            if (id !in 1..66 || name.isBlank() || chapters < 1) null
-            else mapOf("id" to id.toString(), "name" to name, "chapters" to chapters.toString())
-        }.sortedBy { it["id"]?.toIntOrNull() ?: Int.MAX_VALUE }
-        if (books.size != 66) emptyList() else books
-    }.getOrDefault(emptyList())
-}
-
-private fun loadOfflineBibleVerses(context: Context, bookId: Int, chapter: Int): List<Pair<String, String>> {
-    return runCatching {
-        val file = File(File(context.filesDir, "offline_web_bible"), "${bookId}_${chapter}.json")
-        if (!file.isFile || file.length() <= 0L) return emptyList()
-        val array = JSONObject(file.readText()).optJSONArray("verses") ?: JSONArray()
-        (0 until array.length()).mapNotNull { index ->
-            val item = array.opt(index)
-            if (item is JSONObject) {
-                val number = item.optString("number").ifBlank { item.optString("verse").ifBlank { (index + 1).toString() } }
-                val text = item.optString("text").ifBlank {
-                    item.optString("verse_text").ifBlank { item.optString("content") }
-                }
-                if (text.isBlank()) null else number to text
-            } else {
-                val text = item?.toString().orEmpty()
-                if (text.isBlank()) null else (index + 1).toString() to text
-            }
-        }
-    }.getOrDefault(emptyList())
-}
-
 @Composable
-private fun PublicOfflineLibrary(online: Boolean, onBack: () -> Unit) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var message by remember { mutableStateOf("") }
-    var downloadProgress by remember { mutableIntStateOf(0) }
-    var downloadStage by remember { mutableStateOf("Waiting to download…") }
-    var resources by remember { mutableStateOf(loadOfflineDevotionalRows(context)) }
-    var media by remember { mutableStateOf(loadOfflineMediaRows(context)) }
-    var selected by remember { mutableStateOf<Map<String, String>?>(null) }
-    var bibleBooks by remember { mutableStateOf(loadOfflineBibleBooks(context)) }
-    var bibleDialog by remember { mutableStateOf(false) }
-    var selectedBookId by remember { mutableIntStateOf(bibleBooks.firstOrNull()?.get("id")?.toIntOrNull() ?: 1) }
-    var selectedChapter by remember { mutableIntStateOf(1) }
-    var bibleVerses by remember { mutableStateOf(loadOfflineBibleVerses(context, selectedBookId, selectedChapter)) }
-    var bookMenuExpanded by remember { mutableStateOf(false) }
-    var chapterMenuExpanded by remember { mutableStateOf(false) }
-    val selectedBook = bibleBooks.firstOrNull { it["id"] == selectedBookId.toString() }
-    BackHandler(enabled = bibleDialog) { bibleDialog = false }
-
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        TextButton(onClick = onBack) { Text("← Return to diocesan homepage") }
-        Text("MCN Delta South Diocese", style = MaterialTheme.typography.headlineSmall)
-        Text("Offline Worship & Scripture Library", style = MaterialTheme.typography.titleLarge)
-        Text("Download public hymns, Scripture, worship books, recordings and church media while connected. Saved readings remain on this phone.")
-        Button(enabled = online && !busy, onClick = {
-            busy = true
-            message = "Downloading hymns, worship books and all 66 books of the Bible…"
-            downloadProgress = 0
-            scope.launch {
-                val result = withContext(Dispatchers.IO) {
-                    runCatching {
-                        val count = OfflineModuleManager.downloadAllDevotionalResources(context)
-                        OfflineModuleManager.downloadLectionary(context)
-                        val chapters = OfflineModuleManager.downloadWebBible(context)
-                        count to chapters
-                    }
-                }
-                resources = withContext(Dispatchers.IO) { loadOfflineDevotionalRows(context) }
-                bibleBooks = withContext(Dispatchers.IO) { loadOfflineBibleBooks(context) }
-                val savedChapters = context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-                    .getInt("last_web_bible_chapter_count", 0)
-                message = result.fold(
-                    { "${it.first} devotional resources and ${it.second} Bible chapters saved on this phone." },
-                    { "Download could not be completed: ${it.message ?: "Please try again."} ${savedChapters} Bible chapters are currently saved." }
-                )
-                busy = false
-            }
-        }, modifier = Modifier.fillMaxWidth()) {
-            Text(if (busy) "Downloading…" else "Download Hymns, Scripture, Worship Books & Bible")
-        }
-        Button(enabled = online && !busy, onClick = {
-            busy = true
-            downloadProgress = 0
-            downloadStage = "Preparing hymn audio…"
-            message = "Downloading hymn recordings…"
-            scope.launch {
-                val result = withContext(Dispatchers.IO) { runCatching {
-                    OfflineModuleManager.downloadHymnAudio(context) { stage, percent ->
-                        scope.launch(Dispatchers.Main) { downloadStage = stage; downloadProgress = percent }
-                    }
-                } }
-                resources = withContext(Dispatchers.IO) { loadOfflineDevotionalRows(context) }
-                message = result.fold({ "Hymn audio download finished. ${it} hymn records checked." }, { it.message ?: "Hymn audio could not be downloaded." })
-                busy = false
-            }
-        }, modifier = Modifier.fillMaxWidth()) { Text("Download Hymn Audio") }
-
-        Button(onClick = {
-            bibleBooks = loadOfflineBibleBooks(context)
-            if (bibleBooks.isEmpty()) {
-                message = if (online) "The Bible has not yet been downloaded. Use Download Hymns, Scripture, Worship Books & Bible first."
-                    else "No offline Bible is saved yet. Connect to the internet and download the Bible first."
-            } else {
-                selectedBookId = bibleBooks.first()["id"]!!.toInt()
-                selectedChapter = 1
-                bibleVerses = loadOfflineBibleVerses(context, selectedBookId, selectedChapter)
-                bibleDialog = true
-            }
-        }, modifier = Modifier.fillMaxWidth()) { Text("Read Offline Bible — No Internet Required") }
-
-        Text("Church Media Library", style = MaterialTheme.typography.titleMedium)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("audio", "video", "document").forEach { type ->
-                OutlinedButton(
-                    enabled = online && !busy,
-                    onClick = {
-                        busy = true
-                        downloadProgress = 0
-                        downloadStage = "Preparing $type download…"
-                        message = "Downloading published $type files…"
-                        scope.launch {
-                            val result = withContext(Dispatchers.IO) { runCatching {
-                                OfflineModuleManager.downloadMediaCategory(context, type) { stage, percent ->
-                                    scope.launch(Dispatchers.Main) { downloadStage = stage; downloadProgress = percent }
-                                }
-                            } }
-                            media = withContext(Dispatchers.IO) { loadOfflineMediaRows(context) }
-                            message = result.fold({ "${it} $type item(s) saved for offline use." }, { it.message ?: "The $type module could not be downloaded." })
-                            busy = false
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                ) { Text(type.replaceFirstChar { it.uppercase() }) }
-            }
-        }
-        if (busy) {
-            Text("$downloadStage  •  $downloadProgress%", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-            LinearProgressIndicator(progress = { downloadProgress / 100f }, modifier = Modifier.fillMaxWidth())
-        }
-        if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.primary)
-        Text("Saved readings (${resources.size})", style = MaterialTheme.typography.titleMedium)
-        if (resources.isEmpty()) Text("No devotional collections have been downloaded yet.")
-        LazyColumn(Modifier.heightIn(max = 430.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            items(resources) { item ->
-                ElevatedCard(Modifier.fillMaxWidth()) {
-                    Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column(Modifier.weight(1f)) {
-                            Text(item["title"] ?: "Church resource")
-                            Text(item["collection"] ?: "", style = MaterialTheme.typography.bodySmall)
-                        }
-                        TextButton(onClick = { selected = item }) { Text("Read") }
-                    }
-                }
-            }
-        }
-        Text("Saved media (${media.size})", style = MaterialTheme.typography.titleMedium)
-        media.forEach { item ->
-            ElevatedCard(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f)) {
-                        Text(item["title"] ?: "Church media")
-                        Text(item["media_type"] ?: "", style = MaterialTheme.typography.bodySmall)
-                    }
-                    TextButton(onClick = {
-                        runCatching {
-                            val file = File(OfflineModuleManager.offlineMediaDirectory(context), item["file"].orEmpty())
-                            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
-                            val mime = item["mime_type"].orEmpty().ifBlank { "*/*" }
-                            context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
-                        }.onFailure { message = it.message ?: "Could not open saved media." }
-                    }) { Text("Open") }
-                }
-            }
-        }
-    }
-
-    if (bibleDialog) {
-        AlertDialog(
-            onDismissRequest = { bibleDialog = false },
-            title = { Text("Offline Holy Bible (WEB)") },
-            text = {
-                Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("This Bible is read directly from the chapters saved on this phone. No website or internet connection is used.")
-                    Box {
-                        OutlinedButton(onClick = { bookMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(selectedBook?.get("name") ?: "Choose Bible book")
-                        }
-                        DropdownMenu(expanded = bookMenuExpanded, onDismissRequest = { bookMenuExpanded = false }) {
-                            bibleBooks.forEach { book ->
-                                DropdownMenuItem(text = { Text(book["name"] ?: "Book") }, onClick = {
-                                    selectedBookId = book["id"]!!.toInt()
-                                    selectedChapter = 1
-                                    bibleVerses = loadOfflineBibleVerses(context, selectedBookId, selectedChapter)
-                                    bookMenuExpanded = false
-                                })
-                            }
-                        }
-                    }
-                    Box {
-                        OutlinedButton(onClick = { chapterMenuExpanded = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Chapter $selectedChapter")
-                        }
-                        DropdownMenu(expanded = chapterMenuExpanded, onDismissRequest = { chapterMenuExpanded = false }) {
-                            (1..(selectedBook?.get("chapters")?.toIntOrNull() ?: 1)).forEach { chapter ->
-                                DropdownMenuItem(text = { Text("Chapter $chapter") }, onClick = {
-                                    selectedChapter = chapter
-                                    bibleVerses = loadOfflineBibleVerses(context, selectedBookId, selectedChapter)
-                                    chapterMenuExpanded = false
-                                })
-                            }
-                        }
-                    }
-                    if (bibleVerses.isEmpty()) {
-                        Text("This chapter is not saved on this phone yet. Connect to the internet and download the Bible to save all chapters.")
-                    } else {
-                        bibleVerses.forEach { (number, verse) ->
-                            Text("$number. $verse", style = MaterialTheme.typography.bodyLarge)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { bibleDialog = false }) { Text("Close Bible") }
-            }
-        )
-    }
-
-    selected?.let { item ->
-        AlertDialog(
-            onDismissRequest = { selected = null },
-            title = { Text(item["title"] ?: "Church resource") },
-            text = {
-                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    Text(item["content"].orEmpty().ifBlank { "No reading text was included in this resource." })
-                }
-            },
-            confirmButton = {
-                Row {
-                    val audio = item["audio_file"].orEmpty()
-                    if (audio.isNotBlank()) TextButton(onClick = {
-                        runCatching {
-                            val file = File(context.filesDir, "offline_devotional/" + audio)
-                            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
-                            context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "audio/*").addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))
-                        }.onFailure { message = it.message ?: "Could not play hymn audio." }
-                    }) { Text("Play audio") }
-                    TextButton(onClick = { selected = null }) { Text("Close") }
-                }
-            }
-        )
-    }
-}
-
-@Composable
-private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onOpenOfflineLibrary: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pageError by remember { mutableStateOf(false) }
     var pageErrorDetails by remember { mutableStateOf("The connection to the diocesan website failed.") }
@@ -1953,11 +1620,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
-                                onOpenOfflineLibrary()
+                                view.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/devotional-centre")
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
-                                onOpenOfflineLibrary()
+                                view.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/devotional-centre")
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "staff-login") {
@@ -2000,13 +1667,12 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
                             if (!online) {
-                                val cachedBible = OfflineModuleManager.cachedWebBibleBooks(ctx, request.url.toString())
-                                    ?: OfflineModuleManager.cachedWebBibleChapter(ctx, request.url.toString())
-                                if (cachedBible != null) {
+                                val localBible = OfflineModuleManager.cachedBibleModuleResponse(ctx, request.url.toString())
+                                if (localBible != null) {
                                     return android.webkit.WebResourceResponse(
                                         "application/json", "UTF-8", 200, "OK",
                                         mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Methods" to "GET, OPTIONS"),
-                                        cachedBible.inputStream()
+                                        java.io.ByteArrayInputStream(localBible)
                                     )
                                 }
                             }
@@ -2216,14 +1882,17 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("The diocesan homepage could not be reached inside the app.", style = MaterialTheme.typography.titleMedium)
                     Text(pageErrorDetails, style = MaterialTheme.typography.bodySmall)
-                    Text("You can retry here or open the same page in your phone browser.")
+                    Text("You can retry here or open the downloaded devotional and worship libraries inside this app.")
                     Button(onClick = {
                         pageError = false
                         pageLoading = true
                         webView?.clearHistory()
                         webView?.reload()
                     }, modifier = Modifier.fillMaxWidth()) { Text("Retry homepage") }
-                    OutlinedButton(onClick = onOpenOfflineLibrary, modifier = Modifier.fillMaxWidth()) { Text("Open downloaded offline library") }
+                    OutlinedButton(onClick = {
+                        pageError = false
+                        webView?.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/devotional-centre")
+                    }, modifier = Modifier.fillMaxWidth()) { Text("Open devotional library in this app") }
                 }
             }
         }
