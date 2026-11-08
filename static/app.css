@@ -3183,3 +3183,22 @@ html,body{
   #nav .menu-panel,
   #nav .menu-panel.open{width:min(300px, calc(100vw - 28px)) !important}
 }
+
+
+/* Fresh dashboard navigation menu — shared web and Android WebView styling */
+#nav.mcn-dashboard-nav{display:block!important;position:sticky!important;top:0!important;z-index:12000!important;overflow:visible!important;padding:10px 16px!important;background:#fff!important;border-bottom:1px solid #e2e8e4!important}
+#nav .mcn-dashboard-nav{position:relative!important;display:block!important;width:min(360px,100%)!important;max-width:100%!important;overflow:visible!important}
+#nav .mcn-dashboard-toggle{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:12px!important;width:100%!important;min-height:56px!important;padding:12px 16px!important;border:1px solid #dce5df!important;border-radius:14px!important;background:#fff!important;color:#14532d!important;font-size:19px!important;font-weight:800!important;box-shadow:0 3px 14px rgba(15,45,25,.08)!important;touch-action:manipulation!important}
+#nav .mcn-menu-icon{font-size:24px!important;line-height:1}
+#nav .mcn-dashboard-toggle #menuCurrent{flex:1!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
+#nav .mcn-dashboard-toggle .menu-chevron{font-size:18px!important;margin-left:auto!important}
+#nav .mcn-dashboard-panel{display:none!important;position:absolute!important;top:calc(100% + 8px)!important;left:0!important;right:auto!important;width:min(360px,calc(100vw - 32px))!important;max-width:calc(100vw - 32px)!important;max-height:70vh!important;overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain!important;-webkit-overflow-scrolling:touch!important;flex-direction:column!important;gap:3px!important;padding:9px!important;background:#fff!important;border:1px solid #dce5df!important;border-radius:15px!important;box-shadow:0 14px 36px rgba(15,45,25,.20)!important}
+#nav .mcn-dashboard-panel.open{display:flex!important}
+#nav .mcn-dashboard-panel button{display:block!important;flex:0 0 auto!important;width:100%!important;min-height:46px!important;padding:12px 14px!important;margin:0!important;border:0!important;border-radius:9px!important;background:#fff!important;color:#526057!important;font-size:15px!important;font-weight:650!important;line-height:1.35!important;text-align:left!important;white-space:normal!important;overflow-wrap:anywhere!important;box-shadow:none!important}
+#nav .mcn-dashboard-panel button.active,#nav .mcn-dashboard-panel button:hover{background:#ecfdf3!important;color:#14532d!important}
+#nav .mcn-dashboard-panel button[hidden]{display:none!important}
+@media(max-width:700px){
+ #nav.mcn-dashboard-nav{padding:9px 16px!important}
+ #nav .mcn-dashboard-nav{width:min(360px,calc(100vw - 32px))!important}
+ #nav .mcn-dashboard-panel{width:min(360px,calc(100vw - 32px))!important;max-height:68vh!important}
+}
