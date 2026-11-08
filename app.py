@@ -13143,9 +13143,12 @@ def register_mcn_offline_worker(response):
             if "/service-worker.js" not in html and "</body>" in html:
                 registration = (
                     '<script>(function(){if("serviceWorker" in navigator){'
-                    'window.mcnCacheEntireApp=function(){navigator.serviceWorker.ready.then(function(reg){'
-                    'var worker=reg.active||reg.waiting||reg.installing;if(worker){worker.postMessage({type:"CACHE_MCN_APP"});}});};'
+                    'window.mcnCacheEntireApp=function(){return navigator.serviceWorker.ready.then(function(reg){'
+                    'var worker=reg.active||reg.waiting||reg.installing;if(!worker)return;'
+                    'worker.postMessage({type:"CACHE_MCN_APP"});});};'
                     'navigator.serviceWorker.register("/service-worker.js",{scope:"/"})'
+                    '.then(function(){return navigator.serviceWorker.ready;})'
+                    '.then(function(){if(navigator.onLine){window.mcnCacheEntireApp();}})'
                     '.catch(function(error){console.warn("Offline support unavailable",error);});'
                     '}})();</script>'
                 )
