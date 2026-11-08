@@ -13,7 +13,7 @@ const PUBLIC_ROUTES = [
   "/devotional-centre/creeds", "/devotional-centre/holy-bible",
   "/devotional-centre/lectionary", "/media-library"
 ];
-const BLOCKED = /(^|\/)(admin|login|logout|register|registration|member-registration|payment|checkout|dashboard|staff|member|profile|account|finance|giving|security|customer-care|settings|reports)(\/|$)/i;
+const BLOCKED = /(^|\/)(admin|login|logout|register|registration|member-registration|payment|checkout|dashboard|staff|member|profile|account|finance|giving|give|donate|donation|flutterwave|paystack|security|customer-care|settings|reports)(\/|$)/i;
 
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
