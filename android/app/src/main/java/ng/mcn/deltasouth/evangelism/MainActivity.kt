@@ -1391,7 +1391,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                             val uri = request.url
                             if (!onlineState && (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library")) {
-                                val html = OfflineDevotionalPage.render(view.context, uri.path.orEmpty(), uri.getQueryParameter("q").orEmpty())
+                                val html = OfflineDevotionalPage.render(view.context, uri.path.orEmpty(), uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
                                 view.loadDataWithBaseURL(BuildConfig.API_BASE_URL, html, "text/html", "UTF-8", null)
                                 return true
                             }
