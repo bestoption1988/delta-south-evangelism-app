@@ -506,6 +506,23 @@
 </section>
 
 
+
+
+<section class="contact-section" id="contact">
+  <p class="eyebrow">WE WOULD LOVE TO HEAR FROM YOU</p>
+  <h2>Connect With the Diocese</h2>
+  <p>{{ homepage_content.get("diocese_text") or "For worship, membership, prayer and diocesan enquiries, please contact your local church or diocesan office." }}</p>
+  <a class="button gold-button" href="mailto:info@mcn-deltasouth.org">✉ Email the Diocese</a>
+  <div class="contact-details">
+{% if homepage_content.get("contact_email") %}<p>Email: <a href="mailto:{{ homepage_content.get('contact_email') }}">{{ homepage_content.get("contact_email") }}</a></p>{% endif %}
+{% if homepage_content.get("contact_phone") %}<p>Telephone: <a href="tel:{{ homepage_content.get('contact_phone') }}">{{ homepage_content.get("contact_phone") }}</a></p>{% endif %}
+{% if homepage_content.get("contact_address") %}<p>Address: {{ homepage_content.get("contact_address") }}</p>{% endif %}
+{% if homepage_content.get("facebook_url") %}<p><a href="{{ homepage_content.get('facebook_url') }}" target="_blank" rel="noopener">Facebook</a></p>{% endif %}
+{% if homepage_content.get("youtube_url") %}<p><a href="{{ homepage_content.get('youtube_url') }}" target="_blank" rel="noopener">YouTube</a></p>{% endif %}
+</div>
+</section>
+</main>
+
 <section class="mission-map-section" id="mission-map"
          aria-labelledby="mission-map-title">
   <div class="mission-map-inner">
@@ -542,21 +559,6 @@
     </div>
   </div>
 </section>
-
-<section class="contact-section" id="contact">
-  <p class="eyebrow">WE WOULD LOVE TO HEAR FROM YOU</p>
-  <h2>Connect With the Diocese</h2>
-  <p>{{ homepage_content.get("diocese_text") or "For worship, membership, prayer and diocesan enquiries, please contact your local church or diocesan office." }}</p>
-  <a class="button gold-button" href="mailto:info@mcn-deltasouth.org">✉ Email the Diocese</a>
-  <div class="contact-details">
-{% if homepage_content.get("contact_email") %}<p>Email: <a href="mailto:{{ homepage_content.get('contact_email') }}">{{ homepage_content.get("contact_email") }}</a></p>{% endif %}
-{% if homepage_content.get("contact_phone") %}<p>Telephone: <a href="tel:{{ homepage_content.get('contact_phone') }}">{{ homepage_content.get("contact_phone") }}</a></p>{% endif %}
-{% if homepage_content.get("contact_address") %}<p>Address: {{ homepage_content.get("contact_address") }}</p>{% endif %}
-{% if homepage_content.get("facebook_url") %}<p><a href="{{ homepage_content.get('facebook_url') }}" target="_blank" rel="noopener">Facebook</a></p>{% endif %}
-{% if homepage_content.get("youtube_url") %}<p><a href="{{ homepage_content.get('youtube_url') }}" target="_blank" rel="noopener">YouTube</a></p>{% endif %}
-</div>
-</section>
-</main>
 
 <footer>
   <div class="footer-brand"><img class="footer-logo" src="/static/uploads/leadership/mcn-logo.png?v=4" alt="Official Methodist Church Nigeria emblem"><div><b>METHODIST CHURCH NIGERIA</b><br><strong>DELTA SOUTH DIOCESE</strong><small>WORSHIP · WITNESS · SERVICE · DISCIPLESHIP</small></div></div>
