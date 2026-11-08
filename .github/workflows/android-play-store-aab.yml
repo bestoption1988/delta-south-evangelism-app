@@ -9,7 +9,7 @@ on:
       - 'android/**'
       - 'app.py'
       - 'templates/**'
-      - 'static/mcn-offline-sw.js'
+      - 'static/**'
       - '.github/workflows/android-play-store-aab.yml'
 
 permissions:
