@@ -1400,9 +1400,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // The online server may return 404 for its homepage while the
                             // installed app still has usable local libraries. Keep navigation
                             // inside the app and show the on-device library instead of a raw 404.
-                            if (uri.path.isNullOrBlank() || uri.path == "/") {
-                                val html = OfflineDevotionalPage.render(view.context, "/")
-                                view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
+                            if (uri.scheme == "mcn-app" && uri.host == "home") {
+                                view.settings.cacheMode = if (onlineState) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                                view.loadUrl(BuildConfig.API_BASE_URL)
                                 return true
                             }
                             if (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library") {
@@ -1445,9 +1445,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         @Suppress("DEPRECATION")
                         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                             val uri = android.net.Uri.parse(url)
-                            if ((uri.scheme == "mcn-app" && uri.host == "home") || uri.path.isNullOrBlank() || uri.path == "/") {
-                                val html = OfflineDevotionalPage.render(view.context, "/")
-                                view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
+                            if (uri.scheme == "mcn-app" && uri.host == "home") {
+                                view.settings.cacheMode = if (onlineState) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                                view.loadUrl(BuildConfig.API_BASE_URL)
                                 return true
                             }
                             if (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library") {
@@ -1682,9 +1682,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     if (online) {
                         loadUrl(BuildConfig.API_BASE_URL)
                     } else {
-                        val localHome = OfflineDevotionalPage.render(ctx, "/")
-                        loadDataWithBaseURL("https://offline.mcn-app/", localHome, "text/html", "UTF-8", null)
-                        pageLoading = false
+                        settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                        loadUrl(BuildConfig.API_BASE_URL)
                     }
                     webView = this
                 }
@@ -1698,9 +1697,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 if (view.url.isNullOrBlank()) {
                     if (online) view.loadUrl(BuildConfig.API_BASE_URL)
                     else {
-                        val localHome = OfflineDevotionalPage.render(view.context, "/")
-                        view.loadDataWithBaseURL("https://offline.mcn-app/", localHome, "text/html", "UTF-8", null)
-                        pageLoading = false
+                        view.settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                        view.loadUrl(BuildConfig.API_BASE_URL)
                     }
                 }
             }
