@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - postgres-migration-integration
+      - rebuild/android-offline-first
     paths:
       - "android/**"
       - ".github/workflows/build-apk.yml"
