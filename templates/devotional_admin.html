@@ -77,12 +77,6 @@
    showUpload(100,"Upload complete. Checking ZIP contents…");
    const done=await fetch("/admin/devotional-centre/upload/"+id+"/complete",{method:"POST"});
    const doneData=await done.json().catch(()=>({}));if(!done.ok)throw new Error(doneData.error||"Could not process ZIP (HTTP "+done.status+").");
-   if(doneData.bible_uploaded){
-    showUpload(100,"Success! The World English Bible database was extracted from your ZIP and installed for offline reading. Opening the Bible reader…");
-    label.classList.add("success");
-    window.location.href=doneData.redirect||"/devotional-centre/holy-bible";
-    return;
-   }
    showUpload(100,"Devotional Kits ZIP received and saved securely. The background worker will process it; see the progress panel below.");
    addJob(doneData.job_id);refresh();
   }catch(err){showUpload(0,"Upload stopped: "+(err&&err.message?err.message:String(err)));label.classList.add("error");}
