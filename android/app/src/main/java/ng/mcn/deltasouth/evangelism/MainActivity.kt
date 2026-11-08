@@ -38,8 +38,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         Backend.initialize(applicationContext)
         OfflineModuleManager.removeLegacyBibleFiles(applicationContext)
-        // Stage already-downloaded devotional collections into one local file per resource.
-        // This migration is local-only and requires no network connection.
+        // Keep existing downloads and move them into one permanent folder per library card.
+        // This migration runs on-device and requires no internet connection.
         runCatching { OfflineModuleManager.migrateToCardFolders(applicationContext) }
         android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
             object : android.webkit.ServiceWorkerClient() {
