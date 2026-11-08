@@ -20,6 +20,7 @@ object OfflineDevotionalPage {
         if(p=="/devotional-centre/holy-bible")return bible(c)
         if(p.startsWith("/devotional-centre/offline-bible"))return bibleReader(c,translation)
         if(p.startsWith("/devotional-centre/collection/"))return collection(c,Uri.decode(p.substringAfterLast('/')),q)
+        if(p.startsWith("/__mcn_offline/resource/"))return stagedResource(c,Uri.decode(p.removePrefix("/__mcn_offline/resource/")))
         if(p.startsWith("/devotional-centre/item/"))return item(c,Uri.decode(p.substringAfterLast('/')))
         if(p=="/devotional-centre/lectionary"){val f=File(d(c),"lectionary_2027.txt");return page("Yearly Lectionary","<article class='paper'>${e(if(f.isFile)f.readText() else "Not downloaded yet.")}</article>")}
         return home(c)
@@ -36,7 +37,7 @@ object OfflineDevotionalPage {
         val x=cs.firstOrNull{it.slug==slug||it.key==slug}?:return home(c);val rows=a(c,x.key);val b=StringBuilder("""<form method="get"><input name="q" placeholder="Search this collection" value="${e(q)}"><button>Search</button></form><p class="muted">${rows.length()} resources saved in this library</p>""")
         var count=0
         for(i in 0 until rows.length()){val r=rows.optJSONObject(i)?:continue;val p=r.optJSONObject("payload")?:JSONObject();val title=r.optString("title","Resource");val num=r.optString("item_number");val first=p.optString("firstline",p.optString("reference",p.optString("heading",p.optString("content",""))));if(q.isNotBlank()&&!("$title $num $first".contains(q,true)))continue
-            val id=r.optString("resource_id","${x.key}:$num");b.append("""<article class="item"><div class="muted">${e(x.title)} · ${e(num)}</div><h2>${e(title)}</h2><p class="muted">${e(first.take(200))}</p><a class="btn" href="/devotional-centre/item/${Uri.encode(id)}">Open Resource →</a></article>""");count++}
+            val id=r.optString("resource_id","${x.key}:$num");val staged=r.optString("offline_file");val localHref=if(staged.isNotBlank())"/__mcn_offline/resource/${Uri.encode(staged)}" else "/devotional-centre/item/${Uri.encode(id)}";b.append("""<article class="item"><div class="muted">${e(x.title)} · ${e(num)}</div><h2>${e(title)}</h2><p class="muted">${e(first.take(200))}</p><a class="btn" href="$localHref">Open Saved Resource →</a></article>""");count++}
         if(count==0)b.append("<div class='paper'>No matching downloaded resources in this library card.</div>")
         return page(x.title,b.toString())
     }
@@ -48,6 +49,25 @@ object OfflineDevotionalPage {
             val tunes=p.optJSONArray("otherTunes");if(tunes!=null)for(j in 0 until tunes.length()){val t=tunes.optJSONObject(j)?:continue;val f=t.optString("offline_file");if(f.isNotBlank())b.append("""<div class="item"><strong>${e(t.optString("title","Additional tune"))}</strong><audio controls src="/__mcn_offline/file/${Uri.encode(f)}"></audio></div>""")}
             return page(r.optString("title","Worship resource"),b.toString())}}
         return page("Resource unavailable offline","<div class='paper'>This resource is not in the downloaded collection. Re-download this collection from its original card while connected.</div>")
+    }
+    private fun stagedResource(c:Context,relative:String):String {
+        val clean=relative.replace("\\","/")
+        if(clean.isBlank()||clean.startsWith("/")||clean.split("/").any{it==".."})return page("Resource unavailable","<div class='paper'>Invalid local resource path.</div>")
+        val root=d(c).canonicalFile
+        val file=File(root,clean).canonicalFile
+        if(!file.path.startsWith(root.path+File.separator)||!file.isFile)return page("Resource unavailable offline","<div class='paper'>This individual resource has not been staged on this phone. Reconnect and download its collection.</div>")
+        val r=runCatching{JSONObject(file.readText())}.getOrElse{return page("Resource unavailable","<div class='paper'>The saved resource file could not be read.</div>")}
+        val p=r.optJSONObject("payload")?:JSONObject()
+        val b=StringBuilder("<article class='paper'>")
+        if(p.has("reference"))b.append("<h2>${e(p.optString("reference"))}</h2>${e(p.optString("verse"))}")
+        else if(p.has("stanzas")){val st=p.optJSONArray("stanzas")?:JSONArray();for(i in 0 until st.length())b.append("<p>${e(st.optString(i))}</p>");if(p.has("chorus"))b.append("<h3>Chorus</h3><p>${e(p.optString("chorus"))}</p>")}
+        else b.append(e(p.optString("content",p.optString("text",p.optString("body",p.optString("description",p.toString(2)))))))
+        b.append("</article>")
+        val audio=r.optString("audio_file")
+        if(audio.isNotBlank())b.append("""<div class="item"><strong>Hymn recording</strong><audio controls preload="metadata" src="/__mcn_offline/file/${Uri.encode(audio)}"></audio></div>""")
+        val tunes=p.optJSONArray("otherTunes")
+        if(tunes!=null)for(i in 0 until tunes.length()){val t=tunes.optJSONObject(i)?:continue;val f=t.optString("offline_file");if(f.isNotBlank())b.append("""<div class="item"><strong>${e(t.optString("title","Hymn tune"))}</strong><audio controls preload="metadata" src="/__mcn_offline/file/${Uri.encode(f)}"></audio></div>""")}
+        return page(r.optString("title","Worship resource"),b.toString())
     }
     private fun bible(c:Context):String {val a=runCatching{JSONArray(File(c.filesDir,"bible_modules/index.json").readText())}.getOrDefault(JSONArray());val b=StringBuilder("<div class='grid'>");for(i in 0 until a.length()){val x=a.optJSONObject(i)?:continue;val id=x.optString("id");if(id.isBlank()||id.equals("web",true))continue;b.append("""<article class="card"><div class="icon">📖</div><h2>${e(x.optString("title",id.uppercase(Locale.ROOT)))}</h2><span class="pill">Downloaded Bible module</span><p class="muted">Bible database saved locally on this phone.</p></article>""")};b.append("</div>");if(a.length()==0)b.append("<div class='paper'>No uploaded Bible modules saved yet.</div>");return page("Uploaded Bible Library",b.toString())}
     private fun bibleReader(c:Context,translation:String):String {
