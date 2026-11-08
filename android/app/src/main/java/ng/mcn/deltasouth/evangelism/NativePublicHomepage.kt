@@ -377,7 +377,7 @@ fun NativePublicHomepage(
                 }
                 item {
                     SectionTitle("UPCOMING EVENTS")
-                    TextButton(onClick = { openPage("/#events") }, modifier = Modifier.align(Alignment.End)) { Text("View Events →") }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) { TextButton(onClick = { openPage("/#events") }) { Text("View Events →") } }
                 }
                 items(events) { event ->
                     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(16.dp)) {
