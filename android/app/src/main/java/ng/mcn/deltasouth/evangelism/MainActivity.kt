@@ -1489,6 +1489,33 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
                                 return true
                             }
+                            // Never let ordinary homepage navigation silently contact Naijacloud.
+                            // Public pages that have local renderers open from saved phone data;
+                            // other pages use a saved MHTML copy or a clear offline notice.
+                            val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                            if ((uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost) {
+                                val route = localPath.ifBlank { "/" }
+                                if (route == "/" || route == "/index.html") {
+                                    openSavedDiocesanHome(view)
+                                    return true
+                                }
+                                if (route in setOf("/login", "/register", "/registration", "/giving", "/payment", "/prayer-request")) {
+                                    if (onlineState) view.loadUrl(uri.toString())
+                                    else {
+                                        val notice = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px'><h2>Internet connection required</h2><p>This service needs an internet connection. Your saved homepage and downloaded church resources remain available offline.</p><p><a href='mcn-app://home'>Return to homepage</a></p></body>"
+                                        view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
+                                    }
+                                    return true
+                                }
+                                val savedPage = offlinePageArchiveFile(view.context, uri.toString())
+                                if (savedPage.isFile && savedPage.length() > 0L) {
+                                    view.loadUrl(android.net.Uri.fromFile(savedPage).toString())
+                                } else {
+                                    val notice = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px;background:#f3f6fa;color:#17345b'><h2>Page not saved for offline use</h2><p>This page is not part of the downloaded offline package. Use Update Offline Content while connected to save the latest available content.</p><p><a href='mcn-app://home'>Return to saved homepage</a></p></body>"
+                                    view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
+                                }
+                                return true
+                            }
                             if (uri.scheme == "file" && bundledPagePath.isNotBlank()) {
                                 val route = bundledPagePath.removePrefix("/")
                                 if (route in setOf("login", "register", "registration", "giving", "payment", "prayer-request")) {
@@ -1516,19 +1543,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             }
                             // All website navigation stays inside this WebView, including links
                             // to other diocesan pages and pages opened with target=_blank.
-                            if ((uri.scheme == "http" || uri.scheme == "https") &&
-                                uri.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host &&
-                                view.url?.startsWith("file:") == true) {
-                                val savedPage = offlinePageArchiveFile(view.context, uri.toString())
-                                if (savedPage.isFile && savedPage.length() > 0L) {
-                                    view.loadUrl(android.net.Uri.fromFile(savedPage).toString())
-                                } else {
-                                    val notice = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px;background:#f3f6fa;color:#17345b'><h2>Offline page not saved yet</h2><p>This section has not been downloaded to this phone. Connect and deliberately choose <b>Update Offline Content</b> to save the latest version.</p><p><a href='mcn-app://home'>Return to saved homepage</a></p></body>"
-                                    view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
-                                }
+                            if (uri.scheme == "http" || uri.scheme == "https") {
+                                // External web links are not opened as background navigation from
+                                // the bundled homepage. Login/payment actions are handled above.
                                 return true
                             }
-                            if (uri.scheme == "http" || uri.scheme == "https") return false
                             // Let phone/email handlers work without launching a browser.
                             if (uri.scheme == "tel" || uri.scheme == "mailto") {
                                 runCatching {
@@ -1586,17 +1605,43 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
                             OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
-                            // A saved local homepage must not silently call Naijacloud for live API data.
-                            if (localArchiveActive.get() &&
-                                request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host &&
-                                (request.url.path.orEmpty().startsWith("/api/") ||
-                                 request.url.path.orEmpty().startsWith("/socket.io/"))) {
-                                // Block live data/API calls from a saved page, but do not block
-                                // same-origin images, CSS, fonts or other static homepage assets.
+                            // Serve same-origin homepage assets directly from the APK. This is
+                            // what prevents absolute /static/... image, CSS and JS URLs from
+                            // falling through to Naijacloud when the homepage is opened locally.
+                            val requestedUri = request.url
+                            val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                            if (localArchiveActive.get() && requestedUri.host == configuredHost) {
+                                val requestPath = android.net.Uri.decode(requestedUri.encodedPath.orEmpty()).trimStart('/')
+                                if (requestPath.startsWith("api/") || requestPath.startsWith("socket.io/")) {
+                                    return android.webkit.WebResourceResponse(
+                                        "application/json", "UTF-8", 503, "Offline snapshot",
+                                        mapOf("Cache-Control" to "no-store"),
+                                        java.io.ByteArrayInputStream(ByteArray(0))
+                                    )
+                                }
+                                val safePath = requestPath.split('/').filter { it.isNotBlank() && it != "." && it != ".." }.joinToString("/")
+                                if (safePath.isNotBlank()) {
+                                    val assetPath = "offline-home/$safePath"
+                                    val mime = when (safePath.substringAfterLast('.', "").lowercase()) {
+                                        "css" -> "text/css"; "js" -> "application/javascript"; "mjs" -> "application/javascript"
+                                        "png" -> "image/png"; "jpg", "jpeg" -> "image/jpeg"; "gif" -> "image/gif"
+                                        "webp" -> "image/webp"; "svg" -> "image/svg+xml"; "ico" -> "image/x-icon"
+                                        "woff" -> "font/woff"; "woff2" -> "font/woff2"; "ttf" -> "font/ttf"
+                                        "json" -> "application/json"; "mp4" -> "video/mp4"; "webm" -> "video/webm"
+                                        "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; "pdf" -> "application/pdf"
+                                        else -> "application/octet-stream"
+                                    }
+                                    val localAsset = runCatching { ctx.assets.open(assetPath) }.getOrNull()
+                                    if (localAsset != null) {
+                                        return android.webkit.WebResourceResponse(mime, null, localAsset)
+                                    }
+                                }
+                                // A missing bundled same-origin resource must not trigger a
+                                // network request; return a local 404 instead.
                                 return android.webkit.WebResourceResponse(
-                                    "application/json", "UTF-8", 503, "Offline snapshot",
+                                    "text/plain", "UTF-8", 404, "Not found",
                                     mapOf("Cache-Control" to "no-store"),
-                                    java.io.ByteArrayInputStream(ByteArray(0))
+                                    java.io.ByteArrayInputStream("Offline asset not packaged".toByteArray())
                                 )
                             }
                             if (!onlineState) {
