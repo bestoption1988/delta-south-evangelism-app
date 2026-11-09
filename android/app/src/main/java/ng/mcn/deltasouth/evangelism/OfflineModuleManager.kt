@@ -333,6 +333,7 @@ object OfflineModuleManager {
                         val target = File(directory, "hymn_" + id + ext)
                         if (downloadSignedFile(longClient, audioUrl, target) { done, total -> onProgress("Hymn audio: " + item.optString("title", collection), if (total > 0L) (done * 100 / total).toInt() else 0) }) {
                             item.put("audio_file", target.name)
+                            saveOfflineAudioUrl(context, audioUrl, target.name)
                             audioDownloaded++
                         }
                     }
@@ -347,6 +348,7 @@ object OfflineModuleManager {
                             val tuneFile = File(directory, "hymn_" + id + "_tune" + tuneIndex + tuneExt)
                             if (downloadSignedFile(longClient, tuneUrl, tuneFile) { done, total -> onProgress("Hymn tune: " + item.optString("title", collection), if (total > 0L) (done * 100 / total).toInt() else 0) }) {
                                 tune.put("offline_file", tuneFile.name)
+                                saveOfflineAudioUrl(context, tuneUrl, tuneFile.name)
                                 audioDownloaded++
                             }
                         }
@@ -369,6 +371,19 @@ object OfflineModuleManager {
         context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
             .edit().putInt("stored_" + collection + "_count", allItems.length()).apply()
         return if (includeAudio) audioDownloaded else allItems.length()
+    }
+
+    private fun saveOfflineAudioUrl(context: Context, signedUrl: String, filename: String) {
+        val path = runCatching { android.net.Uri.parse(signedUrl).encodedPath.orEmpty() }.getOrDefault("")
+        if (path.isBlank()) return
+        val directory = File(devotionalDirectory(context), "audio_url_map").apply { mkdirs() }
+        val mapFile = File(directory, "index.json")
+        val map = runCatching { JSONObject(if (mapFile.isFile) mapFile.readText() else "{}") }.getOrDefault(JSONObject())
+        map.put(path, filename)
+        val temporary = File(directory, "index.json.part")
+        temporary.writeText(map.toString())
+        if (mapFile.exists()) mapFile.delete()
+        if (!temporary.renameTo(mapFile)) temporary.copyTo(mapFile, overwrite = true).also { temporary.delete() }
     }
 
     fun downloadHymnAudio(context: Context, onProgress: (String, Int) -> Unit = { _, _ -> }): Int {
