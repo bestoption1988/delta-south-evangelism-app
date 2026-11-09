@@ -1803,7 +1803,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 // Connectivity changes must not reload the screen or wake the hosted server.
                 // The user chooses "Open live website" from the local home when needed.
                 if (view.url.isNullOrBlank()) {
-                    view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(appContext, "/"), "text/html", "UTF-8", null)
+                    view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, "/"), "text/html", "UTF-8", null)
                 }
             }
         )
