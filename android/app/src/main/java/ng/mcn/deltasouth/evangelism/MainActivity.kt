@@ -1544,6 +1544,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             pageErrorDetails = "Connecting to the diocesan website…"
                         }
                         override fun onPageFinished(view: WebView, url: String?) {
+                            // Turn file access back off after the trusted local MHTML page has loaded.
+                            if (url.orEmpty().startsWith("file:")) view.settings.allowFileAccess = false
                             // Keep every ordinary website link, form and popup navigation
                             // inside this standalone app instead of handing it to Chrome.
                             val keepNavigationInsideApp = """
@@ -1716,6 +1718,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                             // Return to the exact original homepage from its on-device archive.
                                             view.post {
                                                 view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                                                // MHTML is stored in this app's private files directory.
+                                                // Enable file access only while opening that trusted local archive.
+                                                view.settings.allowFileAccess = true
                                                 view.loadUrl(Uri.fromFile(archive).toString())
                                             }
                                         }
@@ -1835,6 +1840,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                     if (savedHomepage.isFile && savedHomepage.length() > 0L) {
                         // Once saved, launch the exact original homepage from local storage.
+                        settings.allowFileAccess = true
                         loadUrl(Uri.fromFile(savedHomepage).toString())
                     } else if (online) {
                         // First launch only: fetch the official homepage so onPageFinished can
