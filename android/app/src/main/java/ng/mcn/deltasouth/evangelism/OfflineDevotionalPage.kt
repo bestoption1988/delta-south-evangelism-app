@@ -46,9 +46,11 @@ object OfflineDevotionalPage {
         val hymnPayload=hymn?.optJSONObject("payload")?:JSONObject()
         val hymnTitle=hymn?.optString("title").orEmpty().ifBlank{"Methodist Hymn for Today"}
         val hymnNumber=hymn?.optString("item_number").orEmpty()
-        val lyrics=when {
-            hymnPayload.has("stanzas") -> (0 until hymnPayload.optJSONArray("stanzas").length()).joinToString("\\n\\n"){hymnPayload.optJSONArray("stanzas").optString(it)}
-            else -> hymnPayload.optString("content",hymnPayload.optString("text",hymnPayload.optString("body","Open the Methodist Hymn Library to read the saved hymns.")))
+        val stanzas=hymnPayload.optJSONArray("stanzas")
+        val lyrics=if(stanzas!=null) {
+            (0 until stanzas.length()).joinToString("\n\n"){stanzas.optString(it)}
+        } else {
+            hymnPayload.optString("content",hymnPayload.optString("text",hymnPayload.optString("body","Open the Methodist Hymn Library to read the saved hymns.")))
         }
         val audio=hymn?.optString("audio_file").orEmpty()
         val b=StringBuilder()
