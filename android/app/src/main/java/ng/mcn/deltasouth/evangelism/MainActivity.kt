@@ -14,6 +14,10 @@ import android.content.Context
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import android.webkit.ValueCallback
 import androidx.compose.ui.viewinterop.AndroidView
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -1361,6 +1365,19 @@ private fun KeyValueList(values: Map<String, Any?>) {
 @Composable
 private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
+    var pendingFileChooser by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+    val fileChooserLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val callback = pendingFileChooser
+        pendingFileChooser = null
+        if (callback != null) {
+            val selectedUris = runCatching {
+                WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+            }.getOrNull()
+            callback.onReceiveValue(selectedUris)
+        }
+    }
     val onlineState by rememberUpdatedState(online)
     var pageError by remember { mutableStateOf(false) }
     var pageErrorDetails by remember { mutableStateOf("The connection to the diocesan website failed.") }
@@ -1683,7 +1700,25 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             }
                         }
                     }
-                    webChromeClient = WebChromeClient()
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onShowFileChooser(
+                            webView: WebView,
+                            filePathCallback: ValueCallback<Array<Uri>>,
+                            fileChooserParams: FileChooserParams
+                        ): Boolean {
+                            // Connect HTML file inputs to Android's native chooser.
+                            pendingFileChooser?.onReceiveValue(null)
+                            pendingFileChooser = filePathCallback
+                            return try {
+                                fileChooserLauncher.launch(fileChooserParams.createIntent())
+                                true
+                            } catch (error: Exception) {
+                                pendingFileChooser = null
+                                filePathCallback.onReceiveValue(null)
+                                false
+                            }
+                        }
+                    }
                     if (online) {
                         loadUrl(BuildConfig.API_BASE_URL)
                     } else {
