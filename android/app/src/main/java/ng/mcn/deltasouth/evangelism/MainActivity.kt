@@ -1683,7 +1683,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     )
                                 }
                             }
-                            return super.shouldInterceptRequest(view, request)
+                            // This callback runs on a WebView worker thread. Do not call the
+                            // superclass implementation with the WebView instance: keep the
+                            // interceptor strictly request-based and return null for network fallback.
+                            return null
                         }
                         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                             localArchiveActive.set(url?.startsWith("file:") == true)
