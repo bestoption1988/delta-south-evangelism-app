@@ -230,50 +230,11 @@ private fun NativeDioceseApp() {
                 .onSuccess { dashboard = it }
                 .onFailure { message = it.message ?: "Dashboard will load from saved records when offline." }
         }
-        if (online && !downloadBusy) {
-            val prefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-            val homepageArchive = File(appContext.filesDir, "offline_homepage/diocesan-homepage.mht")
-            val needsFirstPackage = !prefs.getBoolean("initial_download_complete", false) ||
-                (!signedIn && !homepageArchive.isFile)
-            if (needsFirstPackage) {
-                // Run the large first download as persistent WorkManager work, not inside
-                // the homepage composition. Android may pause/recreate the screen while it runs.
-                val workName = "mcn-delta-south-offline-initial-download"
-                val manager = androidx.work.WorkManager.getInstance(appContext)
-                val existing = withContext(Dispatchers.IO) {
-                    runCatching { manager.getWorkInfosForUniqueWork(workName).get() }.getOrDefault(emptyList())
-                }.firstOrNull { !it.state.isFinished }
-                if (existing == null) {
-                    val constraints = androidx.work.Constraints.Builder()
-                        .setRequiredNetworkType(androidx.work.NetworkType.CONNECTED).build()
-                    val request = androidx.work.OneTimeWorkRequestBuilder<OfflineRefreshWorker>()
-                        .setConstraints(constraints).build()
-                    manager.enqueueUniqueWork(workName, androidx.work.ExistingWorkPolicy.KEEP, request)
-                }
-                downloadBusy = true
-                downloadMessage = "Preparing your offline package in the background…"
-                while (true) {
-                    val info = withContext(Dispatchers.IO) {
-                        runCatching { manager.getWorkInfosForUniqueWork(workName).get().firstOrNull() }.getOrNull()
-                    }
-                    if (info == null || info.state.isFinished) {
-                        if (info?.state == androidx.work.WorkInfo.State.SUCCEEDED) {
-                            prefs.edit().putBoolean("initial_download_complete", true).apply()
-                            val count = prefs.getInt("last_downloaded_count", 0)
-                            val media = prefs.getInt("last_media_downloaded_count", 0)
-                            downloadMessage = "Offline package saved: $count data sets and $media media files."
-                        } else if (info?.state == androidx.work.WorkInfo.State.FAILED) {
-                            downloadMessage = "Offline download stopped. Your saved files remain available; use Update Offline Content to retry."
-                        }
-                        break
-                    }
-                    downloadStage = info.progress.getString("stage") ?: "Saving app content for offline use…"
-                    downloadProgress = info.progress.getInt("progress", 0)
-                    kotlinx.coroutines.delay(900)
-                }
-                downloadBusy = false
-            }
-        }
+        // Do not launch the large first-time media package while the public
+        // homepage is starting. On some Android devices the simultaneous media,
+        // Bible and archive work can exhaust memory and cause Android to kill the app.
+        // The user can deliberately start this package from Update Offline Content.
+
     }
     BackHandler(enabled = signedIn && selected != "Home") { selected = "Home"; message = "" }
     val role = (profile["role"] ?: "").toString()
