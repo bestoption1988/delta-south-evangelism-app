@@ -146,11 +146,11 @@ def register_fellowship_routes(app, db_getter, user_getter):
             "ok": True,
             "fellowship": fellowship,
             "leaders": rows(
-                "SELECT full_name, role, biography, display_order FROM fellowship_leaders WHERE fellowship_id=? AND active=1 ORDER BY display_order, full_name",
+                "SELECT full_name, position_title, biography, display_order FROM fellowship_leaders WHERE fellowship_id=? AND active=1 ORDER BY display_order, full_name",
                 (fid,),
             ),
             "announcements": rows(
-                "SELECT title, content, created_at, published_at FROM fellowship_announcements WHERE fellowship_id=? AND status='published' ORDER BY COALESCE(published_at, created_at) DESC LIMIT 12",
+                "SELECT title, body, created_at, published_at FROM fellowship_announcements WHERE fellowship_id=? AND status='published' ORDER BY COALESCE(published_at, created_at) DESC LIMIT 12",
                 (fid,),
             ),
             "events": rows(
@@ -158,7 +158,7 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 (fid,),
             ),
             "studies": rows(
-                "SELECT title, description, content, event_date FROM fellowship_studies WHERE fellowship_id=? AND status='published' ORDER BY event_date DESC LIMIT 12",
+                "SELECT title, scripture_reference, preacher_or_teacher, summary, content, event_date FROM fellowship_studies WHERE fellowship_id=? AND status='published' ORDER BY event_date DESC LIMIT 12",
                 (fid,),
             ),
         })
