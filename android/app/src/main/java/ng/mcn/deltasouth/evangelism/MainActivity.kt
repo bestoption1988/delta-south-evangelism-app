@@ -1692,12 +1692,24 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     panel.style.setProperty('opacity','1','important');
                                     trigger.setAttribute('aria-expanded','true');
                                   }
-                                  trigger.addEventListener('click',function(event) {
+                                  // Use document-level capture because Android WebView can fail to
+                                  // dispatch the label/checkbox activation reliably on touch.
+                                  // This handler receives taps even when the label contains icon/text spans.
+                                  document.addEventListener('click',function(event) {
+                                    var menuHit = event.target && event.target.closest ? event.target.closest('.ds-menu-trigger') : null;
+                                    if (!menuHit) return;
                                     event.preventDefault();
-                                    event.stopImmediatePropagation();
+                                    event.stopPropagation();
+                                    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
                                     if (panel.style.display === 'none' || getComputedStyle(panel).display === 'none') openMenu();
                                     else closeMenu();
                                   },true);
+                                  // Make the full visible Menu bar an explicit touch target.
+                                  trigger.style.setProperty('display','flex','important');
+                                  trigger.style.setProperty('position','relative','important');
+                                  trigger.style.setProperty('z-index','10','important');
+                                  trigger.style.setProperty('pointer-events','auto','important');
+                                  trigger.style.setProperty('touch-action','manipulation','important');
                                   panel.addEventListener('click',function(event) {
                                     var groupLabel = event.target.closest('.ds-menu-group-trigger');
                                     if (groupLabel && subToggle) {
