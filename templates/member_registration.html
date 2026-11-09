@@ -1425,6 +1425,8 @@ const data = {};
       "/api/public/member-registration",
       {
         method:"POST",
+        credentials:"same-origin",
+        cache:"no-store",
         headers:{
           "Content-Type":"application/json",
           "Accept":"application/json"
@@ -1481,6 +1483,8 @@ const data = {};
         "/photo",
         {
           method:"POST",
+          credentials:"same-origin",
+          cache:"no-store",
           body:photoData,
           headers:{
             "Accept":"application/json"
