@@ -163,7 +163,51 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
         } finally { db.close() }
         WebResourceResponse("application/json","UTF-8",200,"OK",mapOf("Access-Control-Allow-Origin" to "*"),json.byteInputStream())
     }.getOrNull()
-    fun audioUrlResponse(c:Context,url:String):WebResourceResponse?=runCatching {
+    private fun mediaFileResponse(file: File, mime: String, rangeHeader: String?): WebResourceResponse {
+        val length = file.length()
+        val headers = linkedMapOf("Accept-Ranges" to "bytes", "Access-Control-Allow-Origin" to "*", "Content-Type" to mime, "Cache-Control" to "no-store")
+        val range = rangeHeader?.trim()?.takeIf { it.isNotBlank() }
+        if (range == null) {
+            headers["Content-Length"] = length.toString()
+            return WebResourceResponse(mime, null, 200, "OK", headers, file.inputStream())
+        }
+        val match = Regex("bytes=(\\d*)-(\\d*)", RegexOption.IGNORE_CASE).find(range)
+        if (match == null) {
+            headers["Content-Range"] = "bytes */$length"
+            return WebResourceResponse(mime, null, 416, "Range Not Satisfiable", headers, java.io.ByteArrayInputStream(ByteArray(0)))
+        }
+        val start = match.groupValues[1].toLongOrNull() ?: 0L
+        val requestedEnd = match.groupValues[2].toLongOrNull() ?: (length - 1L)
+        if (length <= 0L || start < 0L || start >= length || requestedEnd < start) {
+            headers["Content-Range"] = "bytes */$length"
+            return WebResourceResponse(mime, null, 416, "Range Not Satisfiable", headers, java.io.ByteArrayInputStream(ByteArray(0)))
+        }
+        val end = minOf(requestedEnd, length - 1L)
+        val count = end - start + 1L
+        headers["Content-Range"] = "bytes $start-$end/$length"
+        headers["Content-Length"] = count.toString()
+        val source = java.io.RandomAccessFile(file, "r")
+        source.seek(start)
+        val limited = object : java.io.InputStream() {
+            private var remaining = count
+            override fun read(): Int {
+                if (remaining <= 0L) return -1
+                val value = source.read()
+                if (value >= 0) remaining--
+                return value
+            }
+            override fun read(buffer: ByteArray, offset: Int, size: Int): Int {
+                if (remaining <= 0L) return -1
+                val read = source.read(buffer, offset, minOf(size.toLong(), remaining).toInt())
+                if (read > 0) remaining -= read.toLong()
+                return read
+            }
+            override fun close() = source.close()
+        }
+        return WebResourceResponse(mime, null, 206, "Partial Content", headers, limited)
+    }
+
+    fun audioUrlResponse(c:Context,url:String,rangeHeader:String? = null):WebResourceResponse?=runCatching {
         val uri = Uri.parse(url)
         val indexFile = File(File(d(c), "audio_url_map"), "index.json")
         if (!indexFile.isFile) return null
@@ -176,10 +220,10 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
             "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; "wav" -> "audio/wav"; "ogg" -> "audio/ogg"
             else -> "application/octet-stream"
         }
-        WebResourceResponse(mime, null, 200, "OK", mapOf("Access-Control-Allow-Origin" to "*", "Accept-Ranges" to "bytes"), file.inputStream())
+        mediaFileResponse(file, mime, rangeHeader)
     }.getOrNull()
 
-    fun fileResponse(c:Context,url:String):WebResourceResponse?=runCatching{
+    fun fileResponse(c:Context,url:String,rangeHeader:String? = null):WebResourceResponse?=runCatching{
         val u=Uri.parse(url)
         bibleJsonResponse(c,u)?.let{return it}
         if(!u.path.orEmpty().startsWith("/__mcn_offline/file/"))return null
@@ -187,6 +231,6 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
         if(name.isBlank()||name.contains("/")||name.contains(".."))return null
         val f=(sequenceOf(d(c),File(d(c),"Church_Media"),File(d(c),"Bible")) + (d(c).listFiles()?.filter{it.isDirectory}?.asSequence()?:emptySequence())).map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0} ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0} ?: return null
         val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
-        WebResourceResponse(mime,null,f.inputStream())
+        mediaFileResponse(f, mime, rangeHeader)
     }.getOrNull()
 }
