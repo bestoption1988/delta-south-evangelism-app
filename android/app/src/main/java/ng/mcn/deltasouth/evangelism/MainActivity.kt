@@ -1574,9 +1574,25 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 uri.path == "/hymns" || uri.path == "/hymn-library" -> "/devotional-centre/collection/english-hymns"
                                 else -> uri.path.orEmpty()
                             }
-                            if (legacyPath.startsWith("/devotional-centre") || legacyPath == "/media-library") {
+                            if (legacyPath.startsWith("/devotional-centre") || legacyPath == "/media-library" ||
+                                legacyPath == "/fellowships" || legacyPath.startsWith("/fellowship/")) {
                                 val html = OfflineDevotionalPage.render(view.context, legacyPath, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
+                                return true
+                            }
+                            if ((uri.scheme == "http" || uri.scheme == "https") &&
+                                uri.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host) {
+                                if (legacyPath.isBlank() || legacyPath == "/" || legacyPath == "/index.html") {
+                                    openSavedDiocesanHome(view)
+                                } else {
+                                    val savedPage = offlinePageArchiveFile(view.context, uri.toString())
+                                    if (savedPage.isFile && savedPage.length() > 0L) {
+                                        view.loadUrl(android.net.Uri.fromFile(savedPage).toString())
+                                    } else {
+                                        val notice = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px'><h2>Page not saved for offline use</h2><p>Use Update Offline Content while connected to save this page.</p><p><a href='mcn-app://home'>Return to homepage</a></p></body>"
+                                        view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
+                                    }
+                                }
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
@@ -1601,7 +1617,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 }
                                 return true
                             }
-                            return uri.scheme != "http" && uri.scheme != "https"
+                            // Do not allow a legacy WebView navigation path to load the
+                            // diocesan website directly. Only explicit Update/Login/payment flows do.
+                            return true
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
                             OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
