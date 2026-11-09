@@ -26,6 +26,9 @@ object OfflineDevotionalPage {
     private fun page(t:String,b:String)= """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(t)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:16px/1.55 system-ui}header{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:white;padding:26px 18px}header small{color:#f4d36e;font-weight:800}h1{font:800 30px Georgia;margin:8px 0}main{max-width:1000px;margin:auto;padding:16px 13px 45px}nav{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}a{color:#12664b;text-decoration:none;font-weight:700}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.card,.item,.paper{background:white;border:1px solid #dfe6ee;border-radius:15px;padding:15px;margin-bottom:12px}.icon{font-size:32px}.card h2,.item h2{font-size:18px;margin:7px 0}.muted{color:#69768b}.pill{display:inline-block;background:#edf4f0;color:#176247;border-radius:24px;padding:6px 11px;font-weight:800;font-size:12px;margin-top:8px}.btn,button{display:inline-block;background:#123363;color:white;padding:10px 14px;border:0;border-radius:9px;font-weight:800}input{font:inherit;padding:11px;border:1px solid #cbd5e1;border-radius:8px;width:70%}.paper{font:17px/1.8 Georgia;white-space:pre-wrap}audio,video{width:100%;margin-top:10px}@media(max-width:520px){.card{padding:12px}.card h2{font-size:16px}}</style></head><body><header><small>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE · OFFLINE</small><h1>${e(t)}</h1><div>Downloaded resources saved on this phone. No internet required.</div></header><main><nav><a href="mcn-app://home">← Main home</a><a href="/devotional-centre">All library cards</a></nav>$b</main></body></html>"""
     fun render(c:Context,path:String,q:String="",translation:String=""):String {
         val p=if(path=="/") "/" else path.trimEnd('/').ifBlank{"/devotional-centre"}
+        if(p=="/")return homepage(c)
+        if(p=="/fellowships")return fellowshipDirectory(c)
+        if(p.startsWith("/fellowship/"))return fellowshipPage(c,p.substringAfterLast('/'))
         if(p=="/media-library")return media(c)
         if(p=="/devotional-centre/communion-document/english")return communionDocument(c,"communion_english","English Communion")
         if(p=="/devotional-centre/communion-document/yoruba")return communionDocument(c,"communion_yoruba","Yoruba Communion")
@@ -35,6 +38,47 @@ object OfflineDevotionalPage {
         if(p.startsWith("/devotional-centre/item/"))return item(c,Uri.decode(p.substringAfterLast('/')))
         if(p=="/devotional-centre/lectionary")return lectionary(c)
         return home(c)
+    }
+    private fun homepage(c:Context):String {
+        val english=sortedRows(a(c,"english_hymns"))
+        val today=java.util.Calendar.getInstance(java.util.Locale("en","NG")).get(java.util.Calendar.DAY_OF_YEAR)
+        val hymn=english.getOrNull(if(english.isEmpty()) 0 else (today-1)%english.size)
+        val hymnPayload=hymn?.optJSONObject("payload")?:JSONObject()
+        val hymnTitle=hymn?.optString("title").orEmpty().ifBlank{"Methodist Hymn for Today"}
+        val hymnNumber=hymn?.optString("item_number").orEmpty()
+        val lyrics=when {
+            hymnPayload.has("stanzas") -> (0 until hymnPayload.optJSONArray("stanzas").length()).joinToString("\\n\\n"){hymnPayload.optJSONArray("stanzas").optString(it)}
+            else -> hymnPayload.optString("content",hymnPayload.optString("text",hymnPayload.optString("body","Open the Methodist Hymn Library to read the saved hymns.")))
+        }
+        val audio=hymn?.optString("audio_file").orEmpty()
+        val b=StringBuilder()
+        b.append("""<section class="item"><div class="muted">✝ SCRIPTURE FOR TODAY · OFFLINE</div><h2>Read your downloaded Bible</h2><p>The Scripture reader uses the Bible module saved on this phone.</p><a class="btn" href="/devotional-centre/holy-bible">Open Saved Bible →</a></section>""")
+        b.append("""<section class="item"><div class="muted">♫ METHODIST HYMN FOR TODAY · OFFLINE</div><h2>${e(hymnNumber)} ${e(hymnTitle)}</h2><div class="paper">${e(lyrics)}</div>""")
+        if(audio.isNotBlank())b.append("""<p><strong>Hymn tune</strong><audio controls preload="none" playsinline src="/__mcn_offline/file/${Uri.encode(audio)}"></audio></p>""")
+        val tunes=hymnPayload.optJSONArray("otherTunes")
+        if(tunes!=null)for(i in 0 until tunes.length()){val tune=tunes.optJSONObject(i)?:continue;val file=tune.optString("offline_file");if(file.isNotBlank())b.append("""<p><strong>${e(tune.optString("musicTitle",tune.optString("tuneName","Alternative tune")))}</strong><audio controls preload="none" playsinline src="/__mcn_offline/file/${Uri.encode(file)}"></audio></p>""")}
+        b.append("""<a class="btn" href="/devotional-centre/collection/english-hymns">All Saved Hymns →</a></section>""")
+        b.append("""<h2>Explore the Diocese</h2><div class="grid">
+<a class="card" href="/fellowships"><div class="icon">🤝</div><h2>Fellowships</h2><p class="muted">Open saved fellowship information</p></a>
+<a class="card" href="/devotional-centre"><div class="icon">📖</div><h2>Devotional Centre</h2><p class="muted">Hymns, Scripture and worship books</p></a>
+<a class="card" href="/media-library"><div class="icon">🎧</div><h2>Church Media</h2><p class="muted">Downloaded audio, video and documents</p></a>
+<a class="card" href="/devotional-centre/lectionary"><div class="icon">📅</div><h2>Lectionary</h2><p class="muted">Saved appointed readings</p></a>
+<a class="card" href="/login"><div class="icon">♙</div><h2>Member Login</h2><p class="muted">Internet required for secure sign-in</p></a>
+<a class="card" href="/giving"><div class="icon">♥</div><h2>Online Giving</h2><p class="muted">Internet required for payment</p></a>
+</div>""")
+        return page("Methodist Church Nigeria · Delta South Diocese",b.toString())
+    }
+    private fun fellowshipDirectory(c:Context):String {
+        val names=listOf("methodist-mens-fellowship" to "Methodist Men's Fellowship","methodist-womens-fellowship" to "Methodist Women's Fellowship","methodist-youth-fellowship" to "Methodist Youth Fellowship","methodist-campus-fellowship" to "Methodist Campus Fellowship")
+        val body=StringBuilder("<div class='grid'>")
+        names.forEach{(slug,name)->body.append("""<a class="card" href="/fellowship/${slug}"><div class="icon">🤝</div><h2>${e(name)}</h2><p class="muted">Fellowship information saved for offline access when included in the last update.</p><span class="pill">Open fellowship</span></a>""")}
+        body.append("</div>")
+        return page("Diocesan Fellowships",body.toString())
+    }
+    private fun fellowshipPage(c:Context,slug:String):String {
+        val names=mapOf("methodist-mens-fellowship" to "Methodist Men's Fellowship","methodist-womens-fellowship" to "Methodist Women's Fellowship","methodist-youth-fellowship" to "Methodist Youth Fellowship","methodist-campus-fellowship" to "Methodist Campus Fellowship")
+        val name=names[slug]?:return fellowshipDirectory(c)
+        return page(name,"""<article class='paper'><h2>${e(name)}</h2><p>This fellowship page is part of the offline app. Its profile, leadership, announcements, events and studies will appear here after they are included in the next offline content update.</p><a class='btn' href="/fellowships">← All Fellowships</a></article>""")
     }
     private fun lectionary(c:Context):String {
         val file = File(File(d(c), "Lectionary"), "lectionary_2027.txt")
