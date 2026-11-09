@@ -1693,9 +1693,22 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             if (onlineState && currentUrl.startsWith(BuildConfig.API_BASE_URL) &&
                                 !currentUrl.contains("/login") && !currentUrl.contains("/register")) {
                                 val archive = File(view.context.filesDir, "mcn_diocesan_homepage.mht")
-                                runCatching { view.saveWebArchive(archive.absolutePath, false) { savedPath ->
-                                    if (savedPath.isNullOrBlank()) archive.delete()
-                                } }
+                                runCatching {
+                                    view.saveWebArchive(archive.absolutePath, false) { savedPath ->
+                                        if (savedPath.isNullOrBlank() || !archive.isFile || archive.length() == 0L) {
+                                            archive.delete()
+                                            pageLoading = false
+                                            pageErrorDetails = "The original homepage could not be saved. Please try Refresh / Update again."
+                                            pageError = true
+                                        } else {
+                                            // Return to the exact original homepage from its on-device archive.
+                                            view.post {
+                                                view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                                                view.loadUrl(Uri.fromFile(archive).toString())
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             // Daily Scripture and hymn use the same tested webpage implementation as Chrome.
                             pageLoading = false
@@ -1719,9 +1732,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 } else {
                                     pageError = false
                                     pageErrorDetails = ""
-                                    val localHome = OfflineDevotionalPage.render(view.context, "/")
+                                    // Never replace the official homepage with the devotional library.
+                                    val notice = "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font-family:Arial;padding:28px;background:#f2f5fa;color:#102c50'><h2>Methodist Church Nigeria — Delta South Diocese</h2><p>The original diocesan homepage has not yet been saved on this phone.</p><p>Connect to the internet and tap <b>Refresh / Update</b> once. The original homepage will then be saved on this phone for offline use.</p></body></html>"
                                     view.post {
-                                        view.loadDataWithBaseURL("https://offline.mcn-app/", localHome, "text/html", "UTF-8", null)
+                                        view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
                                     }
                                 }
                             }
@@ -1748,8 +1762,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 } else {
                                     pageError = false
                                     pageErrorDetails = ""
-                                    val localHome = OfflineDevotionalPage.render(view.context, "/")
-                                    view.post { view.loadDataWithBaseURL("https://offline.mcn-app/", localHome, "text/html", "UTF-8", null) }
+                                    // Keep the homepage identity; do not show a second offline page.
+                                    val notice = "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font-family:Arial;padding:28px;background:#f2f5fa;color:#102c50'><h2>Methodist Church Nigeria — Delta South Diocese</h2><p>The original diocesan homepage has not yet been saved on this phone.</p><p>Connect to the internet and tap <b>Refresh / Update</b> once. The original homepage will then be saved on this phone for offline use.</p></body></html>"
+                                    view.post { view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null) }
                                 }
                             }
                         }
@@ -1809,7 +1824,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     if (savedHomepage.isFile && savedHomepage.length() > 0L) {
                         loadUrl(Uri.fromFile(savedHomepage).toString())
                     } else {
-                        loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(ctx, "/"), "text/html", "UTF-8", null)
+                        val notice = "<html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font-family:Arial;padding:28px;background:#f2f5fa;color:#102c50'><h2>Methodist Church Nigeria — Delta South Diocese</h2><p>The original diocesan homepage has not yet been saved on this phone.</p><p>Connect to the internet and tap <b>Refresh / Update</b> once. The original homepage will then be saved on this phone for offline use.</p></body></html>"
+                        loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
                     }
                     webView = this
                 }
