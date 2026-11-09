@@ -64,7 +64,13 @@ class MainActivity : ComponentActivity() {
         Thread {
             runCatching { OfflineModuleManager.removeLegacyBibleFiles(applicationContext) }
             runCatching { OfflineModuleManager.migrateToCardFolders(applicationContext) }
-            runCatching { OfflineModuleManager.scheduleAutomaticUpdates(applicationContext) }
+            // Background refresh is disabled: users update only when they deliberately choose Update.
+            runCatching {
+                androidx.work.WorkManager.getInstance(applicationContext)
+                    .cancelUniquePeriodicWork("mcn-delta-south-offline-refresh")
+                androidx.work.WorkManager.getInstance(applicationContext)
+                    .cancelUniqueWork("mcn-delta-south-offline-refresh-now")
+            }
         }.start()
     }
 }
@@ -205,8 +211,8 @@ private fun NativeDioceseApp() {
             }
         }
     }
-    // Reuse encrypted, session-scoped API snapshots when offline; only refresh and
-    // synchronize server changes when a validated connection is available.
+    // First connected launch creates the on-device package once. Later launches never
+    // refresh from Naijacloud automatically; refresh is user-initiated from the homepage.
     LaunchedEffect(signedIn, online) {
         if (signedIn) {
             if (online) {
@@ -215,19 +221,34 @@ private fun NativeDioceseApp() {
             }
             runCatching { withContext(Dispatchers.IO) { Backend.api.dashboard() } }
                 .onSuccess { dashboard = it }
-                .onFailure { message = it.message ?: "Dashboard will load when the connection is available." }
-            if (online) {
-                val prefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-                if (prefs.getBoolean("initial_download_complete", false)) {
-                    OfflineModuleManager.scheduleImmediateUpdate(appContext)
-                } else {
-                    downloadBusy = true
-                    downloadMessage = "Preparing your offline modules…"
-                    val result = withContext(Dispatchers.IO) { OfflineModuleManager.downloadAll(appContext) }
-                    if (result.downloaded > 0) prefs.edit().putBoolean("initial_download_complete", true).apply()
-                    downloadMessage = "Initial download: ${result.downloaded} saved, ${result.unavailable} not available for this account, ${result.failed} failed."
-                    downloadBusy = false
+                .onFailure { message = it.message ?: "Dashboard will load from saved records when offline." }
+        }
+        if (online && !downloadBusy) {
+            val prefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+            val homepageArchive = File(appContext.filesDir, "offline_homepage/diocesan-homepage.mht")
+            val needsFirstPackage = !prefs.getBoolean("initial_download_complete", false) ||
+                (!signedIn && !homepageArchive.isFile)
+            if (needsFirstPackage) {
+                downloadBusy = true
+                downloadMessage = "Preparing the first offline package…"
+                downloadProgress = 0
+                downloadStage = "Saving app content for offline use…"
+                val result = withContext(Dispatchers.IO) {
+                    runCatching {
+                        OfflineModuleManager.downloadAll(appContext) { stage, percent ->
+                            scope.launch(Dispatchers.Main) { downloadStage = stage; downloadProgress = percent }
+                        }
+                    }
                 }
+                result.onSuccess { summary ->
+                    if (summary.downloaded > 0 || summary.mediaDownloaded > 0) {
+                        prefs.edit().putBoolean("initial_download_complete", true).apply()
+                    }
+                    downloadMessage = "First offline package: ${summary.downloaded} data sets and ${summary.mediaDownloaded} media files saved; ${summary.unavailable} restricted and ${summary.failed} failed."
+                }.onFailure { error ->
+                    downloadMessage = error.message ?: "The first offline package could not be completed."
+                }
+                downloadBusy = false
             }
         }
     }
@@ -243,12 +264,15 @@ private fun NativeDioceseApp() {
             offlineDownloadProgress = downloadProgress,
             offlineDownloadStage = downloadStage,
             onStaffLogin = { showStaffLogin = true },
-            onOfflineDownload = {
+            onOfflineDownload = { homepageView ->
                 if (online && !downloadBusy) {
                     downloadBusy = true
-                    downloadMessage = "Saving the diocesan homepage, devotional resources, media and permitted records for offline use…"
+                    downloadMessage = "Updating the saved homepage and offline content…"
                     downloadProgress = 0
-                    downloadStage = "Preparing offline package…"
+                    downloadStage = "Checking for updated diocesan content…"
+                    // Only this deliberate action contacts the live homepage for a fresh copy.
+                    homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    homepageView.loadUrl(BuildConfig.API_BASE_URL)
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
                             runCatching {
@@ -260,10 +284,11 @@ private fun NativeDioceseApp() {
                         result.onSuccess { summary ->
                             val offlinePrefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
                             val bibleModules = offlinePrefs.getInt("last_uploaded_bible_module_count", 0)
-                            downloadMessage = "Offline package updated: ${summary.downloaded} data sets, ${summary.mediaDownloaded} media files, ${bibleModules} uploaded Bible modules, ${summary.unavailable} account-restricted items and ${summary.failed} failed modules."
+                            offlinePrefs.edit().putBoolean("initial_download_complete", true).apply()
+                            downloadMessage = "Offline update saved: ${summary.downloaded} data sets, ${summary.mediaDownloaded} media files, ${bibleModules} uploaded Bible modules, ${summary.unavailable} restricted items and ${summary.failed} failed."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }.onFailure { error ->
-                            downloadMessage = error.message ?: "The offline package could not be completed."
+                            downloadMessage = error.message ?: "The offline package could not be updated."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }
                         downloadBusy = false
@@ -1359,7 +1384,7 @@ private fun KeyValueList(values: Map<String, Any?>) {
 
 
 @Composable
-private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: (WebView) -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     val onlineState by rememberUpdatedState(online)
     var pageError by remember { mutableStateOf(false) }
@@ -1386,7 +1411,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                     settings.useWideViewPort = true
                     settings.loadWithOverviewMode = false
-                    settings.allowFileAccess = false
+                    settings.allowFileAccess = true
                     settings.allowContentAccess = true
                     settings.cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
                     isFocusable = true
@@ -1412,7 +1437,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
-                                onOfflineDownload()
+                                onOfflineDownload(view)
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
@@ -1457,7 +1482,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
-                                onOfflineDownload()
+                                onOfflineDownload(view)
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "staff-login") {
@@ -1515,6 +1540,36 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             """.trimIndent()
                             view.evaluateJavascript(keepNavigationInsideApp, null)
 
+                            // A locally saved MHTML homepage is rebased to the live origin for internal routes.
+                            if (url?.startsWith("file:") == true) {
+                                val rebaseLinks = """
+                                    (function() {
+                                      var base = '${BuildConfig.API_BASE_URL}';
+                                      document.querySelectorAll('a[href],form[action]').forEach(function(el) {
+                                        var attr = el.tagName === 'FORM' ? 'action' : 'href';
+                                        var raw = el.getAttribute(attr) || '';
+                                        if (raw && !/^(#|[a-z][a-z0-9+.-]*:)/i.test(raw)) el.setAttribute(attr, new URL(raw, base).href);
+                                      });
+                                    })();
+                                """.trimIndent()
+                                view.evaluateJavascript(rebaseLinks, null)
+                            } else if (url?.startsWith(BuildConfig.API_BASE_URL) == true) {
+                                val parsed = android.net.Uri.parse(url)
+                                if (parsed.path.isNullOrBlank() || parsed.path == "/") {
+                                    view.postDelayed({
+                                        val archive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+                                        archive.parentFile?.mkdirs()
+                                        view.saveWebArchive(archive.absolutePath, false) { savedPath ->
+                                            if (!savedPath.isNullOrBlank() && File(savedPath).isFile && File(savedPath).length() > 0L) {
+                                                context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+                                                    .edit().putBoolean("homepage_snapshot_saved", true)
+                                                    .putLong("homepage_snapshot_saved_at", System.currentTimeMillis()).apply()
+                                            }
+                                        }
+                                    }, 1200L)
+                                }
+                            }
+
                             // Use the same single menu controller as the web dashboard.
                             // The app.js click handler toggles #menuPanel.open; no competing
                             // WebView onclick override is installed here.
@@ -1546,6 +1601,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             val menuBridge = """
                                 (function() {
                                   if (window.__mcnAndroidMenuBridge) return;
+                                  var updateLink = document.getElementById('saveOfflineApp');
+                                  if (updateLink) updateLink.textContent = 'Update Offline Content';
                                   var nav = document.querySelector('.ds-site-nav');
                                   var menu = document.querySelector('.ds-menu');
                                   var trigger = document.querySelector('.ds-menu-trigger');
@@ -1684,25 +1741,28 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         }
                     }
                     webChromeClient = WebChromeClient()
-                    if (online) {
+                    val savedHomepage = File(ctx.filesDir, "offline_homepage/diocesan-homepage.mht")
+                    if (savedHomepage.isFile && savedHomepage.length() > 0L) {
+                        settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                        loadUrl(android.net.Uri.fromFile(savedHomepage).toString())
+                    } else if (online) {
+                        settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                         loadUrl(BuildConfig.API_BASE_URL)
                     } else {
                         settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
-                        loadUrl(BuildConfig.API_BASE_URL)
+                        loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(ctx, "/devotional-centre"), "text/html", "UTF-8", null)
                     }
                     webView = this
                 }
             },
             update = { view ->
-                val cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
-                if (view.settings.cacheMode != cacheMode) {
-                    view.settings.cacheMode = cacheMode
-                    if (!view.url.isNullOrBlank()) view.reload()
-                }
+                // Connectivity changes must not silently replace the saved homepage.
                 if (view.url.isNullOrBlank()) {
-                    if (online) view.loadUrl(BuildConfig.API_BASE_URL)
-                    else {
-                        view.settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                    val savedHomepage = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+                    if (savedHomepage.isFile && savedHomepage.length() > 0L) {
+                        view.loadUrl(android.net.Uri.fromFile(savedHomepage).toString())
+                    } else if (online) {
+                        view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                         view.loadUrl(BuildConfig.API_BASE_URL)
                     }
                 }
