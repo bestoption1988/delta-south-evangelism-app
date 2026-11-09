@@ -1391,6 +1391,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
+                // Read this flag from WebView request worker threads instead of calling view.url.
+                val localArchiveActive = java.util.concurrent.atomic.AtomicBoolean(false)
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
                     // Identify this WebView to the diocesan homepage so Android-only UI is selected.
@@ -1531,7 +1533,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
                             OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
                             // A saved local homepage must not silently call Naijacloud for live API data.
-                            if (view.url?.startsWith("file:") == true &&
+                            if (localArchiveActive.get() &&
                                 request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host) {
                                 return android.webkit.WebResourceResponse(
                                     "application/json", "UTF-8", 503, "Offline snapshot",
@@ -1552,6 +1554,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             return super.shouldInterceptRequest(view, request)
                         }
                         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                            localArchiveActive.set(url?.startsWith("file:") == true)
                             pageLoading = true
                             pageError = false
                             pageErrorDetails = "Connecting to the diocesan website…"
