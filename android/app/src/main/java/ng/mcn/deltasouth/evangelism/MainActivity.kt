@@ -1469,9 +1469,14 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             return uri.scheme != "http" && uri.scheme != "https"
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                            OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
+                            // WebView calls this callback on a background thread. Never read
+                            // WebView state (for example view.url/getUrl()) or invoke WebView
+                            // navigation APIs here. Use only the immutable request URL and
+                            // application-context file/cache helpers.
+                            val requestUrl = request.url.toString()
+                            OfflineDevotionalPage.fileResponse(ctx, requestUrl)?.let { return it }
                             if (!onlineState) {
-                                val localBible = OfflineModuleManager.cachedBibleModuleResponse(ctx, request.url.toString())
+                                val localBible = OfflineModuleManager.cachedBibleModuleResponse(ctx, requestUrl)
                                 if (localBible != null) {
                                     return android.webkit.WebResourceResponse(
                                         "application/json", "UTF-8", 200, "OK",
@@ -1480,7 +1485,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     )
                                 }
                             }
-                            return super.shouldInterceptRequest(view, request)
+                            // The default WebViewClient implementation is a no-op (null).
+                            // Return directly so this worker-thread callback never calls back
+                            // into the WebView instance.
+                            return null
                         }
                         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                             pageLoading = true
