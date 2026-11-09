@@ -71,7 +71,6 @@ class MainActivity : ComponentActivity() {
         Thread {
             runCatching { OfflineModuleManager.removeLegacyBibleFiles(applicationContext) }
             runCatching { OfflineModuleManager.migrateToCardFolders(applicationContext) }
-            runCatching { OfflineModuleManager.scheduleAutomaticUpdates(applicationContext) }
         }.start()
     }
 }
@@ -1805,12 +1804,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     // Open the saved copy of the REAL diocesan homepage first. The app
                     // contacts Naijacloud only when the user taps Refresh / Update.
                     val savedHomepage = File(ctx.filesDir, "mcn_diocesan_homepage.mht")
-                    settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                    // Always launch from the local diocesan homepage. No automatic Naijacloud request.
+                    settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                     if (savedHomepage.isFile && savedHomepage.length() > 0L) {
                         loadUrl(Uri.fromFile(savedHomepage).toString())
-                    } else if (online) {
-                        settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                        loadUrl(BuildConfig.API_BASE_URL)
                     } else {
                         loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(ctx, "/"), "text/html", "UTF-8", null)
                     }
