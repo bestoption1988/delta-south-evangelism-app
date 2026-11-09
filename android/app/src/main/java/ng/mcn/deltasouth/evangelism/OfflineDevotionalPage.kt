@@ -163,6 +163,22 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
         } finally { db.close() }
         WebResourceResponse("application/json","UTF-8",200,"OK",mapOf("Access-Control-Allow-Origin" to "*"),json.byteInputStream())
     }.getOrNull()
+    fun audioUrlResponse(c:Context,url:String):WebResourceResponse?=runCatching {
+        val uri = Uri.parse(url)
+        val indexFile = File(File(d(c), "audio_url_map"), "index.json")
+        if (!indexFile.isFile) return null
+        val map = JSONObject(indexFile.readText())
+        val filename = map.optString(uri.encodedPath.orEmpty())
+        if (filename.isBlank() || filename.contains("/") || filename.contains("..")) return null
+        val roots = d(c).listFiles()?.filter { it.isDirectory } ?: emptyList()
+        val file = roots.asSequence().map { File(it, filename) }.firstOrNull { it.isFile && it.length() > 0L } ?: return null
+        val mime = when (file.extension.lowercase(Locale.ROOT)) {
+            "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; "wav" -> "audio/wav"; "ogg" -> "audio/ogg"
+            else -> "application/octet-stream"
+        }
+        WebResourceResponse(mime, null, 200, "OK", mapOf("Access-Control-Allow-Origin" to "*", "Accept-Ranges" to "bytes"), file.inputStream())
+    }.getOrNull()
+
     fun fileResponse(c:Context,url:String):WebResourceResponse?=runCatching{
         val u=Uri.parse(url)
         bibleJsonResponse(c,u)?.let{return it}
