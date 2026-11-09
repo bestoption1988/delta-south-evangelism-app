@@ -1858,9 +1858,13 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             return super.shouldOverrideUrlLoading(view, request)
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
+                            // WebView invokes request interception on a background thread.
+                            // Do not read WebView state (such as view.url/getUrl()) or invoke
+                            // WebView APIs from this callback; only use the request URL.
+                            val requestUrl = request.url.toString()
                             if (!online) {
-                                val cachedBible = OfflineModuleManager.cachedWebBibleBooks(ctx, request.url.toString())
-                                    ?: OfflineModuleManager.cachedWebBibleChapter(ctx, request.url.toString())
+                                val cachedBible = OfflineModuleManager.cachedWebBibleBooks(ctx, requestUrl)
+                                    ?: OfflineModuleManager.cachedWebBibleChapter(ctx, requestUrl)
                                 if (cachedBible != null) {
                                     return android.webkit.WebResourceResponse(
                                         "application/json", "UTF-8", 200, "OK",
@@ -1869,7 +1873,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     )
                                 }
                             }
-                            return super.shouldInterceptRequest(view, request)
+                            // The base implementation returns null; avoid calling it on the
+                            // WebView request worker thread.
+                            return null
                         }
                         override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
                             pageLoading = true
