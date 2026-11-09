@@ -1629,7 +1629,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 // or remove a trailing slash or change the canonical root URL.
                                 if (parsed != null && parsed.host == configuredHost &&
                                     (parsed.path.isNullOrBlank() || parsed.path == "/") &&
-                                    !url.startsWith("file:")) {
+                                    !url.orEmpty().startsWith("file:")) {
                                     val archive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
                                     view.postDelayed({
                                         archive.parentFile?.mkdirs()
