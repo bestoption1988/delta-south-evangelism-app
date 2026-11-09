@@ -1580,6 +1580,17 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                       el.setAttribute('target','_self');
                                     }
                                   });
+                                  var offlineBase = '${BuildConfig.API_BASE_URL}';
+                                  if (document.baseURI.startsWith('file:')) {
+                                    document.querySelectorAll('a[href]').forEach(function(link) {
+                                      var raw = link.getAttribute('href') || '';
+                                      if (raw && !/^(#|[a-z][a-z0-9+.-]*:)/i.test(raw)) link.setAttribute('href', new URL(raw, offlineBase).href);
+                                    });
+                                    document.querySelectorAll('form[action]').forEach(function(form) {
+                                      var raw = form.getAttribute('action') || '';
+                                      if (raw && !/^[a-z][a-z0-9+.-]*:/i.test(raw)) form.setAttribute('action', new URL(raw, offlineBase).href);
+                                    });
+                                  }
                                   document.addEventListener('click',function(event) {
                                     var link = event.target.closest('a[href]');
                                     if (!link) return;
