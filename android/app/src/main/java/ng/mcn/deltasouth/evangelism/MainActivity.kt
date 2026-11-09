@@ -1387,6 +1387,25 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
     var pageLoading by remember { mutableStateOf(true) }
     var webView by remember { mutableStateOf<WebView?>(null) }
     var nativeMenuExpanded by remember { mutableStateOf(false) }
+    fun openSavedDiocesanHome(target: WebView?) {
+        if (target == null) return
+        val saved = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+        target.post {
+            if (saved.isFile && saved.length() > 0L) {
+                target.settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                target.loadUrl(android.net.Uri.fromFile(saved).toString())
+            } else if (onlineState) {
+                target.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                target.loadUrl(BuildConfig.API_BASE_URL)
+            } else {
+                target.loadDataWithBaseURL(
+                    "https://offline.mcn-app/",
+                    OfflineDevotionalPage.render(context, "/devotional-centre"),
+                    "text/html", "UTF-8", null
+                )
+            }
+        }
+    }
     BackHandler(enabled = nativeMenuExpanded) { nativeMenuExpanded = false }
     BackHandler(enabled = !nativeMenuExpanded && webView?.canGoBack() == true) { webView?.goBack() }
     Box(Modifier.fillMaxSize()) {
@@ -1602,23 +1621,49 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     })();
                                 """.trimIndent()
                                 view.evaluateJavascript(rebaseLinks, null)
-                            } else if (url?.startsWith(BuildConfig.API_BASE_URL) == true) {
-                                val parsed = android.net.Uri.parse(url)
-                                val archive = if (parsed.path.isNullOrBlank() || parsed.path == "/") {
-                                    File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
-                                } else {
-                                    offlinePageArchiveFile(context, url)
-                                }
-                                view.postDelayed({
+                            } else {
+                                val parsed = url?.let { android.net.Uri.parse(it) }
+                                val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                                // Save the actual diocesan root page as a local MHTML archive.
+                                // Compare hosts rather than URL prefixes because redirects may add
+                                // or remove a trailing slash or change the canonical root URL.
+                                if (parsed != null && parsed.host == configuredHost &&
+                                    (parsed.path.isNullOrBlank() || parsed.path == "/") &&
+                                    !url.startsWith("file:")) {
+                                    val archive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+                                    view.postDelayed({
+                                        archive.parentFile?.mkdirs()
+                                        fun saveHomepageArchive(attempt: Int) {
+                                            view.saveWebArchive(archive.absolutePath, false) { savedPath ->
+                                                val saved = savedPath?.let { File(it) }
+                                                if (saved != null && saved.isFile && saved.length() > 0L) {
+                                                    context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+                                                        .edit()
+                                                        .putBoolean("homepage_snapshot_saved", true)
+                                                        .putLong("homepage_snapshot_saved_at", System.currentTimeMillis())
+                                                        .apply()
+                                                    Log.i("DeltaSouthOffline", "Homepage archive saved: ${saved.length()} bytes")
+                                                } else if (attempt < 3) {
+                                                    view.postDelayed({ saveHomepageArchive(attempt + 1) }, 1800L)
+                                                } else {
+                                                    Log.e("DeltaSouthOffline", "Homepage archive could not be saved after retries")
+                                                }
+                                            }
+                                        }
+                                        saveHomepageArchive(1)
+                                    }, 2500L)
+                                } else if (parsed != null && parsed.host == configuredHost) {
+                                    val archive = offlinePageArchiveFile(context, url.orEmpty())
+                                    view.postDelayed({
                                         archive.parentFile?.mkdirs()
                                         view.saveWebArchive(archive.absolutePath, false) { savedPath ->
                                             if (!savedPath.isNullOrBlank() && File(savedPath).isFile && File(savedPath).length() > 0L) {
                                                 context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-                                                    .edit().putBoolean("homepage_snapshot_saved", true)
-                                                    .putLong("homepage_snapshot_saved_at", System.currentTimeMillis()).apply()
+                                                    .edit().putLong("homepage_snapshot_saved_at", System.currentTimeMillis()).apply()
                                             }
                                         }
-                                    }, 1200L)
+                                    }, 1800L)
+                                }
                             }
 
                             // Use the same single menu controller as the web dashboard.
@@ -1890,8 +1935,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             nativeMenuExpanded = false
                             when {
                                 destination == "mcn-app://home" -> {
-                                    // WebViewClient handles this route by opening the saved MHTML homepage.
-                                    webView?.loadUrl("mcn-app://home")
+                                    // Bypass custom URL schemes: open the local archive directly.
+                                    openSavedDiocesanHome(webView)
                                 }
                                 destination.startsWith("#") -> {
                                     webView?.evaluateJavascript(
