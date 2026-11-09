@@ -643,12 +643,13 @@
   if (isAndroidApp) {
     const quickActions = document.createElement("div");
     quickActions.id = "mcnAppQuickActions";
-    quickActions.innerHTML = '<a href="mcn-app://offline" aria-label="Save offline">Offline</a><a href="mcn-app://staff-login" aria-label="Staff sign in">Staff</a>';
+    quickActions.innerHTML = '<a href="mcn-app://offline" aria-label="Save offline">Offline</a><a href="mcn-app://staff-login" aria-label="Staff sign in">Staff</a><a href="mcn-app://refresh-homepage" aria-label="Refresh or update the saved homepage">↻ Update</a>';
     const copyright = document.querySelector("footer .copyright");
     if (copyright && copyright.parentNode) copyright.parentNode.insertBefore(quickActions, copyright);
     else document.body.appendChild(quickActions);
     quickActions.querySelector('a[href="mcn-app://offline"]').addEventListener("click", event => { event.preventDefault(); Promise.resolve(window.mcnCacheEntireApp ? window.mcnCacheEntireApp() : null).finally(() => { window.location.href = "mcn-app://offline"; }); });
     quickActions.querySelector('a[href="mcn-app://staff-login"]').addEventListener("click", event => { event.preventDefault(); window.location.href = "mcn-app://staff-login"; });
+    quickActions.querySelector('a[href="mcn-app://refresh-homepage"]').addEventListener("click", event => { event.preventDefault(); window.location.href = "mcn-app://refresh-homepage"; });
   }
   const webDailyReading = document.querySelector('section.daily-reading:not(.android-daily-reading)');
   const androidDailyReading = document.getElementById("androidDailyReading");
