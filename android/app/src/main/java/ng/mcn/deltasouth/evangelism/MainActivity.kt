@@ -1570,7 +1570,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
                             // A saved local homepage must not silently call Naijacloud for live API data.
                             if (localArchiveActive.get() &&
-                                request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host) {
+                                request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host &&
+                                (request.url.path.orEmpty().startsWith("/api/") ||
+                                 request.url.path.orEmpty().startsWith("/socket.io/"))) {
+                                // Block live data/API calls from a saved page, but do not block
+                                // same-origin images, CSS, fonts or other static homepage assets.
                                 return android.webkit.WebResourceResponse(
                                     "application/json", "UTF-8", 503, "Offline snapshot",
                                     mapOf("Cache-Control" to "no-store"),
@@ -1834,11 +1838,17 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 // generic "Webpage not available" screen. Restore the saved homepage.
                                 val savedHome = File(view.context.filesDir, "offline_homepage/diocesan-homepage.mht")
                                 val isLiveDiocesanPage = request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host
-                                if (isLiveDiocesanPage && savedHome.isFile && savedHome.length() > 0L) {
+                                if (isLiveDiocesanPage) {
                                     pageError = false
+                                    pageErrorDetails = ""
                                     view.post {
-                                        view.settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
-                                        view.loadUrl(android.net.Uri.fromFile(savedHome).toString())
+                                        view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                                        if (savedHome.isFile && savedHome.length() > 0L) {
+                                            view.loadUrl(android.net.Uri.fromFile(savedHome).toString())
+                                        } else {
+                                            // On first install the real homepage is bundled in the APK.
+                                            view.loadUrl("file:///android_asset/offline-home/index.html")
+                                        }
                                     }
                                     return
                                 }
