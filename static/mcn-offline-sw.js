@@ -2,7 +2,7 @@
  * Public pages and assets are cached for offline reading. Protected API writes,
  * payment routes and authenticated private responses are never cached here.
  */
-const CACHE_VERSION = "mcn-delta-south-shell-v9";
+const CACHE_VERSION = "mcn-delta-south-shell-v10";
 const PAGE_CACHE = CACHE_VERSION + "-pages";
 const ASSET_CACHE = CACHE_VERSION + "-assets";
 const PUBLIC_ROUTES = [
@@ -46,6 +46,14 @@ function safePage(url) {
     !url.pathname.startsWith("/static/uploads/private");
 }
 
+function decodeHtmlAttribute(value) {
+  return String(value)
+    .replace(/&amp;/gi, "&")
+    .replace(/&#0*39;|&apos;/gi, "'")
+    .replace(/&quot;/gi, '"')
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">");
+}
 async function cachePage(url, pageCache, assetCache) {
   try {
     const response = await fetch(url.href, { credentials: "same-origin" });
@@ -59,14 +67,14 @@ async function cachePage(url, pageCache, assetCache) {
     let match;
     while ((match = hrefPattern.exec(html)) !== null) {
       try {
-        const target = new URL(match[1], url.href);
+        const target = new URL(decodeHtmlAttribute(match[1]), url.href);
         if (safePage(target) && (target.pathname !== url.pathname || target.search !== url.search)) links.push(target);
       } catch (_) {}
     }
     const assetPattern = /(?:src|href)\s*=\s*["']([^"']+)["']/gi;
     while ((match = assetPattern.exec(html)) !== null) {
       try {
-        const asset = new URL(match[1], url.href);
+        const asset = new URL(decodeHtmlAttribute(match[1]), url.href);
         const localAsset = asset.origin === self.location.origin;
         const approvedMediaHost = /(^|\.)supabase\.co$/i.test(asset.hostname) ||
           /(^|\.)supabase\.in$/i.test(asset.hostname);
