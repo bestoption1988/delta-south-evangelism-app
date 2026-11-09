@@ -60,8 +60,15 @@ jobs:
                   self.urls = []
               def handle_starttag(self, tag, attrs):
                   attrs = dict(attrs)
-                  for key in ("src", "href", "poster"):
-                      value = attrs.get(key, "")
+                  rel = attrs.get("rel", "").lower().split()
+                  candidates = []
+                  if tag in ("script", "img", "source", "video", "audio", "iframe", "embed", "track"):
+                      candidates.append(attrs.get("src", ""))
+                  if tag == "video":
+                      candidates.append(attrs.get("poster", ""))
+                  if tag == "link" and any(x in rel for x in ("stylesheet", "icon", "preload", "modulepreload")):
+                      candidates.append(attrs.get("href", ""))
+                  for value in candidates:
                       if value.startswith(("https://mcn-delta-south.naijacloud.app/", "/")):
                           parsed = urlparse(value)
                           path = unquote(parsed.path).lstrip("/")
