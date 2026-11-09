@@ -1428,7 +1428,18 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // installed app still has usable local libraries. Keep navigation
                             // inside the app and show the on-device library instead of a raw 404.
                             if (uri.scheme == "mcn-app" && uri.host == "home") {
-                                view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, "/"), "text/html", "UTF-8", null)
+                                val savedHomepage = File(view.context.filesDir, "mcn_diocesan_homepage.mht")
+                                if (savedHomepage.isFile && savedHomepage.length() > 0L) {
+                                    view.settings.allowFileAccess = true
+                                    view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                                    view.loadUrl(Uri.fromFile(savedHomepage).toString())
+                                } else if (onlineState) {
+                                    view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                    view.loadUrl(BuildConfig.API_BASE_URL)
+                                } else {
+                                    pageErrorDetails = "The official homepage has not yet been saved on this phone. Connect once and tap Refresh / Update."
+                                    pageError = true
+                                }
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "refresh-homepage") {
@@ -1494,7 +1505,18 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                             val uri = android.net.Uri.parse(url)
                             if (uri.scheme == "mcn-app" && uri.host == "home") {
-                                view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, "/"), "text/html", "UTF-8", null)
+                                val savedHomepage = File(view.context.filesDir, "mcn_diocesan_homepage.mht")
+                                if (savedHomepage.isFile && savedHomepage.length() > 0L) {
+                                    view.settings.allowFileAccess = true
+                                    view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                                    view.loadUrl(Uri.fromFile(savedHomepage).toString())
+                                } else if (onlineState) {
+                                    view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                    view.loadUrl(BuildConfig.API_BASE_URL)
+                                } else {
+                                    pageErrorDetails = "The official homepage has not yet been saved on this phone. Connect once and tap Refresh / Update."
+                                    pageError = true
+                                }
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "live-home") {
@@ -1763,9 +1785,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 pageLoading = false
                                 pageError = false
                                 pageErrorDetails = ""
-                                val localHome = OfflineDevotionalPage.render(view.context, "/")
-                                view.post {
-                                    view.loadDataWithBaseURL("https://offline.mcn-app/", localHome, "text/html", "UTF-8", null)
+                                val savedHomepage = File(view.context.filesDir, "mcn_diocesan_homepage.mht")
+                                if (savedHomepage.isFile && savedHomepage.length() > 0L) {
+                                    view.post {
+                                        view.settings.allowFileAccess = true
+                                        view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                                        view.loadUrl(Uri.fromFile(savedHomepage).toString())
+                                    }
+                                } else {
+                                    pageErrorDetails = "The official diocesan homepage is temporarily unavailable. Tap Refresh / Update when internet is available to save it on this phone."
+                                    pageError = true
                                 }
                                 return
                             }
@@ -1854,12 +1883,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     webView = this
                 }
             },
-            update = { view ->
-                // Connectivity changes must not reload the screen or wake the hosted server.
-                // The user chooses "Open live website" from the local home when needed.
-                if (view.url.isNullOrBlank()) {
-                    view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, "/"), "text/html", "UTF-8", null)
-                }
+            update = { _ ->
+                // Startup and navigation are controlled by the WebView factory/client.
+                // Never inject a second, synthetic offline homepage from Compose updates.
             }
         )
         if (pageLoading) {
