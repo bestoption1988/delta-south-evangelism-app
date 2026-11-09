@@ -1719,20 +1719,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             """.trimIndent()
                             view.evaluateJavascript(keepNavigationInsideApp, null)
 
-                            // A locally saved MHTML homepage is rebased to the live origin for internal routes.
-                            if (url?.startsWith("file:") == true) {
-                                val rebaseLinks = """
-                                    (function() {
-                                      var base = '${BuildConfig.API_BASE_URL}';
-                                      document.querySelectorAll('a[href],form[action]').forEach(function(el) {
-                                        var attr = el.tagName === 'FORM' ? 'action' : 'href';
-                                        var raw = el.getAttribute(attr) || '';
-                                        if (raw && !/^(#|[a-z][a-z0-9+.-]*:)/i.test(raw)) el.setAttribute(attr, new URL(raw, base).href);
-                                      });
-                                    })();
-                                """.trimIndent()
-                                view.evaluateJavascript(rebaseLinks, null)
-                            } else {
+                            // Keep relative links and asset references relative to the bundled
+                            // homepage. Rebasing them to API_BASE_URL makes an offline page call
+                            // Naijacloud for its own CSS, images and internal navigation.
+                            if (url?.startsWith("file:") != true) {
                                 val parsed = url?.let { android.net.Uri.parse(it) }
                                 val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                                 // Save the actual diocesan root page as a local MHTML archive.
