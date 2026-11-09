@@ -74,7 +74,7 @@ class MainActivity : ComponentActivity() {
             // Background refresh is disabled: users update only when they deliberately choose Update.
             runCatching {
                 androidx.work.WorkManager.getInstance(applicationContext)
-                    .cancelUniquePeriodicWork("mcn-delta-south-offline-refresh")
+                    .cancelUniqueWork("mcn-delta-south-offline-refresh")
                 androidx.work.WorkManager.getInstance(applicationContext)
                     .cancelUniqueWork("mcn-delta-south-offline-refresh-now")
             }
