@@ -69,16 +69,53 @@ object OfflineDevotionalPage {
         return page("Methodist Church Nigeria · Delta South Diocese",b.toString())
     }
     private fun fellowshipDirectory(c:Context):String {
-        val names=listOf("methodist-mens-fellowship" to "Methodist Men's Fellowship","methodist-womens-fellowship" to "Methodist Women's Fellowship","methodist-youth-fellowship" to "Methodist Youth Fellowship","methodist-campus-fellowship" to "Methodist Campus Fellowship")
+        val file=File(d(c),"fellowships.json")
+        val rows=runCatching{JSONArray(file.readText())}.getOrDefault(JSONArray())
         val body=StringBuilder("<div class='grid'>")
-        names.forEach{(slug,name)->body.append("""<a class="card" href="/fellowship/${slug}"><div class="icon">🤝</div><h2>${e(name)}</h2><p class="muted">Fellowship information saved for offline access when included in the last update.</p><span class="pill">Open fellowship</span></a>""")}
-        body.append("</div>")
+        if(rows.length()>0) {
+            for(i in 0 until rows.length()) {
+                val row=rows.optJSONObject(i)?:continue
+                val slug=row.optString("slug")
+                val name=row.optString("name",row.optString("short_name","Fellowship"))
+                if(slug.isBlank())continue
+                body.append("""<a class="card" href="/fellowship/${Uri.encode(slug)}"><div class="icon">🤝</div><h2>${e(name)}</h2><p class="muted">${e(row.optString("short_name"))}</p><span class="pill">Saved on this phone</span></a>""")
+            }
+        } else {
+            listOf("methodist-mens-fellowship" to "Methodist Men's Fellowship","methodist-womens-fellowship" to "Methodist Women's Fellowship","methodist-youth-fellowship" to "Methodist Youth Fellowship","methodist-campus-fellowship" to "Methodist Campus Fellowship").forEach{(slug,name)->body.append("""<a class="card" href="/fellowship/${slug}"><div class="icon">🤝</div><h2>${e(name)}</h2><span class="pill">Connect and update to save details</span></a>""")}
+        }
+        body.append("</div><p class='muted'>Fellowship information is read from the last offline update. No live connection is used to open this page.</p>")
         return page("Diocesan Fellowships",body.toString())
     }
     private fun fellowshipPage(c:Context,slug:String):String {
-        val names=mapOf("methodist-mens-fellowship" to "Methodist Men's Fellowship","methodist-womens-fellowship" to "Methodist Women's Fellowship","methodist-youth-fellowship" to "Methodist Youth Fellowship","methodist-campus-fellowship" to "Methodist Campus Fellowship")
-        val name=names[slug]?:return fellowshipDirectory(c)
-        return page(name,"""<article class='paper'><h2>${e(name)}</h2><p>This fellowship page is part of the offline app. Its profile, leadership, announcements, events and studies will appear here after they are included in the next offline content update.</p><a class='btn' href="/fellowships">← All Fellowships</a></article>""")
+        val safe=slug.replace(Regex("[^A-Za-z0-9_-]"),"")
+        val file=File(d(c),"fellowship_${safe}.json")
+        val root=runCatching{JSONObject(file.readText())}.getOrNull()
+            ?: return page("Fellowship not downloaded", "<article class='paper'><p>This fellowship profile is not saved on this phone yet. Connect and use Update Offline Content.</p><a class='btn' href='/fellowships'>← All Fellowships</a></article>")
+        val f=root.optJSONObject("fellowship")?:JSONObject()
+        val name=f.optString("name","Fellowship")
+        val body=StringBuilder("<article class='paper'>")
+        listOf("short_name" to "Name","introduction" to "Introduction","history" to "History","vision" to "Vision","mission" to "Mission","objectives" to "Objectives").forEach{(key,label)->
+            val value=f.optString(key).trim()
+            if(value.isNotBlank())body.append("<h3>${e(label)}</h3><p>${e(value)}</p>")
+        }
+        body.append("</article>")
+        fun section(key:String,title:String,fields:List<String>) {
+            val items=root.optJSONArray(key)?:return
+            if(items.length()==0)return
+            body.append("<h2>${e(title)}</h2>")
+            for(i in 0 until items.length()) {
+                val item=items.optJSONObject(i)?:continue
+                body.append("<article class='item'>")
+                fields.forEach{field->val value=item.optString(field).trim();if(value.isNotBlank())body.append("<p>${e(value)}</p>")}
+                body.append("</article>")
+            }
+        }
+        section("leaders","Fellowship Leadership",listOf("full_name","role","biography"))
+        section("announcements","Announcements",listOf("title","content","created_at"))
+        section("events","Events",listOf("title","description","starts_at","venue"))
+        section("studies","Bible Studies",listOf("title","description","content","event_date"))
+        body.append("<nav><a class='btn' href='/fellowships'>← All Fellowships</a></nav>")
+        return page(name,body.toString())
     }
     private fun lectionary(c:Context):String {
         val file = File(File(d(c), "Lectionary"), "lectionary_2027.txt")
