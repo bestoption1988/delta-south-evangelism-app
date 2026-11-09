@@ -1444,8 +1444,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // inside the app and show the on-device library instead of a raw 404.
                             val localPath = uri.path.orEmpty()
                             if (uri.scheme == "mcn-app" && uri.host == "home") {
-                                view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                                view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, "/"), "text/html", "UTF-8", null)
+                                openSavedDiocesanHome(view)
                                 return true
                             }
                             if (uri.host == "offline.mcn-app" &&
@@ -1510,16 +1509,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                             val uri = android.net.Uri.parse(url)
                             if (uri.scheme == "mcn-app" && uri.host == "home") {
-                                val savedHomepage = File(view.context.filesDir, "offline_homepage/diocesan-homepage.mht")
-                                if (savedHomepage.isFile && savedHomepage.length() > 0L) {
-                                    view.settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
-                                    view.loadUrl(android.net.Uri.fromFile(savedHomepage).toString())
-                                } else if (onlineState) {
-                                    view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                                    view.loadUrl(BuildConfig.API_BASE_URL)
-                                } else {
-                                    view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, "/devotional-centre"), "text/html", "UTF-8", null)
-                                }
+                                openSavedDiocesanHome(view)
                                 return true
                             }
                             if (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library") {
