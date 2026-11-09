@@ -1688,6 +1688,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(menuBridge, null)
+                            // Save a complete MHTML snapshot of the existing diocesan homepage
+                            // after a successful live visit, including its images and page resources.
+                            val currentUrl = url.orEmpty()
+                            if (onlineState && currentUrl.startsWith(BuildConfig.API_BASE_URL) &&
+                                !currentUrl.contains("/login") && !currentUrl.contains("/register")) {
+                                val archive = File(view.context.filesDir, "mcn_diocesan_homepage.mht")
+                                runCatching { view.saveWebArchive(archive.absolutePath, false) { savedPath ->
+                                    if (savedPath.isNullOrBlank()) archive.delete()
+                                } }
+                            }
                             // Daily Scripture and hymn use the same tested webpage implementation as Chrome.
                             pageLoading = false
                         }
@@ -1792,10 +1802,18 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             }
                         }
                     }
-                    // Offline-first startup: never contact Naijacloud just to open the installed app.
-                    // The local home and downloaded devotional library are available immediately.
+                    // Open the saved copy of the REAL diocesan homepage first. The app
+                    // contacts Naijacloud only when the user taps Refresh / Update.
+                    val savedHomepage = File(ctx.filesDir, "mcn_diocesan_homepage.mht")
                     settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
-                    loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(ctx, "/"), "text/html", "UTF-8", null)
+                    if (savedHomepage.isFile && savedHomepage.length() > 0L) {
+                        loadUrl(Uri.fromFile(savedHomepage).toString())
+                    } else if (online) {
+                        settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                        loadUrl(BuildConfig.API_BASE_URL)
+                    } else {
+                        loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(ctx, "/"), "text/html", "UTF-8", null)
+                    }
                     webView = this
                 }
             },
@@ -1810,6 +1828,22 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
         if (pageLoading) {
             LinearProgressIndicator(Modifier.fillMaxWidth().align(androidx.compose.ui.Alignment.TopCenter))
         }
+        // Explicit refresh is the only normal path that wakes the hosted website.
+        androidx.compose.material3.OutlinedButton(
+            onClick = {
+                if (onlineState) {
+                    pageError = false
+                    pageLoading = true
+                    webView?.settings?.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    webView?.loadUrl(BuildConfig.API_BASE_URL)
+                } else {
+                    pageErrorDetails = "Connect to the internet to refresh the diocesan homepage. Your saved homepage and offline resources remain on this phone."
+                    pageError = true
+                }
+            },
+            modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(10.dp),
+            enabled = !pageLoading
+        ) { Text("↻ Refresh / Update") }
         if (offlineDownloadBusy) {
             ElevatedCard(Modifier.align(androidx.compose.ui.Alignment.BottomCenter).fillMaxWidth().padding(12.dp)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
