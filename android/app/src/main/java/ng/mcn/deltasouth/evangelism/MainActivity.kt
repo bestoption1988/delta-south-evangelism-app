@@ -1445,22 +1445,23 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // The online server may return 404 for its homepage while the
                             // installed app still has usable local libraries. Keep navigation
                             // inside the app and show the on-device library instead of a raw 404.
+                            val localPath = uri.path.orEmpty()
                             if (uri.scheme == "mcn-app" && uri.host == "home") {
                                 view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, "/"), "text/html", "UTF-8", null)
                                 return true
                             }
                             if (uri.host == "offline.mcn-app" &&
-                                (uri.path.isNullOrBlank() || uri.path == "/" ||
-                                 uri.path == "/fellowships" || uri.path.startsWith("/fellowship/") ||
-                                 uri.path.startsWith("/devotional-centre") || uri.path == "/media-library")) {
+                                (localPath.isBlank() || localPath == "/" ||
+                                 localPath == "/fellowships" || localPath.startsWith("/fellowship/") ||
+                                 localPath.startsWith("/devotional-centre") || localPath == "/media-library")) {
                                 view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                                view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, uri.path.orEmpty().ifBlank { "/" }, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty()), "text/html", "UTF-8", null)
+                                view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, localPath.ifBlank { "/" }, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty()), "text/html", "UTF-8", null)
                                 return true
                             }
-                            if (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library" ||
-                                uri.path == "/fellowships" || uri.path.startsWith("/fellowship/")) {
-                                val html = OfflineDevotionalPage.render(view.context, uri.path.orEmpty(), uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
+                            if (localPath.startsWith("/devotional-centre") || localPath == "/media-library" ||
+                                localPath == "/fellowships" || localPath.startsWith("/fellowship/")) {
+                                val html = OfflineDevotionalPage.render(view.context, localPath, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
                                 return true
                             }
