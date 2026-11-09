@@ -1450,7 +1450,17 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // The online server may return 404 for its homepage while the
                             // installed app still has usable local libraries. Keep navigation
                             // inside the app and show the on-device library instead of a raw 404.
-                            val localPath = uri.path.orEmpty()
+                            val rawLocalPath = uri.path.orEmpty()
+                            // Daily homepage shortcuts must open their actual saved libraries,
+                            // not the Devotional Centre landing page.
+                            val localPath = when {
+                                rawLocalPath == "/devotional-centre" && uri.fragment == "uploaded-bible-library" -> "/devotional-centre/holy-bible"
+                                rawLocalPath == "/devotional-centre" && uri.fragment == "english-methodist-hymns" -> "/devotional-centre/collection/english-hymns"
+                                rawLocalPath == "/devotional-centre/english-hymns" -> "/devotional-centre/collection/english-hymns"
+                                rawLocalPath == "/bible" || rawLocalPath == "/scripture" -> "/devotional-centre/holy-bible"
+                                rawLocalPath == "/hymns" || rawLocalPath == "/hymn-library" -> "/devotional-centre/collection/english-hymns"
+                                else -> rawLocalPath
+                            }
                             val bundledPagePath = if (uri.scheme == "file" &&
                                 localPath.startsWith("/android_asset/offline-home/")) {
                                 "/" + localPath.removePrefix("/android_asset/offline-home/").substringBefore('?')
@@ -1537,9 +1547,17 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 openSavedDiocesanHome(view)
                                 return true
                             }
-                            if (uri.path.orEmpty().startsWith("/devotional-centre") || uri.path == "/media-library") {
-                                val html = OfflineDevotionalPage.render(view.context, uri.path.orEmpty(), uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
-                                view.loadDataWithBaseURL(BuildConfig.API_BASE_URL, html, "text/html", "UTF-8", null)
+                            val legacyPath = when {
+                                uri.path == "/devotional-centre" && uri.fragment == "uploaded-bible-library" -> "/devotional-centre/holy-bible"
+                                uri.path == "/devotional-centre" && uri.fragment == "english-methodist-hymns" -> "/devotional-centre/collection/english-hymns"
+                                uri.path == "/devotional-centre/english-hymns" -> "/devotional-centre/collection/english-hymns"
+                                uri.path == "/bible" || uri.path == "/scripture" -> "/devotional-centre/holy-bible"
+                                uri.path == "/hymns" || uri.path == "/hymn-library" -> "/devotional-centre/collection/english-hymns"
+                                else -> uri.path.orEmpty()
+                            }
+                            if (legacyPath.startsWith("/devotional-centre") || legacyPath == "/media-library") {
+                                val html = OfflineDevotionalPage.render(view.context, legacyPath, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
+                                view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
