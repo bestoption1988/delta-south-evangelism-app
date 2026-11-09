@@ -132,6 +132,37 @@ def register_fellowship_routes(app, db_getter, user_getter):
         ).fetchall()
         return jsonify([row_dict(row) for row in rows])
 
+    @app.get("/api/public/fellowships/<slug>")
+    def public_fellowship_detail_api(slug):
+        """Read-only fellowship content package for the native offline app."""
+        row = query("SELECT * FROM fellowships WHERE slug=? AND active=1", (slug,)).fetchone()
+        if not row:
+            abort(404)
+        fellowship = row_dict(row)
+        fid = fellowship["id"]
+        def rows(sql, params):
+            return [row_dict(item) for item in query(sql, params).fetchall()]
+        return jsonify({
+            "ok": True,
+            "fellowship": fellowship,
+            "leaders": rows(
+                "SELECT full_name, role, biography, display_order FROM fellowship_leaders WHERE fellowship_id=? AND active=1 ORDER BY display_order, full_name",
+                (fid,),
+            ),
+            "announcements": rows(
+                "SELECT title, content, created_at, published_at FROM fellowship_announcements WHERE fellowship_id=? AND status='published' ORDER BY COALESCE(published_at, created_at) DESC LIMIT 12",
+                (fid,),
+            ),
+            "events": rows(
+                "SELECT title, description, starts_at, venue FROM fellowship_events WHERE fellowship_id=? AND status='published' ORDER BY starts_at DESC LIMIT 12",
+                (fid,),
+            ),
+            "studies": rows(
+                "SELECT title, description, content, event_date FROM fellowship_studies WHERE fellowship_id=? AND status='published' ORDER BY event_date DESC LIMIT 12",
+                (fid,),
+            ),
+        })
+
     @app.post("/admin/fellowships/new")
     @login_required
     @admin_required
