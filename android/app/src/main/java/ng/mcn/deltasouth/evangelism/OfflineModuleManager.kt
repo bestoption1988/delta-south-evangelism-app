@@ -785,11 +785,20 @@ class OfflineRefreshWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         return try {
-            OfflineAttendanceQueue.syncPending(applicationContext)
-            val result = OfflineModuleManager.downloadAll(applicationContext)
-            if (result.failed == 0) Result.success() else Result.retry()
+            setProgress(workDataOf("stage" to "Preparing secure offline package…", "progress" to 0))
+            runCatching { OfflineAttendanceQueue.syncPending(applicationContext) }
+            val result = OfflineModuleManager.downloadAll(applicationContext) { stage, percent ->
+                setProgressAsync(workDataOf("stage" to stage, "progress" to percent))
+            }
+            val prefs = applicationContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+            if (result.downloaded > 0 || result.mediaDownloaded > 0) {
+                prefs.edit().putBoolean("initial_download_complete", true).apply()
+            }
+            if (result.failed == 0) Result.success()
+            else if (runAttemptCount < 2) Result.retry()
+            else Result.failure()
         } catch (_: Exception) {
-            Result.retry()
+            if (runAttemptCount < 2) Result.retry() else Result.failure()
         }
     }
 }
