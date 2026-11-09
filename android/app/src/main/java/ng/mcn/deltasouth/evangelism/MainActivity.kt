@@ -1770,6 +1770,19 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             if (request.isForMainFrame) {
                                 pageLoading = false
                                 val requestedPath = request.url.path.orEmpty()
+                                // Failed online navigation must never strand the user on Android's
+                                // generic "Webpage not available" screen. Restore the saved homepage.
+                                val failedUrl = request.url.toString()
+                                val savedHome = File(view.context.filesDir, "offline_homepage/diocesan-homepage.mht")
+                                val isLiveDiocesanPage = request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                                if (isLiveDiocesanPage && savedHome.isFile && savedHome.length() > 0L) {
+                                    pageError = false
+                                    view.post {
+                                        view.settings.cacheMode = android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                                        view.loadUrl(android.net.Uri.fromFile(savedHome).toString())
+                                    }
+                                    return
+                                }
                                 if (requestedPath.startsWith("/devotional-centre") || requestedPath == "/media-library") {
                                     pageError = false
                                     pageErrorDetails = ""
@@ -1853,7 +1866,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 modifier = Modifier.fillMaxWidth()
             ) {
                 val menuItems = listOf(
-                    "Home" to "#home",
+                    // Always return to the saved diocesan homepage, not an anchor on a failed page.
+                    "Main Home" to "mcn-app://home",
                     "About Us" to "#about",
                     "Our Diocese" to "#diocese",
                     "Men's Fellowship" to "/fellowship/methodist-mens-fellowship",
@@ -1875,13 +1889,22 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         text = { Text(label) },
                         onClick = {
                             nativeMenuExpanded = false
-                            if (destination.startsWith("#")) {
-                                webView?.evaluateJavascript(
-                                    "(function(){var e=document.getElementById('" + destination.drop(1) + "');if(e)e.scrollIntoView({behavior:'smooth',block:'start'});})()",
-                                    null
-                                )
-                            } else {
-                                webView?.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + destination)
+                            when {
+                                destination == "mcn-app://home" -> {
+                                    // WebViewClient handles this route by opening the saved MHTML homepage.
+                                    webView?.loadUrl("mcn-app://home")
+                                }
+                                destination.startsWith("#") -> {
+                                    webView?.evaluateJavascript(
+                                        "(function(){var e=document.getElementById('" + destination.drop(1) + "');if(e)e.scrollIntoView({behavior:'smooth',block:'start'});})()",
+                                        null
+                                    )
+                                }
+                                else -> {
+                                    // Online pages remain available when connected. If they fail,
+                                    // onReceivedError below returns the user to the saved homepage.
+                                    webView?.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + destination)
+                                }
                             }
                         }
                     )
