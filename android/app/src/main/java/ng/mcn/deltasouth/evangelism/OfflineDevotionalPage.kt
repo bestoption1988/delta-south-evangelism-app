@@ -68,6 +68,26 @@ object OfflineDevotionalPage {
 <a class="card" href="/login"><div class="icon">♙</div><h2>Member Login</h2><p class="muted">Internet required for secure sign-in</p></a>
 <a class="card" href="/giving"><div class="icon">♥</div><h2>Online Giving</h2><p class="muted">Internet required for payment</p></a>
 </div>""")
+        val snapshot=runCatching{JSONObject(File(d(c),"homepage.json").readText())}.getOrDefault(JSONObject())
+        val content=snapshot.optJSONObject("homepage_content")?:JSONObject()
+        val prelate=snapshot.optJSONObject("prelate")?:JSONObject()
+        b.append("""<section class="item"><h2>Our Diocese</h2><p>${e(content.optString("vision","Worship · Witness · Service · Discipleship"))}</p><p>${e(content.optString("mission_1","Winning souls for Christ"))}</p><p>${e(content.optString("mission_2","Building spiritually fulfilled members"))}</p><p>${e(content.optString("mission_3","Serving humanity"))}</p><p><strong>${e(prelate.optString("name","Methodist Church Nigeria"))}</strong><br>${e(prelate.optString("title",""))}</p></section>""")
+        val events=snapshot.optJSONArray("events")?:JSONArray()
+        if(events.length()>0) {
+            b.append("<h2>Saved Announcements & Events</h2>")
+            for(i in 0 until events.length()) {
+                val event=events.optJSONObject(i)?:continue
+                b.append("""<article class="item"><h3>${e(event.optString("title"))}</h3><p>${e(event.optString("description"))}</p><p class="muted">${e(event.optString("event_date"))} · ${e(event.optString("venue"))}</p></article>""")
+            }
+        }
+        val churches=snapshot.optJSONArray("churches")?:JSONArray()
+        if(churches.length()>0) {
+            b.append("<h2>Our Churches</h2>")
+            for(i in 0 until churches.length()) {
+                val church=churches.optJSONObject(i)?:continue
+                b.append("""<article class="item"><h3>${e(church.optString("church_name"))}</h3><p>${e(church.optString("circuit"))} Circuit</p><p>${e(church.optString("address",church.optString("town")))} · ${e(church.optString("phone"))}</p></article>""")
+            }
+        }
         return page("Methodist Church Nigeria · Delta South Diocese",b.toString())
     }
     private fun fellowshipDirectory(c:Context):String {
