@@ -1825,7 +1825,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
         if (pageLoading) {
             LinearProgressIndicator(Modifier.fillMaxWidth().align(androidx.compose.ui.Alignment.TopCenter))
         }
-        // Explicit refresh is the only normal path that wakes the hosted website.
+        // The only control that contacts Naijacloud is kept beside the app's
+        // floating Offline and Staff controls at the bottom of the screen.
         androidx.compose.material3.OutlinedButton(
             onClick = {
                 if (onlineState) {
@@ -1834,11 +1835,12 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     webView?.settings?.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                     webView?.loadUrl(BuildConfig.API_BASE_URL)
                 } else {
-                    pageErrorDetails = "Connect to the internet to refresh the diocesan homepage. Your saved homepage and offline resources remain on this phone."
+                    pageErrorDetails = "Connect to the internet, then tap Refresh / Update. The installed homepage and saved resources remain available offline."
                     pageError = true
                 }
             },
-            modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(10.dp),
+            modifier = Modifier.align(androidx.compose.ui.Alignment.BottomCenter)
+                .padding(bottom = 18.dp),
             enabled = !pageLoading
         ) { Text("↻ Refresh / Update") }
         if (offlineDownloadBusy) {
