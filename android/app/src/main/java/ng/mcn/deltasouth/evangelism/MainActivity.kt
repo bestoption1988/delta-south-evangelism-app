@@ -1618,7 +1618,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 }
                                 view.postDelayed({
                                         archive.parentFile?.mkdirs()
-                                        archive.parentFile?.mkdirs()
                                         view.saveWebArchive(archive.absolutePath, false) { savedPath ->
                                             if (!savedPath.isNullOrBlank() && File(savedPath).isFile && File(savedPath).length() > 0L) {
                                                 context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
