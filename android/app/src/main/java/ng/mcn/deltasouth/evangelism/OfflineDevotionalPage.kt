@@ -110,10 +110,10 @@ object OfflineDevotionalPage {
                 body.append("</article>")
             }
         }
-        section("leaders","Fellowship Leadership",listOf("full_name","role","biography"))
-        section("announcements","Announcements",listOf("title","content","created_at"))
+        section("leaders","Fellowship Leadership",listOf("full_name","position_title","biography"))
+        section("announcements","Announcements",listOf("title","body","created_at"))
         section("events","Events",listOf("title","description","starts_at","venue"))
-        section("studies","Bible Studies",listOf("title","description","content","event_date"))
+        section("studies","Bible Studies",listOf("title","scripture_reference","preacher_or_teacher","summary","content","event_date"))
         body.append("<nav><a class='btn' href='/fellowships'>← All Fellowships</a></nav>")
         return page(name,body.toString())
     }
