@@ -104,6 +104,8 @@ object OfflineModuleManager {
         "api/communications",
         "api/command-centre",
         "api/public/churches",
+        "api/public/homepage",
+        "api/public/fellowships",
         "api/member/records",
         "api/member/id-card",
         "api/member/attendance-summary",
@@ -163,7 +165,19 @@ object OfflineModuleManager {
                     val type = response.body?.contentType()?.subtype.orEmpty()
                     if (response.isSuccessful && type.contains("json", ignoreCase = true)) {
                         // Reading the body causes OfflineResponseCache's interceptor to persist it encrypted.
-                        response.body?.string()
+                        val bodyText = response.body?.string().orEmpty()
+                        if (bodyText.isNotBlank() && path in setOf("api/public/homepage", "api/public/fellowships")) {
+                            val snapshotDir = File(context.filesDir, "offline_storage").apply { mkdirs() }
+                            val snapshotName = if (path.endsWith("homepage")) "homepage.json" else "fellowships.json"
+                            val target = File(snapshotDir, snapshotName)
+                            val part = File(snapshotDir, snapshotName + ".part")
+                            part.writeText(bodyText)
+                            if (target.exists()) target.delete()
+                            if (!part.renameTo(target)) {
+                                part.copyTo(target, overwrite = true)
+                                part.delete()
+                            }
+                        }
                         downloaded++
                     } else if (response.code == 401 || response.code == 403 || response.code == 404) {
                         unavailable++
