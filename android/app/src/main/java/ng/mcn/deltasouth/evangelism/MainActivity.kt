@@ -1772,7 +1772,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 val requestedPath = request.url.path.orEmpty()
                                 // Failed online navigation must never strand the user on Android's
                                 // generic "Webpage not available" screen. Restore the saved homepage.
-                                val failedUrl = request.url.toString()
                                 val savedHome = File(view.context.filesDir, "offline_homepage/diocesan-homepage.mht")
                                 val isLiveDiocesanPage = request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                                 if (isLiveDiocesanPage && savedHome.isFile && savedHome.length() > 0L) {
