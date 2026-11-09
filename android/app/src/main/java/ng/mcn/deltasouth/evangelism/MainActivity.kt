@@ -2,6 +2,7 @@
 package ng.mcn.deltasouth.evangelism
 
 import android.os.Bundle
+import android.util.Log
 import android.content.Intent
 import java.io.File
 import org.json.JSONArray
@@ -44,29 +45,39 @@ private fun offlinePageArchiveFile(context: Context, url: String): File {
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Render the app immediately. Large offline-library migrations must never run
-        // on Android's main thread, or the launch screen can remain stuck.
-        Backend.initialize(applicationContext)
+        // Always render the native shell first. Secure storage and WebView service-worker
+        // setup are guarded so a device-specific keystore/WebView failure cannot close the app.
         setContent { MaterialTheme { NativeDioceseApp() } }
 
-        android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
-            object : android.webkit.ServiceWorkerClient() {
-                override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                    OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString())?.let { return it }
-                    if (!networkAvailable(applicationContext)) {
-                        val localBible = OfflineModuleManager.cachedBibleModuleResponse(applicationContext, request.url.toString())
-                        if (localBible != null) {
-                            return android.webkit.WebResourceResponse(
-                                "application/json", "UTF-8", 200, "OK",
-                                mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Methods" to "GET, OPTIONS"),
-                                java.io.ByteArrayInputStream(localBible)
-                            )
+        Thread {
+            try {
+                Backend.initialize(applicationContext)
+            } catch (error: Throwable) {
+                Log.e("DeltaSouthStartup", "Secure session storage initialization failed", error)
+            }
+            try {
+                android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
+                    object : android.webkit.ServiceWorkerClient() {
+                        override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
+                            OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString())?.let { return it }
+                            if (!networkAvailable(applicationContext)) {
+                                val localBible = OfflineModuleManager.cachedBibleModuleResponse(applicationContext, request.url.toString())
+                                if (localBible != null) {
+                                    return android.webkit.WebResourceResponse(
+                                        "application/json", "UTF-8", 200, "OK",
+                                        mapOf("Access-Control-Allow-Origin" to "*", "Access-Control-Allow-Methods" to "GET, OPTIONS"),
+                                        java.io.ByteArrayInputStream(localBible)
+                                    )
+                                }
+                            }
+                            return null
                         }
                     }
-                    return null
-                }
+                )
+            } catch (error: Throwable) {
+                Log.e("DeltaSouthStartup", "WebView offline service-worker setup failed", error)
             }
-        )
+        }.start()
         // Clean legacy files and migrate existing downloads after first render, on IO.
         Thread {
             runCatching { OfflineModuleManager.removeLegacyBibleFiles(applicationContext) }
