@@ -1443,6 +1443,17 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // installed app still has usable local libraries. Keep navigation
                             // inside the app and show the on-device library instead of a raw 404.
                             val localPath = uri.path.orEmpty()
+                            val bundledPagePath = if (uri.scheme == "file" &&
+                                localPath.startsWith("/android_asset/offline-home/")) {
+                                "/" + localPath.removePrefix("/android_asset/offline-home/").substringBefore('?')
+                            } else ""
+                            val resolvedOfflinePath = when {
+                                localPath.startsWith("/devotional-centre") || localPath == "/media-library" ||
+                                    localPath == "/fellowships" || localPath.startsWith("/fellowship/") -> localPath
+                                bundledPagePath.startsWith("/devotional-centre") || bundledPagePath == "/media-library" ||
+                                    bundledPagePath == "/fellowships" || bundledPagePath.startsWith("/fellowship/") -> bundledPagePath
+                                else -> ""
+                            }
                             if (uri.scheme == "mcn-app" && uri.host == "home") {
                                 openSavedDiocesanHome(view)
                                 return true
@@ -1455,10 +1466,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, localPath.ifBlank { "/" }, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty()), "text/html", "UTF-8", null)
                                 return true
                             }
-                            if (localPath.startsWith("/devotional-centre") || localPath == "/media-library" ||
-                                localPath == "/fellowships" || localPath.startsWith("/fellowship/")) {
-                                val html = OfflineDevotionalPage.render(view.context, localPath, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
+                            if (resolvedOfflinePath.isNotBlank()) {
+                                val html = OfflineDevotionalPage.render(view.context, resolvedOfflinePath, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
+                                return true
+                            }
+                            if (uri.scheme == "file" && bundledPagePath.isNotBlank()) {
+                                val route = bundledPagePath.removePrefix("/")
+                                if (route in setOf("login", "register", "registration", "giving", "payment", "prayer-request")) {
+                                    view.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/" + route)
+                                }
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
