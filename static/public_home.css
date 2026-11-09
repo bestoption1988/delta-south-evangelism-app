@@ -1232,3 +1232,26 @@ html.mcn-android-app #publicMemberCareButton {
   footer { grid-template-columns:1fr 1fr!important; }
   html.mcn-android-app #publicMemberCareButton { margin-right:0!important; }
 }
+
+
+/* Android: compact Member Care to a small round icon, preserving its existing action. */
+html.mcn-android-app #publicMemberCareButton {
+  position:relative!important;
+  width:42px!important;
+  min-width:42px!important;
+  height:42px!important;
+  min-height:42px!important;
+  padding:0!important;
+  margin:8px 0 0!important;
+  border-radius:50%!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:0!important;
+  font-size:0!important;
+  box-shadow:0 2px 7px rgba(0,0,0,.18)!important;
+}
+html.mcn-android-app #publicMemberCareButton .public-care-label { display:none!important; }
+html.mcn-android-app #publicMemberCareButton .public-care-icon { font-size:19px!important; }
+html.mcn-android-app footer { grid-template-columns:1fr 1fr!important; }
+html.mcn-android-app #mcnAppQuickActions { grid-column:1/-1!important; justify-self:start!important; }
