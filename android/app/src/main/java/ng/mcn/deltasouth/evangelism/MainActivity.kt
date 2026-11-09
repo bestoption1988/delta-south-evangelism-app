@@ -286,6 +286,15 @@ private fun NativeDioceseApp() {
                             downloadMessage = error.message ?: "The offline package could not be updated."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }
+                        // Return to the on-device homepage when the deliberate update is finished.
+                        homepageView.post {
+                            homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                            homepageView.loadDataWithBaseURL(
+                                "https://offline.mcn-app/",
+                                OfflineDevotionalPage.render(appContext, "/"),
+                                "text/html", "UTF-8", null
+                            )
+                        }
                         downloadBusy = false
                     }
                 }
