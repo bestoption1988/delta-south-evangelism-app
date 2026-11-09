@@ -52,6 +52,7 @@ class MainActivity : ComponentActivity() {
         android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
             object : android.webkit.ServiceWorkerClient() {
                 override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
+                    OfflineDevotionalPage.audioUrlResponse(applicationContext, request.url.toString())?.let { return it }
                     OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString())?.let { return it }
                     if (!networkAvailable(applicationContext)) {
                         val localBible = OfflineModuleManager.cachedBibleModuleResponse(applicationContext, request.url.toString())
@@ -1547,6 +1548,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             return uri.scheme != "http" && uri.scheme != "https"
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
+                            OfflineDevotionalPage.audioUrlResponse(ctx, request.url.toString())?.let { return it }
                             OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
                             if (!onlineState) {
                                 val localBible = OfflineModuleManager.cachedBibleModuleResponse(ctx, request.url.toString())
