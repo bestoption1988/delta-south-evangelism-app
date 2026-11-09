@@ -3,6 +3,9 @@ package ng.mcn.deltasouth.evangelism
 
 import android.os.Bundle
 import android.content.Intent
+import android.content.ContentValues
+import android.os.Build
+import android.provider.MediaStore
 import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
@@ -1366,15 +1369,22 @@ private fun KeyValueList(values: Map<String, Any?>) {
 private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: () -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     var pendingFileChooser by remember { mutableStateOf<ValueCallback<Array<Uri>>?>(null) }
+    var pendingCameraPhotoUri by remember { mutableStateOf<Uri?>(null) }
     val fileChooserLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val callback = pendingFileChooser
+        val cameraUri = pendingCameraPhotoUri
         pendingFileChooser = null
+        pendingCameraPhotoUri = null
         if (callback != null) {
-            val selectedUris = runCatching {
-                WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
-            }.getOrNull()
+            val selectedUris = if (cameraUri != null) {
+                if (result.resultCode == android.app.Activity.RESULT_OK) arrayOf(cameraUri) else null
+            } else {
+                runCatching {
+                    WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+                }.getOrNull()
+            }
             callback.onReceiveValue(selectedUris)
         }
     }
@@ -1743,11 +1753,39 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         ): Boolean {
                             // Connect HTML file inputs to Android's native chooser.
                             pendingFileChooser?.onReceiveValue(null)
+                            pendingCameraPhotoUri = null
                             pendingFileChooser = filePathCallback
                             return try {
-                                fileChooserLauncher.launch(fileChooserParams.createIntent())
+                                val wantsCameraCapture = fileChooserParams.isCaptureEnabled &&
+                                    fileChooserParams.acceptTypes.any { it.contains("image", ignoreCase = true) }
+                                if (wantsCameraCapture) {
+                                    val values = ContentValues().apply {
+                                        put(MediaStore.Images.Media.DISPLAY_NAME, "MCN_passport_${System.currentTimeMillis()}.jpg")
+                                        put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg")
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                            put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/MCN Delta South")
+                                        }
+                                    }
+                                    val photoUri = ctx.contentResolver.insert(
+                                        MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values
+                                    ) ?: throw IllegalStateException("Unable to create camera photo destination")
+                                    pendingCameraPhotoUri = photoUri
+                                    val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                                        putExtra(MediaStore.EXTRA_OUTPUT, photoUri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                                        clipData = android.content.ClipData.newUri(ctx.contentResolver, "Passport photo", photoUri)
+                                    }
+                                    if (cameraIntent.resolveActivity(ctx.packageManager) == null) {
+                                        throw IllegalStateException("No camera app is available")
+                                    }
+                                    fileChooserLauncher.launch(cameraIntent)
+                                } else {
+                                    fileChooserLauncher.launch(fileChooserParams.createIntent())
+                                }
                                 true
                             } catch (error: Exception) {
+                                pendingCameraPhotoUri?.let { runCatching { ctx.contentResolver.delete(it, null, null) } }
+                                pendingCameraPhotoUri = null
                                 pendingFileChooser = null
                                 filePathCallback.onReceiveValue(null)
                                 false
