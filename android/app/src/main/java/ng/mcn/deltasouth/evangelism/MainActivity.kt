@@ -287,14 +287,9 @@ private fun NativeDioceseApp() {
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }
                         // Return to the on-device homepage when the deliberate update is finished.
-                        homepageView.post {
-                            homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                            homepageView.loadDataWithBaseURL(
-                                "https://offline.mcn-app/",
-                                OfflineDevotionalPage.render(appContext, "/"),
-                                "text/html", "UTF-8", null
-                            )
-                        }
+                        // Return to the same real homepage, preferring the latest archive saved
+                        // during this explicit update and otherwise the APK-bundled first-install copy.
+                        homepageView.post { openSavedDiocesanHome(homepageView) }
                         downloadBusy = false
                     }
                 }
@@ -1400,11 +1395,13 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
         if (target == null) return
         target.post {
             target.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-            target.loadDataWithBaseURL(
-                "https://offline.mcn-app/",
-                OfflineDevotionalPage.render(context, "/"),
-                "text/html", "UTF-8", null
-            )
+            val updatedArchive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+            if (updatedArchive.isFile && updatedArchive.length() > 0L) {
+                target.loadUrl(android.net.Uri.fromFile(updatedArchive).toString())
+            } else {
+                // The exact public web homepage and its same-site assets are bundled in the APK.
+                target.loadUrl("file:///android_asset/offline-home/index.html")
+            }
         }
     }
     BackHandler(enabled = nativeMenuExpanded) { nativeMenuExpanded = false }
@@ -1865,16 +1862,19 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     }
                     webChromeClient = WebChromeClient()
                     settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                    loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(ctx, "/"), "text/html", "UTF-8", null)
+                    val updatedArchive = File(ctx.filesDir, "offline_homepage/diocesan-homepage.mht")
+                    if (updatedArchive.isFile && updatedArchive.length() > 0L) {
+                        loadUrl(android.net.Uri.fromFile(updatedArchive).toString())
+                    } else {
+                        // First install starts from the real diocesan homepage shipped inside this APK.
+                        loadUrl("file:///android_asset/offline-home/index.html")
+                    }
                     webView = this
                 }
             },
             update = { view ->
                 // Connectivity changes must not silently replace the saved homepage.
-                if (view.url.isNullOrBlank()) {
-                    view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                    view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(context, "/"), "text/html", "UTF-8", null)
-                }
+                if (view.url.isNullOrBlank()) openSavedDiocesanHome(view)
             }
         )
         // Native Android menu overlay: the embedded website's CSS/JavaScript menu
