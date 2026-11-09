@@ -26,6 +26,8 @@ object OfflineDevotionalPage {
     private fun page(t:String,b:String)= """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(t)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:16px/1.55 system-ui}header{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:white;padding:26px 18px}header small{color:#f4d36e;font-weight:800}h1{font:800 30px Georgia;margin:8px 0}main{max-width:1000px;margin:auto;padding:16px 13px 45px}nav{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}a{color:#12664b;text-decoration:none;font-weight:700}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.card,.item,.paper{background:white;border:1px solid #dfe6ee;border-radius:15px;padding:15px;margin-bottom:12px}.icon{font-size:32px}.card h2,.item h2{font-size:18px;margin:7px 0}.muted{color:#69768b}.pill{display:inline-block;background:#edf4f0;color:#176247;border-radius:24px;padding:6px 11px;font-weight:800;font-size:12px;margin-top:8px}.btn,button{display:inline-block;background:#123363;color:white;padding:10px 14px;border:0;border-radius:9px;font-weight:800}input{font:inherit;padding:11px;border:1px solid #cbd5e1;border-radius:8px;width:70%}.paper{font:17px/1.8 Georgia;white-space:pre-wrap}audio,video{width:100%;margin-top:10px}@media(max-width:520px){.card{padding:12px}.card h2{font-size:16px}}</style></head><body><header><small>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE · OFFLINE</small><h1>${e(t)}</h1><div>Downloaded resources saved on this phone. No internet required.</div></header><main><nav><a href="mcn-app://home">← Offline home</a><a href="/devotional-centre">All library cards</a><a href="mcn-app://live-home">Open live website (internet)</a></nav>$b</main></body></html>"""
     fun render(c:Context,path:String,q:String="",translation:String=""):String {
         val p=if(path=="/") "/" else path.trimEnd('/').ifBlank{"/devotional-centre"}
+        if(p=="/")return appHome()
+        if(p=="/devotional-centre")return home(c)
         if(p=="/media-library")return media(c)
         if(p=="/devotional-centre/communion-document/english")return communionDocument(c,"communion_english","English Communion")
         if(p=="/devotional-centre/communion-document/yoruba")return communionDocument(c,"communion_yoruba","Yoruba Communion")
@@ -44,6 +46,29 @@ object OfflineDevotionalPage {
         val content = e(file.readText())
         val body = """<div class='item'><strong>YEAR B · 2027 / YEAR C · 2028</strong><p class='muted'>Diocesan appointed readings · Saved on this phone · No internet required</p><input id='lectionarySearch' type='search' placeholder='Search date, Sunday, feast or Bible reference' style='width:100%;margin:8px 0'><p id='lectionaryCount' class='muted'>All appointed readings shown</p></div><article id='lectionaryText' class='paper' style='font:16px/1.65 Georgia,serif;white-space:pre-wrap'>$content</article><script>(function(){const q=document.getElementById('lectionarySearch'),box=document.getElementById('lectionaryText'),count=document.getElementById('lectionaryCount'),original=box.textContent;function run(){const term=q.value.trim().toLocaleLowerCase();if(!term){box.textContent=original;count.textContent='All appointed readings shown';return;}const sections=original.split(/\\n\\s*\\n/).filter(x=>x.toLocaleLowerCase().includes(term));box.textContent=sections.join('\\n\\n');count.textContent=sections.length+' matching reading sections';}q.addEventListener('input',run);})();</script>"""
         return page("Yearly Lectionary", body)
+    }
+    private fun appHome():String {
+        val body = """
+            <section class="item" style="background:linear-gradient(135deg,#103d2b,#075b43);color:#fff;padding:24px;border:0;border-radius:18px">
+              <div style="font-size:13px;font-weight:800;letter-spacing:1.2px;color:#f4d36e">METHODIST CHURCH NIGERIA</div>
+              <h2 style="font-size:27px;line-height:1.2;margin:8px 0;color:#fff">DELTA SOUTH DIOCESE</h2>
+              <p style="font-size:16px;color:#fff;margin:8px 0">Worship · Witness · Service · Discipleship</p>
+              <p style="font:italic 17px/1.5 Georgia,serif;color:#fff">“Go into all the world and preach the Gospel to every creature.” — Mark 16:15</p>
+            </section>
+            <section class="item">
+              <h2>Welcome to Delta South Diocese</h2>
+              <p class="muted">Your diocesan home for worship, fellowship, church information and member services.</p>
+              <a class="btn" href="mcn-app://live-home">Open Main Diocesan Website →</a>
+            </section>
+            <div class="grid">
+              <a class="card" href="/devotional-centre"><div class="icon">📖</div><h2>Devotional & Worship Centre</h2><p class="muted">Open hymns, Bible resources, Communion materials, media and the yearly lectionary saved on this phone.</p><span class="pill">Available offline</span></a>
+              <a class="card" href="mcn-app://staff-login"><div class="icon">👤</div><h2>Member Portal / Login</h2><p class="muted">Access membership services and records when connected.</p><span class="pill">Internet required</span></a>
+              <a class="card" href="mcn-app://offline"><div class="icon">⬇️</div><h2>Update Offline Resources</h2><p class="muted">Connect to the internet to download or refresh resources for offline use.</p><span class="pill">Optional download</span></a>
+              <a class="card" href="mcn-app://live-home"><div class="icon">🌐</div><h2>Diocesan Website</h2><p class="muted">View church locations, news, events, giving and diocesan information.</p><span class="pill">Open website</span></a>
+            </div>
+            <p class="muted" style="text-align:center;margin-top:18px">The app opens this on-device home screen first. Your downloaded worship resources remain available without internet.</p>
+        """.trimIndent()
+        return page("Methodist Church Nigeria · Delta South Diocese", body)
     }
     private fun home(c:Context):String {
         val b=StringBuilder("<div class='grid'>")
