@@ -52,8 +52,8 @@ class MainActivity : ComponentActivity() {
         android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
             object : android.webkit.ServiceWorkerClient() {
                 override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                    OfflineDevotionalPage.audioUrlResponse(applicationContext, request.url.toString())?.let { return it }
-                    OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString())?.let { return it }
+                    OfflineDevotionalPage.audioUrlResponse(applicationContext, request.url.toString(), request.requestHeaders.entries.firstOrNull { it.key.equals("Range", true) }?.value)?.let { return it }
+                    OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString(), request.requestHeaders.entries.firstOrNull { it.key.equals("Range", true) }?.value)?.let { return it }
                     if (!networkAvailable(applicationContext)) {
                         val localBible = OfflineModuleManager.cachedBibleModuleResponse(applicationContext, request.url.toString())
                         if (localBible != null) {
@@ -1548,8 +1548,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             return uri.scheme != "http" && uri.scheme != "https"
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                            OfflineDevotionalPage.audioUrlResponse(ctx, request.url.toString())?.let { return it }
-                            OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
+                            OfflineDevotionalPage.audioUrlResponse(ctx, request.url.toString(), request.requestHeaders.entries.firstOrNull { it.key.equals("Range", true) }?.value)?.let { return it }
+                            OfflineDevotionalPage.fileResponse(ctx, request.url.toString(), request.requestHeaders.entries.firstOrNull { it.key.equals("Range", true) }?.value)?.let { return it }
                             if (!onlineState) {
                                 val localBible = OfflineModuleManager.cachedBibleModuleResponse(ctx, request.url.toString())
                                 if (localBible != null) {
@@ -1715,7 +1715,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                           }
                                           return;
                                         }
-                                        window.location.assign(new URL(href, document.baseURI).href);
+                                        window.location.assign(new URL(href, document.baseURI.startsWith('file:') ? '${BuildConfig.API_BASE_URL}' : document.baseURI).href);
                                       }, 80);
                                     }
                                   },true);
