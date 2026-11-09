@@ -34,6 +34,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private fun offlinePageArchiveFile(context: Context, url: String): File {
+    val uri = android.net.Uri.parse(url)
+    val key = (uri.encodedPath.orEmpty() + "?" + uri.encodedQuery.orEmpty())
+        .hashCode().toString().replace("-", "n")
+    return File(File(context.filesDir, "offline_homepage/pages"), "$key.mht")
+}
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -1464,6 +1471,18 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             }
                             // All website navigation stays inside this WebView, including links
                             // to other diocesan pages and pages opened with target=_blank.
+                            if ((uri.scheme == "http" || uri.scheme == "https") &&
+                                uri.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host &&
+                                view.url?.startsWith("file:") == true) {
+                                val savedPage = offlinePageArchiveFile(view.context, uri.toString())
+                                if (savedPage.isFile && savedPage.length() > 0L) {
+                                    view.loadUrl(android.net.Uri.fromFile(savedPage).toString())
+                                } else {
+                                    val notice = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px;background:#f3f6fa;color:#17345b'><h2>Offline page not saved yet</h2><p>This section has not been downloaded to this phone. Connect and deliberately choose <b>Update Offline Content</b> to save the latest version.</p><p><a href='mcn-app://home'>Return to saved homepage</a></p></body>"
+                                    view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
+                                }
+                                return true
+                            }
                             if (uri.scheme == "http" || uri.scheme == "https") return false
                             // Let phone/email handlers work without launching a browser.
                             if (uri.scheme == "tel" || uri.scheme == "mailto") {
@@ -1507,10 +1526,31 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 view.loadUrl(loginUrl.toString())
                                 return true
                             }
+                            if ((uri.scheme == "http" || uri.scheme == "https") &&
+                                uri.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host &&
+                                view.url?.startsWith("file:") == true) {
+                                val savedPage = offlinePageArchiveFile(view.context, uri.toString())
+                                if (savedPage.isFile && savedPage.length() > 0L) {
+                                    view.loadUrl(android.net.Uri.fromFile(savedPage).toString())
+                                } else {
+                                    val notice = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px;background:#f3f6fa;color:#17345b'><h2>Offline page not saved yet</h2><p>Connect and deliberately choose <b>Update Offline Content</b> to save this section.</p><p><a href='mcn-app://home'>Return to saved homepage</a></p></body>"
+                                    view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
+                                }
+                                return true
+                            }
                             return uri.scheme != "http" && uri.scheme != "https"
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
                             OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
+                            // A saved local homepage must not silently call Naijacloud for live API data.
+                            if (view.url?.startsWith("file:") == true &&
+                                request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host) {
+                                return android.webkit.WebResourceResponse(
+                                    "application/json", "UTF-8", 503, "Offline snapshot",
+                                    mapOf("Cache-Control" to "no-store"),
+                                    java.io.ByteArrayInputStream(ByteArray(0))
+                                )
+                            }
                             if (!onlineState) {
                                 val localBible = OfflineModuleManager.cachedBibleModuleResponse(ctx, request.url.toString())
                                 if (localBible != null) {
@@ -1571,9 +1611,13 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 view.evaluateJavascript(rebaseLinks, null)
                             } else if (url?.startsWith(BuildConfig.API_BASE_URL) == true) {
                                 val parsed = android.net.Uri.parse(url)
-                                if (parsed.path.isNullOrBlank() || parsed.path == "/") {
-                                    view.postDelayed({
-                                        val archive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+                                val archive = if (parsed.path.isNullOrBlank() || parsed.path == "/") {
+                                    File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+                                } else {
+                                    offlinePageArchiveFile(context, url)
+                                }
+                                view.postDelayed({
+                                        archive.parentFile?.mkdirs()
                                         archive.parentFile?.mkdirs()
                                         view.saveWebArchive(archive.absolutePath, false) { savedPath ->
                                             if (!savedPath.isNullOrBlank() && File(savedPath).isFile && File(savedPath).length() > 0L) {
@@ -1583,7 +1627,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                             }
                                         }
                                     }, 1200L)
-                                }
                             }
 
                             // Use the same single menu controller as the web dashboard.
