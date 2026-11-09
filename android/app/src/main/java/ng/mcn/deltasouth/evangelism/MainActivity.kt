@@ -1924,9 +1924,22 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     )
                                 }
                                 else -> {
-                                    // Online pages remain available when connected. If they fail,
-                                    // onReceivedError below returns the user to the saved homepage.
-                                    webView?.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + destination)
+                                    val localPublicPage = destination == "/fellowships" ||
+                                        destination.startsWith("/fellowship/") ||
+                                        destination.startsWith("/devotional-centre") ||
+                                        destination == "/media-library"
+                                    if (localPublicPage) {
+                                        webView?.settings?.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                                        webView?.loadDataWithBaseURL(
+                                            "https://offline.mcn-app/",
+                                            OfflineDevotionalPage.render(context, destination),
+                                            "text/html", "UTF-8", null
+                                        )
+                                    } else {
+                                        // Authentication, registration and payment are the only
+                                        // public routes that intentionally open the live service.
+                                        webView?.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + destination)
+                                    }
                                 }
                             }
                         }
