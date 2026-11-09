@@ -289,7 +289,15 @@ private fun NativeDioceseApp() {
                         // Return to the on-device homepage when the deliberate update is finished.
                         // Return to the same real homepage, preferring the latest archive saved
                         // during this explicit update and otherwise the APK-bundled first-install copy.
-                        homepageView.post { openSavedDiocesanHome(homepageView) }
+                        homepageView.post {
+                            homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                            val savedHomepage = File(appContext.filesDir, "offline_homepage/diocesan-homepage.mht")
+                            if (savedHomepage.isFile && savedHomepage.length() > 0L) {
+                                homepageView.loadUrl(android.net.Uri.fromFile(savedHomepage).toString())
+                            } else {
+                                homepageView.loadUrl("file:///android_asset/offline-home/index.html")
+                            }
+                        }
                         downloadBusy = false
                     }
                 }
