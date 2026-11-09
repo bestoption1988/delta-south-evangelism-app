@@ -46,19 +46,38 @@ object OfflineDevotionalPage {
         return page("Yearly Lectionary", body)
     }
     private fun home(c:Context):String {
-        val b=StringBuilder("<div class='grid'>")
-        cs.forEach{x->
-            val target=when(x.key){"communion_english"->"/devotional-centre/communion-document/english";"communion_yoruba"->"/devotional-centre/communion-document/yoruba";else->"/devotional-centre/collection/${x.slug}"}
-            b.append("""<a class="card" href="$target"><div class="icon">${x.icon}</div><h2>${e(x.title)}</h2><p class="muted">Browse downloaded resources in this original library.</p><span class="pill">${a(c,x.key).length()} downloaded</span></a>""")
-        }
-        val n=runCatching{JSONArray(File(d(c),"Bible/index.json").readText()).length()}.getOrDefault(0)
-        val m=runCatching{JSONArray(File(d(c),"Church_Media/index.json").readText()).length()}.getOrDefault(0)
-        b.append("""<a class="card" href="/devotional-centre/holy-bible"><div class="icon">📖</div><h2>Uploaded Bible Library</h2><span class="pill">$n modules saved</span></a><a class="card" href="/media-library"><div class="icon">🎧</div><h2>Church Media Library</h2><span class="pill">$m files saved</span></a></div>""")
-        val lectionaryFile = File(File(d(c), "Lectionary"), "lectionary_2027.txt")
-        val lectionarySaved = lectionaryFile.isFile && lectionaryFile.length() > 0L
-        val lectionaryLabel = if (lectionarySaved) "YEAR B · 2027 / YEAR C · 2028 · Offline" else "Download required"
-        b.append("""<a class="card" href="/devotional-centre/lectionary"><div class="icon">📅</div><h2>Yearly Lectionary</h2><p class="muted">Read appointed Scripture readings for Sundays, feast days and special services. Available without internet after saving.</p><span class="pill">$lectionaryLabel</span></a>""")
-        return page("Devotional & Worship Centre",b.toString())
+        val b = """
+        <style>
+          body{background:#f1f4f9;color:#10234d}
+          .brand{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+          .brand-mark{font-size:54px;background:white;color:#0b4a35;border-radius:50%;width:76px;height:76px;display:grid;place-items:center}
+          .brand strong{display:block;font:800 21px Georgia;color:#0b234e}
+          .brand b{display:block;font:800 20px Georgia;color:#a91e37}
+          .brand small{display:block;color:#667085;font-size:11px;letter-spacing:1px;margin-top:7px}
+          .menu{background:#091f55;color:white;padding:16px;border-radius:12px;margin:12px 0 18px}
+          .menu a{color:white;margin-right:13px;display:inline-block;padding:5px 0}
+          .hero{background:linear-gradient(120deg,#081b4a,#242443 70%,#70503f);color:white;border-radius:16px;padding:26px 20px;margin-bottom:18px}
+          .eyebrow{color:#f6cf45;font-weight:900;letter-spacing:2px}
+          .hero h1{font:800 34px/1.12 Georgia;color:white;margin:14px 0}
+          .hero p{font:19px/1.55 Georgia;color:white}
+          .action{display:inline-block;background:#e31837;color:white;padding:12px 14px;border-radius:9px;margin:5px 6px 5px 0;font-weight:800}
+          .section{background:white;border:1px solid #dce3ec;border-radius:15px;padding:18px;margin:14px 0}
+          .section h2{color:#0d315e}
+          .note{font-size:13px;color:#69768b}
+        </style>
+        <div class="brand"><div class="brand-mark">✝</div><div><strong>METHODIST CHURCH NIGERIA</strong><b>DELTA SOUTH DIOCESE</b><small>WORSHIP · WITNESS · SERVICE · DISCIPLESHIP</small></div></div>
+        <nav class="menu"><strong style="font-size:20px">☰ Menu</strong><div style="margin-top:8px"><a href="#home">Home</a><a href="#about">About Us</a><a href="#diocese">Our Diocese</a><a href="#churches">Find Churches</a><a href="#devotional">Devotional Centre</a><a href="#contact">Contact</a></div></nav>
+        <section class="hero" id="home"><div class="eyebrow">WELCOME TO</div><h1>METHODIST CHURCH NIGERIA<br><span style="color:#f6cf45">DELTA SOUTH DIOCESE</span></h1><p>“Go into all the world and preach the Gospel to every creature.” — Mark 16:15</p><a class="action" href="#watch">▶ Watch Live Service</a><a class="action" href="#giving">♥ Give Online</a><a class="action" href="#churches" style="background:transparent;border:2px solid white">⌖ Find a Church Near You</a></section>
+        <section class="section" id="watch"><h2>Worship with Us</h2><p>Methodist Church Nigeria · Delta South Diocese</p><p class="note">Live streaming requires internet. Your homepage and saved resources remain available offline.</p></section>
+        <section class="section" id="about"><h2>About Our Diocese</h2><p>Worship · Witness · Service · Discipleship. Serving communities across Delta South Diocese through the Gospel of Jesus Christ.</p></section>
+        <section class="section" id="diocese"><h2>Our Diocese</h2><p>Delta South Diocese — Methodist Church Nigeria.</p></section>
+        <section class="section" id="churches"><h2>Find a Methodist Church Near You</h2><p>Effurun Circuit · Warri Circuit · Sapele Circuit · Steel Town Circuit</p><p class="note">The online directory and live map can be refreshed when you deliberately update the app.</p></section>
+        <section class="section" id="giving"><h2>Give Online</h2><p>Online giving requires an internet connection.</p></section>
+        <section class="section" id="devotional"><h2>Devotional & Worship Centre</h2><p>Access downloaded hymns, Bible modules, communion materials, canticles and yearly lectionary on this phone.</p><a class="btn" href="/devotional-centre">Open Offline Devotional Centre →</a></section>
+        <section class="section" id="contact"><h2>Connect With the Diocese</h2><p>Methodist Church Nigeria · Delta South Diocese</p></section>
+        <p class="note">OFFLINE MODE · This homepage is stored on this phone. Tap Refresh / Update only when you choose to download the latest version.</p>
+        """.trimIndent()
+        return page("Methodist Church Nigeria · Delta South Diocese", b)
     }
     private fun communionDocument(c:Context,key:String,title:String):String {
         val rows=a(c,key)
