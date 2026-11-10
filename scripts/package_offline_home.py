@@ -6,6 +6,10 @@ import os
 import re
 import subprocess
 import sys
+import hashlib
+import mimetypes
+import html as html_lib
+import urllib.request
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -82,6 +86,43 @@ def rewrite_srcset(match):
     return match.group(1) + quote + ", ".join(parts) + quote
 
 html = re.sub(r"""(\bsrcset\s*=\s*)(["'])(.*?)\2""", rewrite_srcset, html, flags=re.I | re.S)
+# Signed leadership/gallery photos often live on Supabase rather than the
+# diocesan host. Copy those image bytes into the APK and point the HTML at the
+# packaged file, so expired signatures or Airplane Mode cannot break photos.
+external_image_urls: set[str] = set()
+for attribute in re.finditer(r"""(?:src|poster|srcset)\\s*=\\s*(["'])(.*?)\\1""", html, flags=re.I | re.S):
+    for candidate in re.findall(r"https?://[^\\s,]+", attribute.group(2)):
+        candidate = html_lib.unescape(candidate).rstrip(")")
+        parsed = urlparse(candidate)
+        if parsed.netloc and parsed.netloc != HOST:
+            external_image_urls.add(candidate)
+
+packaged_external_images = 0
+for image_url in sorted(external_image_urls):
+    parsed = urlparse(image_url)
+    ext = Path(unquote(parsed.path)).suffix.lower()
+    if ext not in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif", ".ico"}:
+        continue
+    try:
+        request = urllib.request.Request(
+            image_url,
+            headers={"User-Agent": "Mozilla/5.0 MCN-Delta-South-Offline-Packager"},
+        )
+        with urllib.request.urlopen(request, timeout=25) as response:
+            content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
+            if not content_type.startswith("image/"):
+                continue
+            target = DEST / "_external" / (hashlib.sha256(image_url.encode("utf-8")).hexdigest()[:24] + ext)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(response.read())
+        local_url = "file:///android_asset/offline-home/_external/" + target.name
+        html = html.replace(image_url, local_url)
+        html = html.replace(image_url.replace("&", "&amp;"), local_url)
+        packaged_external_images += 1
+    except Exception as error:
+        print(f"Could not package external homepage image {image_url[:100]}: {error}")
+
+print(f"Packaged {packaged_external_images} external homepage images for offline viewing.")
 index.write_text(html, encoding="utf-8")
 
 def local_path(value: str) -> str | None:
