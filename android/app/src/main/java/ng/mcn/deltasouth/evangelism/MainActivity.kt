@@ -1629,7 +1629,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // falling through to Naijacloud when the homepage is opened locally.
                             val requestedUri = request.url
                             val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
-                            if (localArchiveActive.get() && requestedUri.host == configuredHost) {
+                            // Serve APK-bundled same-origin assets on the very first page load.
+                            // Do not gate this on onPageStarted: WebView may request CSS/images
+                            // before that callback flips localArchiveActive, causing a blank page
+                            // when the phone is in Airplane Mode.
+                            if (requestedUri.host == configuredHost && !request.isForMainFrame) {
                                 val requestPath = android.net.Uri.decode(requestedUri.encodedPath.orEmpty()).trimStart('/')
                                 if (requestPath.startsWith("api/") || requestPath.startsWith("socket.io/")) {
                                     return android.webkit.WebResourceResponse(
@@ -1722,6 +1726,80 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(keepNavigationInsideApp, null)
+
+                            // Reconnect homepage media controls to the files already downloaded
+                            // into the devotional/media libraries. The public page's signed
+                            // Supabase URLs require internet and therefore cannot play offline.
+                            if (url?.startsWith("file:") == true) {
+                                val hymnRows = runCatching {
+                                    org.json.JSONArray(
+                                        File(File(ctx.filesDir, "offline_storage/english_hymns"), "resources.json").readText()
+                                    )
+                                }.getOrDefault(org.json.JSONArray())
+                                val mediaRows = runCatching {
+                                    org.json.JSONArray(
+                                        File(OfflineModuleManager.offlineMediaDirectory(ctx), "index.json").readText()
+                                    )
+                                }.getOrDefault(org.json.JSONArray())
+                                val localMediaScript = """
+                                    (function() {
+                                      const hymns = $hymnRows;
+                                      const media = $mediaRows;
+                                      const key = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+                                      const card = document.querySelector('.android-daily-card.hymn-preview');
+                                      if (card) {
+                                        const heading = key(card.querySelector('h3')?.innerText);
+                                        const row = hymns.find(item => {
+                                          const number = key(item.item_number || item.number || '');
+                                          const title = key(item.title || '');
+                                          return (number && heading.includes(number)) || (title && heading.includes(title));
+                                        });
+                                        if (row && row.audio_file) {
+                                          let audio = card.querySelector('audio.daily-preview-audio');
+                                          if (!audio) {
+                                            const wrap = document.createElement('div');
+                                            wrap.className = 'daily-preview-audio-wrap';
+                                            const label = document.createElement('span');
+                                            label.className = 'daily-preview-audio-label';
+                                            label.textContent = '▶ Play downloaded hymn tune';
+                                            audio = document.createElement('audio');
+                                            audio.className = 'daily-preview-audio';
+                                            audio.controls = true;
+                                            audio.preload = 'none';
+                                            audio.playsInline = true;
+                                            wrap.append(label, audio);
+                                            const details = card.querySelector('details');
+                                            if (details) details.appendChild(wrap);
+                                          }
+                                          if (audio) {
+                                            audio.src = 'https://offline.mcn-app/__mcn_offline/file/' + encodeURIComponent(row.audio_file);
+                                            audio.load();
+                                          }
+                                        }
+                                        const tunes = row && row.payload && (row.payload.otherTunes || row.payload.other_tunes);
+                                        if (Array.isArray(tunes)) {
+                                          const audioElements = card.querySelectorAll('audio.daily-preview-audio');
+                                          tunes.forEach((tune, index) => {
+                                            if (tune.offline_file && audioElements[index + 1]) {
+                                              audioElements[index + 1].src = 'https://offline.mcn-app/__mcn_offline/file/' + encodeURIComponent(tune.offline_file);
+                                              audioElements[index + 1].load();
+                                            }
+                                          });
+                                        }
+                                      }
+                                      const videos = document.querySelectorAll('.homepage-video-card video');
+                                      videos.forEach(video => {
+                                        const title = key(video.getAttribute('aria-label') || video.closest('.homepage-video-card')?.querySelector('h3')?.innerText);
+                                        const match = media.find(item => item.media_type === 'video' && key(item.title) === title);
+                                        if (match && match.file) {
+                                          video.src = 'https://offline.mcn-app/__mcn_offline/file/' + encodeURIComponent(match.file);
+                                          video.load();
+                                        }
+                                      });
+                                    })();
+                                """.trimIndent()
+                                view.evaluateJavascript(localMediaScript, null)
+                            }
 
                             // Keep relative links and asset references relative to the bundled
                             // homepage. Rebasing them to API_BASE_URL makes an offline page call
