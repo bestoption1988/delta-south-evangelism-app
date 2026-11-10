@@ -291,7 +291,7 @@
 {% set leader_photo = profile.photo_path or defaults.get("photo", "") %}
 <article class="leader-card">
 {% if leader_photo %}
-<img class="leader-photo" src="{{ url_for('public_leadership_photo', profile_id=profile.id) if leader_photo.startswith('https://') or leader_photo.startswith('http://') else url_for('static', filename=leader_photo) }}" alt="{{ leader_name }}" loading="lazy" onerror="this.onerror=null;this.src='/static/uploads/leadership/{{ profile.title|lower|replace(' ', '-') }}.jpg';">
+<img class="leader-photo" src="{{ url_for('public_leadership_photo', profile_id=profile.id) if leader_photo.startswith('https://') or leader_photo.startswith('http://') else url_for('static', filename=leader_photo) }}" alt="{{ leader_name }}" loading="lazy" onerror="this.onerror=null;var p=document.createElement('div');p.className='leader-photo leader-placeholder';p.textContent='✝';this.replaceWith(p);">
 {% else %}
 <div class="leader-photo leader-placeholder">✝</div>
 {% endif %}
@@ -318,7 +318,7 @@
       <figure class="photo-gallery-slide{% if loop.first %} is-active{% endif %}" data-gallery-slide aria-hidden="{{ 'false' if loop.first else 'true' }}">
         <button class="photo-gallery-open" type="button" data-gallery-open aria-label="View {{ photo.title }}">
           <img src="{{ url_for('media_document_view', media_id=photo.id, raw=1) }}"
-               alt="Church gallery photo" loading="{{ 'eager' if loop.first else 'lazy' }}">
+               alt="Church gallery photo" loading="{{ 'eager' if loop.first else 'lazy' }}" onerror="this.onerror=null;this.outerHTML='<div class=&quot;photo-unavailable&quot;>Photo unavailable</div>';">
         </button>
       </figure>
       {% endfor %}
