@@ -90,8 +90,8 @@ html = re.sub(r"""(\bsrcset\s*=\s*)(["'])(.*?)\2""", rewrite_srcset, html, flags
 # diocesan host. Copy those image bytes into the APK and point the HTML at the
 # packaged file, so expired signatures or Airplane Mode cannot break photos.
 external_image_urls: set[str] = set()
-for attribute in re.finditer(r"""(?:src|poster|srcset)\\s*=\\s*(["'])(.*?)\\1""", html, flags=re.I | re.S):
-    for candidate in re.findall(r"https?://[^\\s,]+", attribute.group(2)):
+for attribute in re.finditer(r"""(?:src|poster|srcset)\s*=\s*(["'])(.*?)\1""", html, flags=re.I | re.S):
+    for candidate in re.findall(r"https?://[^\s,]+", attribute.group(2)):
         candidate = html_lib.unescape(candidate).rstrip(")")
         parsed = urlparse(candidate)
         if parsed.netloc and parsed.netloc != HOST:
