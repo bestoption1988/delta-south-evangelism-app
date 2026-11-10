@@ -1922,19 +1922,15 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 val requestedPath = request.url.path.orEmpty()
                                 // Failed online navigation must never strand the user on Android's
                                 // generic "Webpage not available" screen. Restore the saved homepage.
-                                val savedHome = File(view.context.filesDir, "offline_homepage/diocesan-homepage.mht")
                                 val isLiveDiocesanPage = request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                                 if (isLiveDiocesanPage) {
                                     pageError = false
                                     pageErrorDetails = ""
                                     view.post {
                                         view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                                        if (savedHome.isFile && savedHome.length() > 0L) {
-                                            view.loadUrl(android.net.Uri.fromFile(savedHome).toString())
-                                        } else {
-                                            // On first install the real homepage is bundled in the APK.
-                                            view.loadUrl("file:///android_asset/offline-home/index.html")
-                                        }
+                                        // Recover to the homepage packaged in this APK, never an
+                                        // old MHTML archive left behind by an earlier installation.
+                                        view.loadUrl("file:///android_asset/offline-home/index.html")
                                     }
                                     return
                                 }
@@ -1973,13 +1969,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     }
                     webChromeClient = WebChromeClient()
                     settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                    val updatedArchive = File(ctx.filesDir, "offline_homepage/diocesan-homepage.mht")
-                    if (updatedArchive.isFile && updatedArchive.length() > 0L) {
-                        loadUrl(android.net.Uri.fromFile(updatedArchive).toString())
-                    } else {
-                        // First install starts from the real diocesan homepage shipped inside this APK.
-                        loadUrl("file:///android_asset/offline-home/index.html")
-                    }
+                    // Always start with the current homepage bundled in this APK.
+                    // Do not prefer an MHTML archive from a previous app version.
+                    loadUrl("file:///android_asset/offline-home/index.html")
                     webView = this
                 }
             },
