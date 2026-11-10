@@ -26,13 +26,24 @@ jobs:
         with:
           ref: postgres-migration-integration
 
-      - name: Package the official web homepage and verify every required offline asset
+      - name: Package the official web homepage, with verified APK fallback
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          python scripts/package_offline_home.py android/app/src/main/assets/offline-home
-          echo "Bundled homepage entry point:"
-          test -s android/app/src/main/assets/offline-home/index.html
-          find android/app/src/main/assets/offline-home -type f | sort | head -n 120
+          DEST="android/app/src/main/assets/offline-home"
+          if ! python scripts/package_offline_home.py "$DEST"; then
+            echo "Live homepage could not be fetched. Restoring the last verified homepage bundle from build #454."
+            mkdir -p /tmp/mcn-homepage-fallback
+            gh run download 42778934419 --repo "$GITHUB_REPOSITORY" --name "Delta-South-Evangelism-Android-debug" --dir /tmp/mcn-homepage-fallback
+            test -s /tmp/mcn-homepage-fallback/app-debug.apk
+            mkdir -p android/app/src/main
+            unzip -oq /tmp/mcn-homepage-fallback/app-debug.apk 'assets/offline-home/*' -d android/app/src/main
+            python scripts/package_offline_home.py --verify-only "$DEST"
+          fi
+          echo "Verified bundled homepage entry point:"
+          test -s "$DEST/index.html"
+          find "$DEST" -type f | sort | head -n 120
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
