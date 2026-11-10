@@ -130,6 +130,11 @@ def local_path(value: str) -> str | None:
     if not value or value.startswith(("data:", "blob:", "javascript:", "#")):
         return None
     parsed = urlparse(value)
+    if parsed.scheme == "file":
+        prefix = "/android_asset/offline-home/"
+        if parsed.path.startswith(prefix):
+            return unquote(parsed.path[len(prefix):])
+        return None
     if parsed.scheme and parsed.netloc and parsed.netloc != HOST:
         return None
     path = unquote(parsed.path).lstrip("/")
