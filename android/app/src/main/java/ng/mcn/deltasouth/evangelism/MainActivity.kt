@@ -1402,14 +1402,15 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
     fun openSavedDiocesanHome(target: WebView?) {
         if (target == null) return
         target.post {
+            // Always open the homepage shipped inside this APK. Older app installs may
+            // contain a stale MHTML snapshot from a previous broken release; preferring
+            // that file makes every newer APK appear unchanged even after its assets are fixed.
             target.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-            val updatedArchive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
-            if (updatedArchive.isFile && updatedArchive.length() > 0L) {
-                target.loadUrl(android.net.Uri.fromFile(updatedArchive).toString())
-            } else {
-                // The exact public web homepage and its same-site assets are bundled in the APK.
-                target.loadUrl("file:///android_asset/offline-home/index.html")
+            val staleArchive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+            if (staleArchive.exists()) {
+                runCatching { staleArchive.delete() }
             }
+            target.loadUrl("file:///android_asset/offline-home/index.html")
         }
     }
     BackHandler(enabled = nativeMenuExpanded) { nativeMenuExpanded = false }
