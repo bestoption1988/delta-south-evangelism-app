@@ -61,7 +61,7 @@ def absolute_same_origin(match):
     return match.group(1) + match.group(2) + BASE_URL + match.group(3) + match.group(2)
 
 html = re.sub(
-    r"""(\b(?:src|href|poster)\s*=\s*)(["'])/([^"']*)""",
+    r"""(\b(?:src|href|poster)\s*=\s*)(["'])/(?!/)([^"']*)""",
     absolute_same_origin,
     html,
     flags=re.I,
