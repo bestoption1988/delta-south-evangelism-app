@@ -115,27 +115,39 @@ object OfflineDevotionalPage {
             ?: return page("Fellowship not downloaded", "<article class='paper'><p>This fellowship profile is not saved on this phone yet. Connect and use Update Offline Content.</p><a class='btn' href='/fellowships'>← All Fellowships</a></article>")
         val f=root.optJSONObject("fellowship")?:JSONObject()
         val name=f.optString("name","Fellowship")
-        val body=StringBuilder("<article class='paper'>")
+        fun image(fileName:String,alt:String,style:String=""):String {
+            if(fileName.isBlank())return ""
+            val url="/__mcn_offline/file/${Uri.encode(fileName)}"
+            return """<img src="$url" alt="${e(alt)}" loading="lazy" style="display:block;max-width:100%;$style">"""
+        }
+        val body=StringBuilder()
+        val cover=f.optString("offline_cover_file")
+        if(cover.isNotBlank())body.append("""<div class="item" style="padding:0;overflow:hidden">${image(cover,"$name cover","width:100%;max-height:260px;object-fit:cover")}</div>""")
+        body.append("<article class='paper'>")
+        val logo=f.optString("offline_logo_file")
+        if(logo.isNotBlank())body.append(image(logo,"$name logo","width:100px;height:100px;object-fit:contain;margin:0 auto 12px"))
         listOf("short_name" to "Name","introduction" to "Introduction","history" to "History","vision" to "Vision","mission" to "Mission","objectives" to "Objectives").forEach{(key,label)->
             val value=f.optString(key).trim()
             if(value.isNotBlank())body.append("<h3>${e(label)}</h3><p>${e(value)}</p>")
         }
         body.append("</article>")
-        fun section(key:String,title:String,fields:List<String>) {
+        fun section(key:String,title:String,fields:List<String>,includeImage:Boolean=false) {
             val items=root.optJSONArray(key)?:return
             if(items.length()==0)return
             body.append("<h2>${e(title)}</h2>")
             for(i in 0 until items.length()) {
                 val item=items.optJSONObject(i)?:continue
                 body.append("<article class='item'>")
+                if(includeImage)body.append(image(item.optString("offline_file"),item.optString("title"),"width:100%;max-height:250px;object-fit:cover;border-radius:10px;margin-bottom:12px"))
                 fields.forEach{field->val value=item.optString(field).trim();if(value.isNotBlank())body.append("<p>${e(value)}</p>")}
                 body.append("</article>")
             }
         }
-        section("leaders","Fellowship Leadership",listOf("full_name","position_title","biography"))
-        section("announcements","Announcements",listOf("title","body","created_at"))
-        section("events","Events",listOf("title","description","starts_at","venue"))
-        section("studies","Bible Studies",listOf("title","scripture_reference","preacher_or_teacher","summary","content","event_date"))
+        section("leaders","Fellowship Leadership",listOf("full_name","position_title","biography"),true)
+        section("announcements","Announcements",listOf("title","body","created_at"),true)
+        section("events","Events & Programmes",listOf("title","description","starts_at","venue"),true)
+        section("studies","Bible Studies",listOf("title","scripture_reference","preacher_or_teacher","summary","content","event_date"),true)
+        section("gallery","Photo & Media Gallery",listOf("title","description","created_at"),true)
         body.append("<nav><a class='btn' href='/fellowships'>← All Fellowships</a></nav>")
         return page(name,body.toString())
     }
