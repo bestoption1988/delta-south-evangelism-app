@@ -12,39 +12,43 @@ from urllib.parse import unquote, urlparse
 
 BASE_URL = "https://mcn-delta-south.naijacloud.app/"
 HOST = urlparse(BASE_URL).netloc
-DEST = Path(sys.argv[1] if len(sys.argv) > 1 else "android/app/src/main/assets/offline-home")
+VERIFY_ONLY = "--verify-only" in sys.argv
+ARGS = [arg for arg in sys.argv[1:] if arg != "--verify-only"]
+DEST = Path(ARGS[0] if ARGS else "android/app/src/main/assets/offline-home")
 DEST.mkdir(parents=True, exist_ok=True)
 
 # Keep original absolute URLs in the HTML. Android's WebView interceptor maps
 # same-origin requests to offline-home/<URL path>. Do not use --convert-links:
 # it rewrites URLs to query-string filenames that do not match WebView request paths.
-cmd = [
-    "wget", "--quiet", "--show-progress", "--page-requisites",
-    "--no-host-directories", "--execute", "robots=off",
-    "--timeout=30", "--tries=3", "--domains=" + HOST,
-    "--directory-prefix=" + str(DEST), BASE_URL,
-]
-result = subprocess.run(cmd, check=False)
-if result.returncode not in (0, 8):
-    raise SystemExit(f"Homepage download failed (wget exit {result.returncode})")
+if not VERIFY_ONLY:
+    cmd = [
+        "wget", "--quiet", "--show-progress", "--page-requisites",
+        "--no-host-directories", "--execute", "robots=off",
+        "--timeout=30", "--tries=3", "--domains=" + HOST,
+        "--directory-prefix=" + str(DEST), BASE_URL,
+    ]
+    result = subprocess.run(cmd, check=False)
+    if result.returncode not in (0, 8):
+        raise SystemExit(f"Homepage download failed (wget exit {result.returncode})")
 
 # Wget stores cache-busted files as e.g. public_home.css?v=123. WebView asks
 # for /static/public_home.css (the query is not part of the asset path), so
 # normalize the on-disk filename to the URL path used by MainActivity.
-for source in sorted(DEST.rglob("*")):
-    if not source.is_file() or "?" not in source.name:
-        continue
-    clean_name = source.name.split("?", 1)[0]
-    if not clean_name:
-        continue
-    target = source.with_name(clean_name)
-    if target.exists():
-        if target.stat().st_size == source.stat().st_size:
-            source.unlink()
+if not VERIFY_ONLY:
+    for source in sorted(DEST.rglob("*")):
+        if not source.is_file() or "?" not in source.name:
             continue
-        # A later cache-busted copy of the same URL path is the current one.
-        target.unlink()
-    source.replace(target)
+        clean_name = source.name.split("?", 1)[0]
+        if not clean_name:
+            continue
+        target = source.with_name(clean_name)
+        if target.exists():
+            if target.stat().st_size == source.stat().st_size:
+                source.unlink()
+                continue
+            # A later cache-busted copy of the same URL path is the current one.
+            target.unlink()
+        source.replace(target)
 
 index = DEST / "index.html"
 if not index.is_file() or index.stat().st_size < 1000:
