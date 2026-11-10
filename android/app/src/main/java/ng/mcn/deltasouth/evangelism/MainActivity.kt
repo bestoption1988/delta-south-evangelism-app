@@ -1628,17 +1628,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // falling through to Naijacloud when the homepage is opened locally.
                             val requestedUri = request.url
                             val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
-                            // While the bundled/saved homepage is active and the phone is offline,
-                            // fail all remote HTTP requests locally. This prevents CDN, analytics,
-                            // API and accidental website requests from delaying the offline screen.
-                            if (localArchiveActive.get() && !onlineState &&
-                                (requestedUri.scheme == "http" || requestedUri.scheme == "https")) {
-                                return android.webkit.WebResourceResponse(
-                                    "text/plain", "UTF-8", 503, "Offline",
-                                    mapOf("Cache-Control" to "no-store"),
-                                    java.io.ByteArrayInputStream(ByteArray(0))
-                                )
-                            }
                             if (localArchiveActive.get() && requestedUri.host == configuredHost) {
                                 val requestPath = android.net.Uri.decode(requestedUri.encodedPath.orEmpty()).trimStart('/')
                                 if (requestPath.startsWith("api/") || requestPath.startsWith("socket.io/")) {
@@ -1671,6 +1660,17 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     "text/plain", "UTF-8", 404, "Not found",
                                     mapOf("Cache-Control" to "no-store"),
                                     java.io.ByteArrayInputStream("Offline asset not packaged".toByteArray())
+                                )
+                            }
+                            // While the bundled/saved homepage is active and the phone is offline,
+                            // fail all remote HTTP requests locally. This prevents CDN, analytics,
+                            // API and accidental website requests from delaying the offline screen.
+                            if (localArchiveActive.get() && !onlineState &&
+                                (requestedUri.scheme == "http" || requestedUri.scheme == "https")) {
+                                return android.webkit.WebResourceResponse(
+                                    "text/plain", "UTF-8", 503, "Offline",
+                                    mapOf("Cache-Control" to "no-store"),
+                                    java.io.ByteArrayInputStream(ByteArray(0))
                                 )
                             }
                             if (!onlineState) {
