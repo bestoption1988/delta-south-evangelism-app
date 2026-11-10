@@ -2859,6 +2859,62 @@ def mcn_offline_service_worker():
     return response
 
 
+@app.get("/public/leadership-photo/<int:profile_id>")
+def public_leadership_photo(profile_id):
+    """Serve a published diocesan leadership portrait through the app, not a temporary storage URL."""
+    from flask import abort, send_file
+    from io import BytesIO
+    from urllib.parse import quote, unquote, urlparse
+    import requests
+
+    row = db().execute(
+        "SELECT photo_path FROM leadership_profiles "
+        "WHERE id=? AND LOWER(CAST(active AS TEXT)) IN ('1','true','t')",
+        (profile_id,),
+    ).fetchone()
+    if not row or not row["photo_path"]:
+        abort(404)
+    photo_path = str(row["photo_path"]).strip()
+    if not photo_path:
+        abort(404)
+
+    # Existing static uploads remain supported.
+    if photo_path.startswith("/static/"):
+        return redirect(photo_path)
+    if not photo_path.startswith(("https://", "http://")):
+        return redirect(url_for("static", filename=photo_path.lstrip("/")))
+
+    base, key = _leadership_storage_credentials()
+    parsed = urlparse(photo_path)
+    marker = "/storage/v1/object/"
+    marker_at = parsed.path.find(marker)
+    if marker_at < 0:
+        abort(404)
+    object_part = parsed.path[marker_at + len(marker):]
+    if object_part.startswith("public/"):
+        object_part = object_part[len("public/"):]
+    if object_part.startswith("sign/"):
+        object_part = object_part[len("sign/"):]
+    bucket, separator, object_path = object_part.partition("/")
+    if not separator or bucket != _LEADERSHIP_BUCKET or not object_path:
+        abort(404)
+
+    response = requests.get(
+        f"{base}/storage/v1/object/{bucket}/{quote(unquote(object_path), safe='/')}",
+        headers={"Authorization": f"Bearer {key}", "apikey": key},
+        timeout=25,
+    )
+    if response.status_code != 200:
+        app.logger.warning("Leadership photo proxy returned HTTP %s for profile %s", response.status_code, profile_id)
+        abort(404)
+    mime = response.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
+    if not mime.startswith("image/"):
+        abort(415)
+    result = send_file(BytesIO(response.content), mimetype=mime, max_age=3600)
+    result.headers["X-Content-Type-Options"] = "nosniff"
+    return result
+
+
 @app.get("/")
 def public_home():
     """Public diocesan homepage; no login required."""
