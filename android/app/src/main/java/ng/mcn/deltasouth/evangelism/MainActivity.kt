@@ -1398,7 +1398,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
     var pageErrorDetails by remember { mutableStateOf("The connection to the diocesan website failed.") }
     var pageLoading by remember { mutableStateOf(true) }
     var webView by remember { mutableStateOf<WebView?>(null) }
-    var nativeMenuExpanded by remember { mutableStateOf(false) }
     fun openSavedDiocesanHome(target: WebView?) {
         if (target == null) return
         target.post {
@@ -1413,8 +1412,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
             target.loadUrl("file:///android_asset/offline-home/index.html")
         }
     }
-    BackHandler(enabled = nativeMenuExpanded) { nativeMenuExpanded = false }
-    BackHandler(enabled = !nativeMenuExpanded && webView?.canGoBack() == true) { webView?.goBack() }
+    BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -2058,101 +2056,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 if (view.url.isNullOrBlank()) openSavedDiocesanHome(view)
             }
         )
-        // Native Android menu overlay: the embedded website's CSS/JavaScript menu
-        // is unreliable on some Android WebView touch implementations.
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset(y = 140.dp)
-        ) {
-            Button(
-                onClick = { nativeMenuExpanded = !nativeMenuExpanded },
-                modifier = Modifier.fillMaxWidth().height(66.dp),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(0.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = androidx.compose.ui.graphics.Color(0xFF0A1E50)),
-                contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp)
-            ) {
-                Text(if (nativeMenuExpanded) "×  Close Menu" else "☰  Menu", style = MaterialTheme.typography.headlineSmall)
-            }
-            DropdownMenu(
-                expanded = nativeMenuExpanded,
-                onDismissRequest = { nativeMenuExpanded = false },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                val menuItems = listOf(
-                    // Always return to the saved diocesan homepage, not an anchor on a failed page.
-                    "Main Home" to "mcn-app://home",
-                    "About Us" to "#about",
-                    "Our Diocese" to "#diocese",
-                    "Men's Fellowship" to "/fellowship/methodist-mens-fellowship",
-                    "Women's Fellowship" to "/fellowship/methodist-womens-fellowship",
-                    "Youth Fellowship" to "/fellowship/methodist-youth-fellowship",
-                    "Campus Fellowship" to "/fellowship/methodist-campus-fellowship",
-                    "All Fellowships" to "/fellowships",
-                    "Ministries" to "#ministries",
-                    "Sermons & Media" to "#watch",
-                    "Devotional Centre" to "/devotional-centre",
-                    "Photo Gallery" to "#photo-gallery",
-                    "Events" to "#events",
-                    "Online Services" to "#online",
-                    "Resources" to "#resources",
-                    "Contact" to "#contact"
-                )
-                menuItems.forEach { (label, destination) ->
-                    DropdownMenuItem(
-                        text = { Text(label) },
-                        onClick = {
-                            nativeMenuExpanded = false
-                            when {
-                                destination == "mcn-app://home" -> {
-                                    // Bypass custom URL schemes: open the local archive directly.
-                                    openSavedDiocesanHome(webView)
-                                }
-                                destination.startsWith("#") -> {
-                                    webView?.evaluateJavascript(
-                                        "(function(){var e=document.getElementById('" + destination.drop(1) + "');if(e)e.scrollIntoView({behavior:'smooth',block:'start'});})()",
-                                        null
-                                    )
-                                }
-                                else -> {
-                                    val localPublicPage = destination == "/fellowships" ||
-                                        destination.startsWith("/fellowship/") ||
-                                        destination.startsWith("/devotional-centre") ||
-                                        destination == "/media-library"
-                                    if (localPublicPage) {
-                                        webView?.settings?.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                                        webView?.loadDataWithBaseURL(
-                                            "https://offline.mcn-app/",
-                                            OfflineDevotionalPage.render(context, destination),
-                                            "text/html", "UTF-8", null
-                                        )
-                                    } else {
-                                        // Authentication, registration and payment are the only
-                                        // public routes that intentionally open the live service.
-                                        webView?.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + destination)
-                                    }
-                                }
-                            }
-                        }
-                    )
-                }
-                Divider()
-                DropdownMenuItem(
-                    text = { Text("Update Offline Content") },
-                    onClick = {
-                        nativeMenuExpanded = false
-                        webView?.let { onOfflineDownload(it) }
-                    }
-                )
-                DropdownMenuItem(
-                    text = { Text("Staff sign in") },
-                    onClick = {
-                        nativeMenuExpanded = false
-                        webView?.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/login")
-                    }
-                )
-            }
-        }
+        // Use the single menu rendered by the official diocesan website.
         if (pageLoading) {
             LinearProgressIndicator(Modifier.fillMaxWidth().align(androidx.compose.ui.Alignment.TopCenter))
         }
