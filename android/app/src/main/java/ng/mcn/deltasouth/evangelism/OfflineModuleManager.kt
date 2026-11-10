@@ -149,6 +149,77 @@ object OfflineModuleManager {
         "api/church-accounts",
     )
 
+    private fun cacheFellowshipImages(context: Context, apiPath: String, source: String): String {
+        val root = runCatching { JSONObject(source) }.getOrNull() ?: return source
+        val slug = apiPath.substringAfterLast('/').replace(Regex("[^A-Za-z0-9_-]"), "")
+        if (slug.isBlank()) return source
+        val folder = File(context.filesDir, "offline_storage/fellowship_media").apply { mkdirs() }
+        var saved = 0
+
+        fun fetch(url: String, stem: String): String {
+            if (url.isBlank()) return ""
+            return runCatching {
+                val fullUrl = if (url.startsWith("http://") || url.startsWith("https://")) {
+                    url
+                } else {
+                    BuildConfig.API_BASE_URL.trimEnd('/') + "/" + url.trimStart('/')
+                }
+                val request = Request.Builder().url(fullUrl).get().build()
+                Backend.client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use ""
+                    val body = response.body ?: return@use ""
+                    val mime = body.contentType()?.toString()?.substringBefore(';')?.lowercase(Locale.ROOT).orEmpty()
+                    val ext = when (mime) {
+                        "image/png" -> ".png"
+                        "image/webp" -> ".webp"
+                        "image/gif" -> ".gif"
+                        "image/svg+xml" -> ".svg"
+                        else -> ".jpg"
+                    }
+                    val fileName = stem + ext
+                    val target = File(folder, fileName)
+                    val bytes = body.bytes()
+                    if (bytes.isEmpty()) return@use ""
+                    val part = File(folder, fileName + ".part")
+                    part.writeBytes(bytes)
+                    if (target.exists()) target.delete()
+                    if (!part.renameTo(target)) {
+                        part.copyTo(target, overwrite = true)
+                        part.delete()
+                    }
+                    saved++
+                    fileName
+                }
+            }.getOrDefault("")
+        }
+
+        val fellowship = root.optJSONObject("fellowship")
+        if (fellowship != null) {
+            val logo = fetch(fellowship.optString("offline_logo_url"), slug + "-logo")
+            if (logo.isNotBlank()) fellowship.put("offline_logo_file", logo)
+            val cover = fetch(fellowship.optString("offline_cover_url"), slug + "-cover")
+            if (cover.isNotBlank()) fellowship.put("offline_cover_file", cover)
+        }
+        val groups = listOf(
+            "leaders" to "leader",
+            "announcements" to "announcement",
+            "events" to "event",
+            "studies" to "study",
+            "gallery" to "gallery"
+        )
+        for ((key, prefix) in groups) {
+            val items = root.optJSONArray(key) ?: continue
+            for (index in 0 until items.length()) {
+                val item = items.optJSONObject(index) ?: continue
+                val id = item.optString("id", index.toString()).ifBlank { index.toString() }
+                val file = fetch(item.optString("offline_image_url"), "$slug-$prefix-$id")
+                if (file.isNotBlank()) item.put("offline_file", file)
+            }
+        }
+        android.util.Log.i("MCNOffline", "Saved $saved fellowship image(s) for $slug")
+        return root.toString()
+    }
+
     fun downloadAll(context: Context, onProgress: (String, Int) -> Unit = { _, _ -> }): OfflineDownloadSummary {
         Backend.initialize(context.applicationContext)
         var downloaded = 0
@@ -169,7 +240,7 @@ object OfflineModuleManager {
                     val type = response.body?.contentType()?.subtype.orEmpty()
                     if (response.isSuccessful && type.contains("json", ignoreCase = true)) {
                         // Reading the body causes OfflineResponseCache's interceptor to persist it encrypted.
-                        val bodyText = response.body?.string().orEmpty()
+                        var bodyText = response.body?.string().orEmpty()
                         if (bodyText.isNotBlank() && path.startsWith("api/public/")) {
                             val snapshotDir = File(context.filesDir, "offline_storage").apply { mkdirs() }
                             val snapshotName = when {
@@ -179,6 +250,9 @@ object OfflineModuleManager {
                                 else -> ""
                             }
                             if (snapshotName.isNotBlank()) {
+                                if (path.startsWith("api/public/fellowships/") && bodyText.isNotBlank()) {
+                                    bodyText = cacheFellowshipImages(context, path, bodyText)
+                                }
                                 val target = File(snapshotDir, snapshotName)
                                 val part = File(snapshotDir, snapshotName + ".part")
                                 part.writeText(bodyText)
