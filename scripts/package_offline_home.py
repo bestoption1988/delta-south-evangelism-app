@@ -58,7 +58,7 @@ if "METHODIST CHURCH NIGERIA" not in html or "DELTA SOUTH DIOCESE" not in html:
 # WebView interceptor can serve those requests from assets/offline-home.
 # Do not add a <base> tag: it would turn #section links into network navigations.
 def absolute_same_origin(match):
-    return match.group(1) + BASE_URL + match.group(3)
+    return match.group(1) + match.group(2) + BASE_URL + match.group(3) + match.group(2)
 
 html = re.sub(
     r"""(\b(?:src|href|poster)\s*=\s*)(["'])/([^"']*)""",
