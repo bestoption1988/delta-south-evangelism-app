@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout release branch
+        # Rebuild after the offline homepage image-proxy and asset-path corrections.
         uses: actions/checkout@v4
         with:
           ref: postgres-migration-integration
