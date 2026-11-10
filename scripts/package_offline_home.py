@@ -28,10 +28,13 @@ if not VERIFY_ONLY:
     cmd = [
         "wget", "--quiet", "--show-progress", "--page-requisites",
         "--no-host-directories", "--execute", "robots=off",
-        "--timeout=30", "--tries=3", "--domains=" + HOST,
+        "--timeout=12", "--tries=1", "--read-timeout=12", "--max-redirect=5", "--domains=" + HOST,
         "--directory-prefix=" + str(DEST), BASE_URL,
     ]
-    result = subprocess.run(cmd, check=False)
+    try:
+        result = subprocess.run(cmd, check=False, timeout=300)
+    except subprocess.TimeoutExpired:
+        raise SystemExit("Homepage download exceeded the 5-minute safety limit; use the last verified offline bundle.")
     if result.returncode not in (0, 8):
         raise SystemExit(f"Homepage download failed (wget exit {result.returncode})")
 
@@ -98,7 +101,7 @@ for attribute in re.finditer(r"""(?:src|poster|srcset)\s*=\s*(["'])(.*?)\1""", h
             external_image_urls.add(candidate)
 
 packaged_external_images = 0
-for image_url in sorted(external_image_urls):
+for image_url in sorted(external_image_urls)[:40]:
     parsed = urlparse(image_url)
     ext = Path(unquote(parsed.path)).suffix.lower()
     if ext and ext not in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif", ".ico"}:
@@ -108,7 +111,7 @@ for image_url in sorted(external_image_urls):
             image_url,
             headers={"User-Agent": "Mozilla/5.0 MCN-Delta-South-Offline-Packager"},
         )
-        with urllib.request.urlopen(request, timeout=25) as response:
+        with urllib.request.urlopen(request, timeout=6) as response:
             content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
             if not content_type.startswith("image/"):
                 continue
