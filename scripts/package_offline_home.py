@@ -1,0 +1,130 @@
+#!/usr/bin/env python3
+"""Download the live diocesan homepage and package its same-origin assets for Android."""
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+from html.parser import HTMLParser
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
+BASE_URL = "https://mcn-delta-south.naijacloud.app/"
+HOST = urlparse(BASE_URL).netloc
+DEST = Path(sys.argv[1] if len(sys.argv) > 1 else "android/app/src/main/assets/offline-home")
+DEST.mkdir(parents=True, exist_ok=True)
+
+# Keep original absolute URLs in the HTML. Android's WebView interceptor maps
+# same-origin requests to offline-home/<URL path>. Do not use --convert-links:
+# it rewrites URLs to query-string filenames that do not match WebView request paths.
+cmd = [
+    "wget", "--quiet", "--show-progress", "--page-requisites",
+    "--no-host-directories", "--execute", "robots=off",
+    "--timeout=30", "--tries=3", "--domains=" + HOST,
+    "--directory-prefix=" + str(DEST), BASE_URL,
+]
+result = subprocess.run(cmd, check=False)
+if result.returncode not in (0, 8):
+    raise SystemExit(f"Homepage download failed (wget exit {result.returncode})")
+
+# Wget stores cache-busted files as e.g. public_home.css?v=123. WebView asks
+# for /static/public_home.css (the query is not part of the asset path), so
+# normalize the on-disk filename to the URL path used by MainActivity.
+for source in sorted(DEST.rglob("*")):
+    if not source.is_file() or "?" not in source.name:
+        continue
+    clean_name = source.name.split("?", 1)[0]
+    if not clean_name:
+        continue
+    target = source.with_name(clean_name)
+    if target.exists():
+        if target.stat().st_size == source.stat().st_size:
+            source.unlink()
+            continue
+        # A later cache-busted copy of the same URL path is the current one.
+        target.unlink()
+    source.replace(target)
+
+index = DEST / "index.html"
+if not index.is_file() or index.stat().st_size < 1000:
+    raise SystemExit("The live homepage HTML was not downloaded correctly.")
+html = index.read_text(encoding="utf-8", errors="replace")
+if "METHODIST CHURCH NIGERIA" not in html or "DELTA SOUTH DIOCESE" not in html:
+    raise SystemExit("Downloaded page is not the official Delta South Diocese homepage.")
+
+# A file:// page otherwise resolves leading-slash resources to file:///static.
+# Set the real site as base so same-origin requests reach the Android asset bridge.
+base_tag = f'<base href="{BASE_URL}">'
+if "<base " not in html.lower():
+    html = re.sub(r"(<head\b[^>]*>)", r"\1\n" + base_tag, html, count=1, flags=re.I)
+index.write_text(html, encoding="utf-8")
+
+def local_path(value: str) -> str | None:
+    value = (value or "").strip()
+    if not value or value.startswith(("data:", "blob:", "javascript:", "#")):
+        return None
+    parsed = urlparse(value)
+    if parsed.scheme and parsed.netloc and parsed.netloc != HOST:
+        return None
+    path = unquote(parsed.path).lstrip("/")
+    return path or None
+
+class HTMLAssets(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.paths: list[str] = []
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag in ("script", "img", "source", "video", "audio", "iframe", "embed", "track"):
+            p = local_path(a.get("src", ""))
+            if p: self.paths.append(p)
+        if tag == "video":
+            p = local_path(a.get("poster", ""))
+            if p: self.paths.append(p)
+        if tag == "link" and any(x in a.get("rel", "").lower().split()
+                                 for x in ("stylesheet", "icon", "preload", "modulepreload")):
+            p = local_path(a.get("href", ""))
+            if p: self.paths.append(p)
+        if tag == "img" and a.get("srcset"):
+            for candidate in a["srcset"].split(","):
+                p = local_path(candidate.strip().split()[0])
+                if p: self.paths.append(p)
+
+parser = HTMLAssets()
+parser.feed(html)
+required = set(parser.paths)
+# CSS url(...) and @import assets are also part of the homepage render tree.
+css_pattern = re.compile(r"""url\(\s*['"]?([^)'"]+)['"]?\s*\)|@import\s+['"]([^'"]+)['"]""", re.I)
+pending = [p for p in required if p.lower().endswith(".css")]
+seen_css: set[str] = set()
+while pending:
+    css_path = pending.pop()
+    if css_path in seen_css:
+        continue
+    seen_css.add(css_path)
+    css_file = DEST / css_path
+    if not css_file.is_file():
+        continue
+    css = css_file.read_text(encoding="utf-8", errors="replace")
+    for match in css_pattern.finditer(css):
+        value = match.group(1) or match.group(2) or ""
+        p = local_path(value)
+        if p:
+            required.add(p)
+            if p.lower().endswith(".css") and p not in seen_css:
+                pending.append(p)
+
+missing = sorted(p for p in required if not (DEST / p).is_file())
+if missing:
+    print("Required homepage assets missing from offline package:")
+    for p in missing:
+        print(" - " + p)
+    raise SystemExit(1)
+
+file_count = sum(1 for p in DEST.rglob("*") if p.is_file())
+total_bytes = sum(p.stat().st_size for p in DEST.rglob("*") if p.is_file())
+if file_count < 5 or total_bytes < 100_000:
+    raise SystemExit(f"Homepage package is suspiciously small: {file_count} files, {total_bytes} bytes")
+print(f"Verified official homepage: {file_count} files, {total_bytes:,} bytes")
+print(f"Verified {len(required)} same-origin HTML/CSS resources.")
