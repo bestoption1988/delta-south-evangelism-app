@@ -25,78 +25,13 @@ jobs:
         with:
           ref: postgres-migration-integration
 
-      - name: Package and verify the real diocesan homepage and its assets
+      - name: Package the official web homepage and verify every required offline asset
         run: |
           set -euo pipefail
-          BASE_URL="https://mcn-delta-south.naijacloud.app/"
-          HOST="mcn-delta-south.naijacloud.app"
-          DEST="android/app/src/main/assets/offline-home"
-          rm -rf "$DEST"
-          mkdir -p "$DEST"
-          # Fetch the actual public homepage plus its same-origin linked pages and
-          # every page prerequisite (CSS, JS, images, fonts and media referenced by CSS).
-          # Keep the host directory out so /static/... maps to assets/offline-home/static/...
-          # Wget exit code 8 means at least one linked URL returned an HTTP
-          # error (the live site has stale/deleted media links). Keep the files
-          # successfully fetched, then let the explicit homepage asset audit below
-          # fail only when a required homepage resource is actually missing.
-          set +e
-          wget --verbose --page-requisites \
-            --convert-links --adjust-extension --no-host-directories \
-            --domains="$HOST" --directory-prefix="$DEST" "$BASE_URL"
-          WGET_STATUS=$?
-          set -e
-          if [ "$WGET_STATUS" -ne 0 ] && [ "$WGET_STATUS" -ne 8 ]; then
-            echo "Homepage download failed with wget exit code $WGET_STATUS"
-            exit "$WGET_STATUS"
-          fi
-          echo "Homepage downloader exit code: $WGET_STATUS (HTTP 404s on unrelated links are tolerated)"
-          test -s "$DEST/index.html"
-          FILE_COUNT="$(find "$DEST" -type f | wc -l)"
-          TOTAL_SIZE="$(du -sh "$DEST" | cut -f1)"
-          echo "Offline homepage files packaged: $FILE_COUNT"
-          echo "Offline homepage package size: $TOTAL_SIZE"
-          test "$FILE_COUNT" -ge 5 || { echo "Homepage package is incomplete: fewer than five files were downloaded"; exit 1; }
-          # Fail the release if the downloaded homepage still points at a same-origin
-          # asset path that is absent from the APK package.
-          python - <<'PY'
-          from html.parser import HTMLParser
-          from pathlib import Path
-          from urllib.parse import urlparse, unquote
-          root = Path("android/app/src/main/assets/offline-home")
-          html = (root / "index.html").read_text(encoding="utf-8", errors="replace")
-          class Assets(HTMLParser):
-              def __init__(self):
-                  super().__init__()
-                  self.urls = []
-              def handle_starttag(self, tag, attrs):
-                  attrs = dict(attrs)
-                  rel = attrs.get("rel", "").lower().split()
-                  candidates = []
-                  if tag in ("script", "img", "source", "video", "audio", "iframe", "embed", "track"):
-                      candidates.append(attrs.get("src", ""))
-                  if tag == "video":
-                      candidates.append(attrs.get("poster", ""))
-                  if tag == "link" and any(x in rel for x in ("stylesheet", "icon", "preload", "modulepreload")):
-                      candidates.append(attrs.get("href", ""))
-                  for value in candidates:
-                      if value.startswith(("https://mcn-delta-south.naijacloud.app/", "/")):
-                          parsed = urlparse(value)
-                          path = unquote(parsed.path).lstrip("/")
-                          if path and not path.endswith("/"):
-                              self.urls.append(path)
-          parser = Assets()
-          parser.feed(html)
-          missing = [p for p in parser.urls if not (root / p).is_file()]
-          if missing:
-              print("Same-origin homepage assets not found in APK package:")
-              for path in sorted(set(missing)):
-                  print(" -", path)
-              raise SystemExit(1)
-          print(f"Verified {len(parser.urls)} same-origin asset references from homepage HTML.")
-          PY
-          echo "Packaged homepage tree:"
-          find "$DEST" -type f | sort | head -n 100
+          python scripts/package_offline_home.py android/app/src/main/assets/offline-home
+          echo "Bundled homepage entry point:"
+          test -s android/app/src/main/assets/offline-home/index.html
+          find android/app/src/main/assets/offline-home -type f | sort | head -n 120
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
