@@ -53,11 +53,31 @@ html = index.read_text(encoding="utf-8", errors="replace")
 if "METHODIST CHURCH NIGERIA" not in html or "DELTA SOUTH DIOCESE" not in html:
     raise SystemExit("Downloaded page is not the official Delta South Diocese homepage.")
 
-# A file:// page otherwise resolves leading-slash resources to file:///static.
-# Set the real site as base so same-origin requests reach the Android asset bridge.
-base_tag = f'<base href="{BASE_URL}">'
-if "<base " not in html.lower():
-    html = re.sub(r"(<head\b[^>]*>)", r"\1\n" + base_tag, html, count=1, flags=re.I)
+# A file:// page resolves leading-slash resources to file:///static.
+# Rewrite root-relative URLs to the live same-origin host so MainActivity's
+# WebView interceptor can serve those requests from assets/offline-home.
+# Do not add a <base> tag: it would turn #section links into network navigations.
+def absolute_same_origin(match):
+    return match.group(1) + BASE_URL + match.group(3)
+
+html = re.sub(
+    r"""(\b(?:src|href|poster)\s*=\s*)(["'])/([^"']*)""",
+    absolute_same_origin,
+    html,
+    flags=re.I,
+)
+def rewrite_srcset(match):
+    quote = match.group(2)
+    value = match.group(3)
+    parts = []
+    for item in value.split(","):
+        bits = item.strip().split()
+        if bits and bits[0].startswith("/") and not bits[0].startswith("//"):
+            bits[0] = BASE_URL.rstrip("/") + bits[0]
+        parts.append(" ".join(bits))
+    return match.group(1) + quote + ", ".join(parts) + quote
+
+html = re.sub(r"""(\bsrcset\s*=\s*)(["'])(.*?)\2""", rewrite_srcset, html, flags=re.I | re.S)
 index.write_text(html, encoding="utf-8")
 
 def local_path(value: str) -> str | None:
