@@ -291,7 +291,7 @@
 {% set leader_photo = profile.photo_path or defaults.get("photo", "") %}
 <article class="leader-card">
 {% if leader_photo %}
-<img class="leader-photo" src="{{ leader_photo if leader_photo.startswith('https://') or leader_photo.startswith('http://') else url_for('static', filename=leader_photo) }}" alt="{{ leader_name }}" loading="lazy" onerror="this.onerror=null;this.src='/static/uploads/leadership/{{ profile.title|lower|replace(' ', '-') }}.jpg';">
+<img class="leader-photo" src="{{ url_for('public_leadership_photo', profile_id=profile.id) if leader_photo.startswith('https://') or leader_photo.startswith('http://') else url_for('static', filename=leader_photo) }}" alt="{{ leader_name }}" loading="lazy" onerror="this.onerror=null;this.src='/static/uploads/leadership/{{ profile.title|lower|replace(' ', '-') }}.jpg';">
 {% else %}
 <div class="leader-photo leader-placeholder">✝</div>
 {% endif %}
@@ -372,7 +372,7 @@
     <article class="homepage-video-card">
       <video controls playsinline webkit-playsinline preload="metadata" width="1280" height="720"
              aria-label="{{ video.title }}"
-             src="{{ video.signed_url or url_for('media_document_view', media_id=video.id, raw=1) }}"></video>
+             src="{{ url_for('media_document_view', media_id=video.id, raw=1) }}"></video>
       <div class="homepage-video-copy">
         <h3>{{ video.title }}</h3>
         {% if video.description %}<p>{{ video.description }}</p>{% endif %}
