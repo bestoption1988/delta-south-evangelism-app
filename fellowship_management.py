@@ -140,26 +140,47 @@ def register_fellowship_routes(app, db_getter, user_getter):
             abort(404)
         fellowship = row_dict(row)
         fid = fellowship["id"]
-        def rows(sql, params):
-            return [row_dict(item) for item in query(sql, params).fetchall()]
+        def rows(sql, params, kind, image_field):
+            output = []
+            for item in query(sql, params).fetchall():
+                record = row_dict(item)
+                if record.get(image_field):
+                    record["offline_image_url"] = url_for(
+                        "fellowship_public_image", slug=slug, kind=kind,
+                        item_id=record["id"],
+                    )
+                output.append(record)
+            return output
+        if fellowship.get("logo_path"):
+            fellowship["offline_logo_url"] = url_for(
+                "fellowship_public_image", slug=slug, kind="logo", item_id=fid
+            )
+        if fellowship.get("cover_path"):
+            fellowship["offline_cover_url"] = url_for(
+                "fellowship_public_image", slug=slug, kind="cover", item_id=fid
+            )
         return jsonify({
             "ok": True,
             "fellowship": fellowship,
             "leaders": rows(
-                "SELECT full_name, position_title, biography, display_order FROM fellowship_leaders WHERE fellowship_id=? AND active=1 ORDER BY display_order, full_name",
-                (fid,),
+                "SELECT id, full_name, position_title, biography, photo_path, display_order FROM fellowship_leaders WHERE fellowship_id=? AND active=1 ORDER BY display_order, full_name",
+                (fid,), "leader", "photo_path",
             ),
             "announcements": rows(
-                "SELECT title, body, created_at, published_at FROM fellowship_announcements WHERE fellowship_id=? AND status='published' ORDER BY COALESCE(published_at, created_at) DESC LIMIT 12",
-                (fid,),
+                "SELECT id, title, body, image_path, created_at, published_at FROM fellowship_announcements WHERE fellowship_id=? AND status='published' ORDER BY COALESCE(published_at, created_at) DESC LIMIT 12",
+                (fid,), "announcement", "image_path",
             ),
             "events": rows(
-                "SELECT title, description, starts_at, venue FROM fellowship_events WHERE fellowship_id=? AND status='published' ORDER BY starts_at DESC LIMIT 12",
-                (fid,),
+                "SELECT id, title, description, poster_path, starts_at, venue FROM fellowship_events WHERE fellowship_id=? AND status='published' ORDER BY starts_at DESC LIMIT 12",
+                (fid,), "event", "poster_path",
             ),
             "studies": rows(
-                "SELECT title, scripture_reference, preacher_or_teacher, summary, content, event_date FROM fellowship_studies WHERE fellowship_id=? AND status='published' ORDER BY event_date DESC LIMIT 12",
-                (fid,),
+                "SELECT id, title, scripture_reference, preacher_or_teacher, summary, content, media_path, event_date FROM fellowship_studies WHERE fellowship_id=? AND status='published' ORDER BY event_date DESC LIMIT 12",
+                (fid,), "study", "media_path",
+            ),
+            "gallery": rows(
+                "SELECT id, title, description, media_type, media_path, created_at FROM fellowship_gallery WHERE fellowship_id=? AND status='published' ORDER BY created_at DESC LIMIT 18",
+                (fid,), "gallery", "media_path",
             ),
         })
 
