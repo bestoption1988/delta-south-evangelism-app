@@ -317,7 +317,7 @@
       {% for photo in homepage_gallery_items %}
       <figure class="photo-gallery-slide{% if loop.first %} is-active{% endif %}" data-gallery-slide aria-hidden="{{ 'false' if loop.first else 'true' }}">
         <button class="photo-gallery-open" type="button" data-gallery-open aria-label="View {{ photo.title }}">
-          <img src="{{ photo.signed_url or url_for('media_document_view', media_id=photo.id, raw=1) }}"
+          <img src="{{ url_for('media_document_view', media_id=photo.id, raw=1) }}"
                alt="Church gallery photo" loading="{{ 'eager' if loop.first else 'lazy' }}">
         </button>
       </figure>
