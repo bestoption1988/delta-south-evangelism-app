@@ -1738,7 +1738,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 }.getOrDefault(org.json.JSONArray())
                                 val mediaRows = runCatching {
                                     org.json.JSONArray(
-                                        File(OfflineModuleManager.offlineMediaDirectory(ctx), "index.json").readText()
+                                        File(File(ctx.filesDir, "offline_storage/Church_Media"), "index.json").readText()
                                     )
                                 }.getOrDefault(org.json.JSONArray())
                                 val localMediaScript = """
