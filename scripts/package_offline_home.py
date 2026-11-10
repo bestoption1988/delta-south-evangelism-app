@@ -101,7 +101,7 @@ packaged_external_images = 0
 for image_url in sorted(external_image_urls):
     parsed = urlparse(image_url)
     ext = Path(unquote(parsed.path)).suffix.lower()
-    if ext not in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif", ".ico"}:
+    if ext and ext not in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif", ".ico"}:
         continue
     try:
         request = urllib.request.Request(
@@ -112,10 +112,16 @@ for image_url in sorted(external_image_urls):
             content_type = response.headers.get("Content-Type", "").split(";", 1)[0].lower()
             if not content_type.startswith("image/"):
                 continue
+            if not ext:
+                ext = mimetypes.guess_extension(content_type) or ".img"
+                if ext == ".jpe":
+                    ext = ".jpg"
             target = DEST / "_external" / (hashlib.sha256(image_url.encode("utf-8")).hexdigest()[:24] + ext)
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(response.read())
-        local_url = "file:///android_asset/offline-home/_external/" + target.name
+        # Use a same-origin URL so the offline WebView asset interceptor and
+        # package verifier resolve this file exactly like every other asset.
+        local_url = BASE_URL.rstrip("/") + "/_external/" + target.name
         html = html.replace(image_url, local_url)
         html = html.replace(image_url.replace("&", "&amp;"), local_url)
         packaged_external_images += 1
