@@ -31,6 +31,7 @@ jobs:
         working-directory: android
     steps:
       - name: Checkout source
+        # Rebuild after the offline homepage image-proxy and asset-path corrections.
         uses: actions/checkout@v4
 
       - name: Package the official web homepage, with verified APK fallback
