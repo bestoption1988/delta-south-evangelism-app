@@ -914,17 +914,71 @@ object OfflineModuleManager {
     }
 
     fun scheduleAutomaticUpdates(context: Context) {
+        // The full media/database package remains user-initiated. Only the small daily
+        // Scripture and hymn payload refreshes automatically.
+        scheduleDailyReadingUpdates(context)
+    }
+
+    fun scheduleDailyReadingUpdates(context: Context) {
+        val app = context.applicationContext
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
-        val request = PeriodicWorkRequestBuilder<OfflineRefreshWorker>(6, TimeUnit.HOURS)
+        val periodic = PeriodicWorkRequestBuilder<DailyReadingRefreshWorker>(6, TimeUnit.HOURS)
             .setConstraints(constraints)
             .build()
-        WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
-            "mcn-delta-south-offline-refresh",
+        WorkManager.getInstance(app).enqueueUniquePeriodicWork(
+            "mcn-delta-south-daily-reading-refresh",
             ExistingPeriodicWorkPolicy.KEEP,
-            request
+            periodic
         )
+        val immediate = OneTimeWorkRequestBuilder<DailyReadingRefreshWorker>()
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(app).enqueueUniqueWork(
+            "mcn-delta-south-daily-reading-refresh-now",
+            ExistingWorkPolicy.KEEP,
+            immediate
+        )
+    }
+}
+
+class DailyReadingRefreshWorker(
+    appContext: Context,
+    params: WorkerParameters
+) : CoroutineWorker(appContext, params) {
+    override suspend fun doWork(): Result {
+        return try {
+            Backend.initialize(applicationContext)
+            val request = Request.Builder()
+                .url(BuildConfig.API_BASE_URL.trimEnd('/') + "/api/public/daily-reading")
+                .get()
+                .build()
+            Backend.client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return if (runAttemptCount < 3) Result.retry() else Result.failure()
+                }
+                val text = response.body?.string().orEmpty()
+                val root = JSONObject(text)
+                val daily = root.optJSONObject("daily_reading")
+                    ?: return if (runAttemptCount < 3) Result.retry() else Result.failure()
+                val directory = File(applicationContext.filesDir, "offline_storage").apply { mkdirs() }
+                val target = File(directory, "daily_reading.json")
+                val part = File(directory, "daily_reading.json.part")
+                part.writeText(JSONObject().put("ok", true).put("daily_reading", daily).toString())
+                if (target.exists()) target.delete()
+                if (!part.renameTo(target)) {
+                    part.copyTo(target, overwrite = true)
+                    part.delete()
+                }
+                applicationContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+                    .edit().putString("daily_reading_date", daily.optString("date")).apply()
+                Result.success()
+            }
+        } catch (error: Exception) {
+            android.util.Log.w("MCNOffline", "Daily Scripture and hymn refresh failed", error)
+            if (runAttemptCount < 3) Result.retry() else Result.failure()
+        }
     }
 }
 
