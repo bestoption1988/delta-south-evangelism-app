@@ -290,7 +290,13 @@
 {% set leader_bio = profile.biography or defaults.get("bio") or "Official profile information will be published here." %}
 {% set leader_photo = profile.photo_path or defaults.get("photo", "") %}
 <article class="leader-card">
-{% if leader_photo %}
+{% if profile.title == "Youth Fellowship President" %}
+  {% if profile.public_photo_url %}
+  <img class="leader-photo" data-leadership-title="{{ profile.title }}" src="{{ profile.public_photo_url }}" alt="Youth Fellowship logo" loading="lazy" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'leader-photo leader-placeholder',textContent:'✝'}));">
+  {% else %}
+  <div class="leader-photo leader-placeholder" aria-label="Youth Fellowship logo not yet uploaded">✝</div>
+  {% endif %}
+{% elif leader_photo %}
 <img class="leader-photo" data-leadership-title="{{ profile.title }}" src="{{ url_for('public_leadership_photo', profile_id=profile.id) if leader_photo.startswith('https://') or leader_photo.startswith('http://') else url_for('static', filename=leader_photo) }}" alt="{{ leader_name }}" loading="lazy" onerror="this.onerror=null;this.src='{{ url_for('static', filename='uploads/leadership/' ~ (profile.title|lower|replace(' ', '-') ~ '.jpg')) }}';this.onerror=function(){this.onerror=null;var p=document.createElement('div');p.className='leader-photo leader-placeholder';p.textContent='✝';this.replaceWith(p);};">
 {% else %}
 <div class="leader-photo leader-placeholder">✝</div>
