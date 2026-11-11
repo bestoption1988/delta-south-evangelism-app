@@ -259,6 +259,110 @@ object OfflineModuleManager {
         return root.toString()
     }
 
+
+    data class OfflineSectionStatus(
+        val id: String,
+        val title: String,
+        val description: String,
+        val saved: Boolean,
+        val updatedAt: Long
+    )
+
+    fun offlineSectionStatuses(context: Context): List<OfflineSectionStatus> {
+        val root = File(context.filesDir, "offline_storage")
+        val prefs = context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+        fun status(id: String, title: String, description: String, exists: Boolean) =
+            OfflineSectionStatus(id, title, description, exists, prefs.getLong("section_updated_at_$id", 0L))
+        return listOf(
+            status("homepage", "Homepage", "Homepage pages, layout, styles and images",
+                File(context.filesDir, "offline_homepage/diocesan-homepage.mht").let { it.isFile && it.length() > 0L } ||
+                    File(root, "homepage.json").isFile),
+            status("leadership", "Leadership profiles", "Leadership names, biographies and uploaded portraits",
+                File(root, "homepage.json").isFile),
+            status("fellowships", "Fellowships", "Men, Women, Youth and Campus fellowship profiles and photos",
+                File(root, "fellowships.json").isFile),
+            status("daily", "Daily Scripture and Hymn", "Daily reading, hymn text and saved readings",
+                File(root, "daily_reading.json").isFile),
+            status("worship", "Worship resources", "Bible modules, hymns, devotional books and lectionary",
+                File(devotionalDirectory(context), "Bible").listFiles()?.any { it.isFile } == true ||
+                    File(devotionalDirectory(context), "English_Hymns").isDirectory ||
+                    File(devotionalDirectory(context), "english_hymns").isDirectory),
+            status("media", "Church media library", "Published audio, video, photographs and documents",
+                File(devotionalDirectory(context), "Church_Media/index.json").isFile)
+        )
+    }
+
+    fun updateOfflineSection(
+        context: Context,
+        sectionId: String,
+        onProgress: (String, Int) -> Unit = { _, _ -> }
+    ): Int {
+        Backend.initialize(context.applicationContext)
+        val root = File(context.filesDir, "offline_storage").apply { mkdirs() }
+        onProgress("Preparing $sectionId…", 0)
+        var saved = 0
+        when (sectionId) {
+            "homepage", "leadership" -> {
+                val request = Request.Builder()
+                    .url(BuildConfig.API_BASE_URL.trimEnd('/') + "/api/public/homepage")
+                    .get().build()
+                val body = Backend.client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) throw IllegalStateException("Homepage update HTTP ${response.code}")
+                    response.body?.string().orEmpty()
+                }
+                if (body.isBlank()) throw IllegalStateException("The homepage returned no content.")
+                val enriched = cacheHomepageImages(context, body)
+                val target = File(root, "homepage.json")
+                val temporary = File(root, "homepage.json.part")
+                temporary.writeText(enriched)
+                if (target.exists()) target.delete()
+                if (!temporary.renameTo(target)) temporary.copyTo(target, overwrite = true).also { temporary.delete() }
+                saved = 1
+                onProgress("Saved homepage content and leadership photographs", 100)
+            }
+            "fellowships" -> {
+                val paths = moduleRequests.filter {
+                    it == "api/public/fellowships" || it.startsWith("api/public/fellowships/")
+                }
+                paths.forEachIndexed { index, path ->
+                    val request = Request.Builder().url(BuildConfig.API_BASE_URL.trimEnd('/') + "/" + path).get().build()
+                    val body = Backend.client.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) throw IllegalStateException("Fellowship update HTTP ${response.code}: $path")
+                        response.body?.string().orEmpty()
+                    }
+                    if (body.isNotBlank()) {
+                        val enriched = if (path == "api/public/fellowships") body else cacheFellowshipImages(context, path, body)
+                        val name = if (path == "api/public/fellowships") "fellowships.json" else "fellowship_" + path.substringAfterLast('/') + ".json"
+                        File(root, name).writeText(enriched)
+                        saved++
+                    }
+                    onProgress("Updating fellowship profiles…", ((index + 1) * 100 / paths.size).coerceIn(0, 99))
+                }
+            }
+            "daily" -> {
+                if (refreshDailyReadingSnapshot(context) == null) throw IllegalStateException("Daily reading is not available from the website.")
+                saved = 1
+                onProgress("Daily Scripture and Hymn updated", 100)
+            }
+            "worship" -> {
+                val collections = downloadAllDevotionalResources(context)
+                val bible = downloadBibleModules(context) { stage, percent -> onProgress(stage, percent.coerceIn(0, 95)) }
+                val lectionary = downloadLectionary(context)
+                val audio = runCatching { downloadHymnAudio(context) { stage, percent -> onProgress(stage, percent.coerceIn(0, 95)) } }.getOrDefault(0)
+                saved = collections + bible + if (lectionary) 1 else 0 + audio
+                onProgress("Worship resources updated", 100)
+            }
+            "media" -> {
+                saved = downloadPublishedMedia(context, null) { stage, percent -> onProgress(stage, percent.coerceIn(0, 99)) }
+                onProgress("Church media library updated", 100)
+            }
+            else -> throw IllegalArgumentException("Unknown offline section: $sectionId")
+        }
+        context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+            .edit().putLong("section_updated_at_$sectionId", System.currentTimeMillis()).apply()
+        return saved
+    }
+
     fun downloadAll(context: Context, onProgress: (String, Int) -> Unit = { _, _ -> }): OfflineDownloadSummary {
         Backend.initialize(context.applicationContext)
         var downloaded = 0
