@@ -1805,6 +1805,19 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", offlineInternetRequiredNotice(), "text/html", "UTF-8", null)
                                 return true
                             }
+                            // Older WebView navigation callbacks use this string overload.
+                            // Keep the same live-only rule for file-based homepage links.
+                            if (uri.scheme == "file" && isOnlineOnlyDiocesanRoute(uri.path.orEmpty())) {
+                                if (onlineState) {
+                                    val target = BuildConfig.API_BASE_URL.trimEnd('/') + uri.encodedPath.orEmpty() +
+                                        (uri.encodedQuery?.let { "?$it" } ?: "") +
+                                        (uri.encodedFragment?.let { "#$it" } ?: "")
+                                    view.loadUrl(target)
+                                } else {
+                                    view.loadDataWithBaseURL("https://offline.mcn-app/", offlineInternetRequiredNotice(), "text/html", "UTF-8", null)
+                                }
+                                return true
+                            }
                             if (uri.scheme == "mcn-app" && uri.host == "home") {
                                 openSavedDiocesanHome(view)
                                 return true
