@@ -1499,12 +1499,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     return true
                                 }
                                 if (route in setOf("/login", "/register", "/registration", "/giving", "/payment", "/prayer-request")) {
-                                    if (onlineState) view.loadUrl(uri.toString())
-                                    else {
+                                    if (onlineState) {
+                                        // Let WebView perform the original navigation itself.
+                                        // Calling loadUrl() here from shouldOverrideUrlLoading can
+                                        // re-enter navigation interception and fail on some WebView versions.
+                                        return false
+                                    } else {
                                         val notice = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px'><h2>Internet connection required</h2><p>This service needs an internet connection. Your saved homepage and downloaded church resources remain available offline.</p><p><a href='mcn-app://home'>Return to homepage</a></p></body>"
                                         view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
+                                        return true
                                     }
-                                    return true
                                 }
                                 val savedPage = offlinePageArchiveFile(view.context, uri.toString())
                                 if (savedPage.isFile && savedPage.length() > 0L) {
