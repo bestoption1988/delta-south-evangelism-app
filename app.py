@@ -2956,15 +2956,17 @@ def public_home():
         if str(profile.get("title") or "").strip().lower() == "youth fellowship president":
             # The public page must use the fellowship's own logo, not a placeholder
             # personal portrait stored against the unannounced president profile.
-            profile["public_photo_url"] = (
-                url_for(
+            # Prefer the Youth Fellowship's uploaded logo/cover. If neither is
+            # available, display the actual uploaded leadership profile photograph.
+            if youth_fellowship_logo and (youth_fellowship_logo["logo_path"] or youth_fellowship_logo["cover_path"]):
+                profile["public_photo_url"] = url_for(
                     "fellowship_public_image",
                     slug="methodist-youth-fellowship",
                     kind="logo" if youth_fellowship_logo["logo_path"] else "cover",
                     item_id=youth_fellowship_logo["id"],
                 )
-                if youth_fellowship_logo and (youth_fellowship_logo["logo_path"] or youth_fellowship_logo["cover_path"]) else ""
-            )
+            else:
+                profile["public_photo_url"] = url_for("public_leadership_photo", profile_id=profile["id"])
     rows = db().execute(
         "SELECT content_key, content_value FROM homepage_content"
     ).fetchall()
@@ -13761,21 +13763,23 @@ def api_public_homepage():
     ).fetchall()
     leadership_payload = []
     youth_logo = db().execute(
-        "SELECT id, logo_path FROM fellowships WHERE slug=? AND active=1 LIMIT 1",
+        "SELECT id, logo_path, cover_path FROM fellowships WHERE slug=? AND active=1 LIMIT 1",
         ("methodist-youth-fellowship",),
     ).fetchone()
     for profile_row in profiles:
         profile = dict(profile_row)
         if str(profile.get("title") or "").strip().lower() == "youth fellowship president":
-            profile["photo_url"] = (
-                url_for(
+            # Use the uploaded fellowship logo/cover when available; otherwise
+            # fall back to the photo uploaded on the Youth Fellowship President profile.
+            if youth_logo and (youth_logo["logo_path"] or youth_logo["cover_path"]):
+                profile["photo_url"] = url_for(
                     "fellowship_public_image",
                     slug="methodist-youth-fellowship",
                     kind="logo" if youth_logo["logo_path"] else "cover",
                     item_id=youth_logo["id"],
                 )
-                if youth_logo and (youth_logo["logo_path"] or youth_logo["cover_path"]) else ""
-            )
+            else:
+                profile["photo_url"] = url_for("public_leadership_photo", profile_id=profile["id"])
         else:
             profile["photo_url"] = url_for("public_leadership_photo", profile_id=profile["id"])
         leadership_payload.append(profile)
