@@ -320,6 +320,16 @@ object OfflineModuleManager {
                 }
                 if (body.isBlank()) throw IllegalStateException("The homepage returned no content.")
                 val enriched = cacheHomepageImages(context, body)
+                runCatching {
+                    val daily = JSONObject(enriched).optJSONObject("daily_reading")
+                    if (daily != null) {
+                        val dailyTarget = File(root, "daily_reading.json")
+                        val dailyPart = File(root, "daily_reading.json.part")
+                        dailyPart.writeText(JSONObject().put("ok", true).put("daily_reading", daily).toString())
+                        if (dailyTarget.exists()) dailyTarget.delete()
+                        if (!dailyPart.renameTo(dailyTarget)) dailyPart.copyTo(dailyTarget, overwrite = true).also { dailyPart.delete() }
+                    }
+                }
                 val target = File(root, "homepage.json")
                 val temporary = File(root, "homepage.json.part")
                 temporary.writeText(enriched)

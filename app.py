@@ -2793,21 +2793,23 @@ def _homepage_daily_reading():
                 hymn.get("number") or hymn.get("hymn_number")
                 or hymn.get("item_number") or ""
             ).strip()
+            hymn_number_digits = re.sub(r"\D+", "", hymn_number)
             hymn_title = str(hymn.get("title") or "").strip()
             try:
                 hymn_row = db().execute(
                     """SELECT * FROM devotional_resources
                        WHERE collection='english_hymns' AND published=1
                          AND (
-                           (? <> '' AND item_number=?)
+                           (? <> '' AND item_number IN (?,?))
                            OR (? <> '' AND LOWER(title)=LOWER(?))
                          )
                        ORDER BY CASE
-                         WHEN ? <> '' AND item_number=? THEN 0 ELSE 1
+                         WHEN ? <> '' AND item_number IN (?,?) THEN 0 ELSE 1
                        END, updated_at DESC
                        LIMIT 1""",
-                    (hymn_number, hymn_number, hymn_title, hymn_title,
-                     hymn_number, hymn_number),
+                    (hymn_number, hymn_number, hymn_number_digits,
+                     hymn_title, hymn_title,
+                     hymn_number, hymn_number, hymn_number_digits),
                 ).fetchone()
                 if hymn_row:
                     resource = dict(hymn_row)
@@ -2958,7 +2960,9 @@ def public_home():
             # personal portrait stored against the unannounced president profile.
             # Prefer the Youth Fellowship's uploaded logo/cover. If neither is
             # available, display the actual uploaded leadership profile photograph.
-            if youth_fellowship_logo and (youth_fellowship_logo["logo_path"] or youth_fellowship_logo["cover_path"]):
+            if profile.get("photo_path"):
+                profile["public_photo_url"] = url_for("public_leadership_photo", profile_id=profile["id"])
+            elif youth_fellowship_logo and (youth_fellowship_logo["logo_path"] or youth_fellowship_logo["cover_path"]):
                 profile["public_photo_url"] = url_for(
                     "fellowship_public_image",
                     slug="methodist-youth-fellowship",
@@ -13771,7 +13775,9 @@ def api_public_homepage():
         if str(profile.get("title") or "").strip().lower() == "youth fellowship president":
             # Use the uploaded fellowship logo/cover when available; otherwise
             # fall back to the photo uploaded on the Youth Fellowship President profile.
-            if youth_logo and (youth_logo["logo_path"] or youth_logo["cover_path"]):
+            if profile.get("photo_path"):
+                profile["photo_url"] = url_for("public_leadership_photo", profile_id=profile["id"])
+            elif youth_logo and (youth_logo["logo_path"] or youth_logo["cover_path"]):
                 profile["photo_url"] = url_for(
                     "fellowship_public_image",
                     slug="methodist-youth-fellowship",
@@ -13780,8 +13786,10 @@ def api_public_homepage():
                 )
             else:
                 profile["photo_url"] = url_for("public_leadership_photo", profile_id=profile["id"])
+            profile["public_photo_url"] = profile["photo_url"]
         else:
             profile["photo_url"] = url_for("public_leadership_photo", profile_id=profile["id"])
+            profile["public_photo_url"] = profile["photo_url"]
         leadership_payload.append(profile)
     content_rows = db().execute(
         "SELECT content_key, content_value FROM homepage_content"

@@ -50,6 +50,7 @@ private fun offlineDailyReadingScript(daily: JSONObject, hymnRows: JSONArray): S
             const node = document.querySelector(selector);
             if (node && value != null) node.textContent = String(value);
           };
+          const key = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
           const reference = verse.reference || 'Scripture for Today';
           const verseText = verse.text || verse.verse || 'Open the Bible and spend time in God’s Word today.';
           const number = hymn.number || hymn.hymn_number || hymn.item_number || '';
@@ -69,35 +70,58 @@ private fun offlineDailyReadingScript(daily: JSONObject, hymnRows: JSONArray): S
             const details = hymnCard.querySelector('details');
             if (details) {
               details.querySelectorAll('.daily-preview-audio-wrap').forEach(node => node.remove());
-              const key = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-              const row = hymns.find(item =>
-                (number && key(item.item_number || item.number) === key(number)) ||
-                (title && key(item.title) === key(title))
-              );
-              if (row && details) {
-                const payload = row.payload || {};
-                const audioWrap = document.createElement('div');
-                audioWrap.className = 'daily-preview-audio-wrap';
-                const addAudio = (file, label) => {
-                  if (!file) return;
-                  const text = document.createElement('span');
-                  text.className = 'daily-preview-audio-label';
-                  text.textContent = '▶ ' + label;
-                  const audio = document.createElement('audio');
-                  audio.className = 'daily-preview-audio';
-                  audio.controls = true;
-                  audio.preload = 'none';
-                  audio.playsInline = true;
-                  audio.src = 'https://offline.mcn-app/__mcn_offline/file/' + encodeURIComponent(file);
-                  audioWrap.append(text, audio);
-                };
-                addAudio(row.audio_file, payload.musicTitle || payload.tuneName || 'Play downloaded hymn tune');
-                const tunes = payload.otherTunes || payload.other_tunes || [];
-                tunes.forEach((tune, index) => addAudio(tune.offline_file, tune.musicTitle || tune.tuneName || ('Alternative tune ' + (index + 1))));
-                if (audioWrap.childNodes.length) {
-                  if (full) full.insertAdjacentElement('afterend', audioWrap);
-                  else details.appendChild(audioWrap);
-                }
+              const numberKey = key(number);
+              const numberDigits = numberKey.replace(/\D/g, '');
+              const row = hymns.find(item => {
+                const itemNumber = key(item.item_number || item.number || '');
+                const itemDigits = itemNumber.replace(/\D/g, '');
+                const itemTitle = key(item.title || '');
+                return (numberDigits && itemDigits === numberDigits) ||
+                  (itemNumber && numberKey.includes(itemNumber)) ||
+                  (itemTitle && itemTitle === key(title));
+              });
+              const payload = row && row.payload ? row.payload : {};
+              const audioWrap = document.createElement('div');
+              audioWrap.className = 'daily-preview-audio-wrap';
+              const addAudio = (file, label, remoteUrl) => {
+                const source = file
+                  ? 'https://offline.mcn-app/__mcn_offline/file/' + encodeURIComponent(file)
+                  : String(remoteUrl || '');
+                if (!source) return;
+                const text = document.createElement('span');
+                text.className = 'daily-preview-audio-label';
+                text.textContent = '▶ ' + (label || 'Play hymn tune');
+                const audio = document.createElement('audio');
+                audio.className = 'daily-preview-audio';
+                audio.controls = true;
+                audio.preload = 'none';
+                audio.playsInline = true;
+                audio.src = source;
+                audio.addEventListener('error', () => {
+                  if (file && remoteUrl && audio.src.indexOf('offline.mcn-app') !== -1) {
+                    audio.src = remoteUrl;
+                    audio.load();
+                  }
+                }, {once:true});
+                audioWrap.append(text, audio);
+              };
+              addAudio(row && row.audio_file,
+                hymn.audio_tune_name || payload.musicTitle || payload.tuneName || 'Main tune',
+                hymn.audio_url);
+              const savedTunes = payload.otherTunes || payload.other_tunes || [];
+              const publishedTunes = hymn.other_tunes || hymn.otherTunes || [];
+              const tuneCount = Math.max(savedTunes.length || 0, publishedTunes.length || 0);
+              for (let index = 0; index < tuneCount; index++) {
+                const savedTune = savedTunes[index] || {};
+                const publishedTune = publishedTunes[index] || {};
+                addAudio(savedTune.offline_file,
+                  publishedTune.musicTitle || publishedTune.tuneName ||
+                    savedTune.musicTitle || savedTune.tuneName || ('Alternative tune ' + (index + 1)),
+                  publishedTune.audio_url || publishedTune.signed_url || '');
+              }
+              if (audioWrap.childNodes.length) {
+                if (full) full.insertAdjacentElement('afterend', audioWrap);
+                else details.appendChild(audioWrap);
               }
             }
           }
@@ -451,6 +475,9 @@ private fun NativeDioceseApp() {
                             offlineSections = OfflineModuleManager.offlineSectionStatuses(appContext)
                             downloadMessage = "${sectionId.replaceFirstChar { it.uppercase() }} updated. ${count} item(s) saved."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
+                            if (sectionId == "homepage") {
+                                homepageView.postDelayed({ homepageView.loadUrl("mcn-app://home") }, 7500L)
+                            }
                         }.onFailure { error ->
                             downloadMessage = error.message ?: "The selected offline section could not be updated."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
@@ -1571,40 +1598,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
         }
     }
     BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
-    LaunchedEffect(online) {
-        // Keep the public homepage live whenever connectivity is available, and return
-        // to the saved homepage when the device loses internet. Authentication and
-        // registration are never served from the offline snapshot.
-        webView?.let { currentView ->
-            currentView.post {
-                val currentUri = runCatching { android.net.Uri.parse(currentView.url.orEmpty()) }.getOrNull()
-                val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
-                val isLocalHomepage = currentUri?.scheme == "file" ||
-                    currentUri?.host == "offline.mcn-app"
-                val isLiveHomepage = currentUri?.host == diocesanHost &&
-                    currentUri?.path.orEmpty().trimEnd('/').isEmpty()
-                if (online && isLocalHomepage) {
-                    currentView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                    currentView.loadUrl(BuildConfig.API_BASE_URL)
-                } else if (!online && isLiveHomepage) {
-                    openSavedDiocesanHome(currentView)
-                }
-            }
-        }
-        if (online) {
-            val refreshedDaily = withContext(Dispatchers.IO) {
-                OfflineModuleManager.refreshDailyReadingSnapshot(context)
-            }
-            if (refreshedDaily != null) {
-                val hymns = runCatching {
-                    JSONArray(File(File(context.filesDir, "offline_storage/english_hymns"), "resources.json").readText())
-                }.getOrDefault(JSONArray())
-                webView?.post {
-                    webView?.evaluateJavascript(offlineDailyReadingScript(refreshedDaily, hymns), null)
-                }
-            }
-        }
-    }
+    // Connectivity changes never replace the offline homepage automatically.
+    // Live access starts only from an explicit login, registration, payment or update action.
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -1643,7 +1638,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             val isDiocesanHttp = (uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost
                             // When connected, all diocesan links must reach the live server.
                             // The offline archive is only a fallback when the phone is offline.
-                            if ((isDiocesanHttp || isFlutterwaveCheckoutHost(uri.host)) && onlineState) {
+                            if (isFlutterwaveCheckoutHost(uri.host) && onlineState) {
+                                view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                return false
+                            }
+                            if (isDiocesanHttp && isOnlineOnlyDiocesanRoute(uri.path.orEmpty()) && onlineState) {
                                 view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                                 return false
                             }
@@ -1801,7 +1800,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             val uri = android.net.Uri.parse(url)
                             val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                             val isDiocesanHttp = (uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost
-                            if ((isDiocesanHttp || isFlutterwaveCheckoutHost(uri.host)) && onlineState) {
+                            if (isFlutterwaveCheckoutHost(uri.host) && onlineState) {
+                                view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                return false
+                            }
+                            if (isDiocesanHttp && isOnlineOnlyDiocesanRoute(uri.path.orEmpty()) && onlineState) {
                                 view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                                 return false
                             }
@@ -2265,10 +2268,33 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     panel.style.setProperty('opacity','1','important');
                                     trigger.setAttribute('aria-expanded','true');
                                   }
-                                  // Use document-level capture because Android WebView can fail to
-                                  // dispatch the label/checkbox activation reliably on touch.
-                                  // This handler receives taps even when the label contains icon/text spans.
+                                  // Keep the menu bar above page content and make the full bar tappable.
+                                  nav.style.setProperty('position','relative','important');
+                                  nav.style.setProperty('z-index','2147483646','important');
+                                  trigger.style.setProperty('min-height','64px','important');
+                                  trigger.style.setProperty('width','100%','important');
+                                  trigger.style.setProperty('cursor','pointer','important');
+                                  var lastMenuTouch = 0;
+                                  function toggleMenuFromTouch(event) {
+                                    var menuHit = event.target && event.target.closest ? event.target.closest('.ds-menu-trigger') : null;
+                                    if (!menuHit) return;
+                                    event.preventDefault();
+                                    event.stopPropagation();
+                                    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+                                    lastMenuTouch = Date.now();
+                                    if (panel.style.display === 'none' || getComputedStyle(panel).display === 'none') openMenu();
+                                    else closeMenu();
+                                  }
+                                  // Some Android WebView versions do not synthesize click from label taps.
+                                  document.addEventListener('touchend',toggleMenuFromTouch,{capture:true,passive:false});
+                                  // Use document-level capture for mouse, stylus and accessibility clicks.
                                   document.addEventListener('click',function(event) {
+                                    if (Date.now() - lastMenuTouch < 700 && event.target && event.target.closest && event.target.closest('.ds-menu-trigger')) {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+                                      return;
+                                    }
                                     var menuHit = event.target && event.target.closest ? event.target.closest('.ds-menu-trigger') : null;
                                     if (!menuHit) return;
                                     event.preventDefault();
@@ -2324,7 +2350,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                           }
                                           return;
                                         }
-                                        window.location.assign(new URL(href, document.baseURI).href);
+                                        var diocesanBase = \${JSONObject.quote(BuildConfig.API_BASE_URL.trimEnd('/'))};
+                                        window.location.assign(href.charAt(0) === '/' ? diocesanBase + href : new URL(href, document.baseURI).href);
                                       }, 80);
                                     }
                                   },true);
@@ -2390,15 +2417,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     }
                     webChromeClient = WebChromeClient()
                     settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                    // Start on the live Naijacloud homepage when connected. In airplane
-                    // mode or without validated internet, open the packaged/saved homepage.
-                    if (online) {
-                        settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                        loadUrl(BuildConfig.API_BASE_URL)
-                    } else {
-                        settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                        openSavedDiocesanHome(this)
-                    }
+                    // Offline-first: always open the saved/package homepage on app launch.
+                    // Do not wake Naijacloud or replace the homepage just because internet exists.
+                    settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                    openSavedDiocesanHome(this)
                     webView = this
                 }
             },
