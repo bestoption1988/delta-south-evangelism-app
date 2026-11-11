@@ -140,8 +140,26 @@ def register_fellowship_routes(app, db_getter, user_getter):
             abort(404)
         fellowship = row_dict(row)
         fid = fellowship["id"]
+        fellowship_leadership_title = {
+            "methodist-mens-fellowship": "Men Fellowship President",
+            "methodist-womens-fellowship": "Women Fellowship President",
+            "methodist-youth-fellowship": "Youth Fellowship President",
+        }.get(slug)
+
+        def fallback_leadership_photo():
+            if not fellowship_leadership_title:
+                return ""
+            profile = query(
+                "SELECT id FROM leadership_profiles WHERE title=? "
+                "AND LOWER(CAST(active AS TEXT)) IN ('1','true','t') "
+                "ORDER BY display_order LIMIT 1",
+                (fellowship_leadership_title,),
+            ).fetchone()
+            return url_for("public_leadership_photo", profile_id=profile["id"]) if profile else ""
+
         def rows(sql, params, kind, image_field):
             output = []
+            fallback_photo = fallback_leadership_photo() if kind == "leader" else ""
             for item in query(sql, params).fetchall():
                 record = row_dict(item)
                 if record.get(image_field):
@@ -149,6 +167,10 @@ def register_fellowship_routes(app, db_getter, user_getter):
                         "fellowship_public_image", slug=slug, kind=kind,
                         item_id=record["id"],
                     )
+                if kind == "leader" and fallback_photo:
+                    record["offline_fallback_image_url"] = fallback_photo
+                    if not record.get("offline_image_url"):
+                        record["offline_image_url"] = fallback_photo
                 output.append(record)
             return output
         if fellowship.get("logo_path"):
@@ -361,6 +383,23 @@ def register_fellowship_routes(app, db_getter, user_getter):
             )
 
         fid = f["id"]
+        fellowship_leadership_title = {
+            "methodist-mens-fellowship": "Men Fellowship President",
+            "methodist-womens-fellowship": "Women Fellowship President",
+            "methodist-youth-fellowship": "Youth Fellowship President",
+        }.get(slug)
+        fallback_leader_profile = None
+        if fellowship_leadership_title:
+            fallback_leader_profile = query(
+                "SELECT id FROM leadership_profiles WHERE title=? "
+                "AND LOWER(CAST(active AS TEXT)) IN ('1','true','t') "
+                "ORDER BY display_order LIMIT 1",
+                (fellowship_leadership_title,),
+            ).fetchone()
+        fallback_leader_url = (
+            url_for("public_leadership_photo", profile_id=fallback_leader_profile["id"])
+            if fallback_leader_profile else ""
+        )
         leaders = query("""SELECT * FROM fellowship_leaders
             WHERE fellowship_id=? AND active=1 ORDER BY display_order, full_name""", (fid,)).fetchall()
         announcements = query("""SELECT * FROM fellowship_announcements
@@ -377,7 +416,17 @@ def register_fellowship_routes(app, db_getter, user_getter):
             ORDER BY created_at DESC LIMIT 18""", (fid,)).fetchall()
         return render_template(
             "fellowship_public.html", fellowship=f,
-            leaders=[dict(row_dict(x), photo_display_url=fellowship_image_url(row_dict(x).get("photo_path"), "leader", row_dict(x)["id"])) for x in leaders],
+            leaders=[
+                dict(
+                    row_dict(x),
+                    photo_display_url=(
+                        fellowship_image_url(row_dict(x).get("photo_path"), "leader", row_dict(x)["id"])
+                        if row_dict(x).get("photo_path") else fallback_leader_url
+                    ),
+                    photo_fallback_url=fallback_leader_url,
+                )
+                for x in leaders
+            ],
             announcements=[dict(row_dict(x), image_display_url=fellowship_image_url(
                 row_dict(x).get("image_path"), "announcement", row_dict(x)["id"]
             )) for x in announcements],
