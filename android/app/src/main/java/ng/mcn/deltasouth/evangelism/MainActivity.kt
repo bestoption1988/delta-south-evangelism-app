@@ -1960,8 +1960,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   // Route all authentication and payment forms to the live site,
                                   // and stop them clearly when the device is offline.
                                   if (location.protocol === 'file:') {
-                                    var liveBase = "https://mcn-delta-south.naijacloud.app";
-                                    var online = true;
+                                    var liveBase = ${JSONObject.quote(BuildConfig.API_BASE_URL.trimEnd('/'))};
+                                    var online = ${onlineState};
                                     var protectedPath = function(path) {
                                       return /^\/(login|logout|register|registration|member|member-portal|member_portal|portal|account|auth|password|reset-password|forgot-password|payment|payments|giving|donate|donation|checkout|flutterwave|new-member|membership\/register|apply|application)(\/|$)/i.test(path || '/');
                                     };
