@@ -424,6 +424,9 @@ private fun NativeDioceseApp() {
                     downloadMessage = "Updating the saved homepage and offline content…"
                     downloadProgress = 0
                     downloadStage = "Checking for updated diocesan content…"
+                    // Record the previous archive timestamp so this update can confirm that
+                    // the live homepage itself (not just its API data) was refreshed.
+                    val homepageUpdateStartedAt = System.currentTimeMillis()
                     // Only this deliberate action contacts the live homepage for a fresh copy.
                     homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                     homepageView.loadUrl(BuildConfig.API_BASE_URL)
@@ -445,9 +448,19 @@ private fun NativeDioceseApp() {
                             downloadMessage = error.message ?: "The offline package could not be updated."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }
+                        // Wait briefly for WebView's asynchronous MHTML save callback.
+                        // The data/media package and the homepage archive are both part of this
+                        // explicit update; never report a refreshed homepage before it is saved.
+                        withContext(Dispatchers.IO) {
+                            repeat(20) {
+                                val prefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+                                val savedAt = prefs.getLong("homepage_snapshot_saved_at", 0L)
+                                if (savedAt >= homepageUpdateStartedAt && latestSavedHomepageArchive(appContext) != null) return@withContext
+                                Thread.sleep(500L)
+                            }
+                        }
                         // Return to the on-device homepage when the deliberate update is finished.
-                        // Return to the same real homepage, preferring the latest archive saved
-                        // during this explicit update and otherwise the APK-bundled first-install copy.
+                        // Prefer the newly refreshed archive; otherwise use the bundled first-install copy.
                         homepageView.post {
                             homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
                             val savedHomepage = latestSavedHomepageArchive(appContext)
