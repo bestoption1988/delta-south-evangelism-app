@@ -899,6 +899,33 @@ object OfflineModuleManager {
 
     fun offlineMediaDirectory(context: Context): File = File(context.filesDir, "offline_media")
 
+    fun refreshDailyReadingSnapshot(context: Context): JSONObject? {
+        return runCatching {
+            Backend.initialize(context.applicationContext)
+            val request = Request.Builder()
+                .url(BuildConfig.API_BASE_URL.trimEnd('/') + "/api/public/daily-reading")
+                .get()
+                .build()
+            Backend.client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use null
+                val root = JSONObject(response.body?.string().orEmpty())
+                val daily = root.optJSONObject("daily_reading") ?: return@use null
+                val directory = File(context.filesDir, "offline_storage").apply { mkdirs() }
+                val target = File(directory, "daily_reading.json")
+                val part = File(directory, "daily_reading.json.part")
+                part.writeText(JSONObject().put("ok", true).put("daily_reading", daily).toString())
+                if (target.exists()) target.delete()
+                if (!part.renameTo(target)) {
+                    part.copyTo(target, overwrite = true)
+                    part.delete()
+                }
+                context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+                    .edit().putString("daily_reading_date", daily.optString("date")).apply()
+                daily
+            }
+        }.getOrNull()
+    }
+
     fun scheduleImmediateUpdate(context: Context) {
         val constraints = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
@@ -949,32 +976,9 @@ class DailyReadingRefreshWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         return try {
-            Backend.initialize(applicationContext)
-            val request = Request.Builder()
-                .url(BuildConfig.API_BASE_URL.trimEnd('/') + "/api/public/daily-reading")
-                .get()
-                .build()
-            Backend.client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    return if (runAttemptCount < 3) Result.retry() else Result.failure()
-                }
-                val text = response.body?.string().orEmpty()
-                val root = JSONObject(text)
-                val daily = root.optJSONObject("daily_reading")
-                    ?: return if (runAttemptCount < 3) Result.retry() else Result.failure()
-                val directory = File(applicationContext.filesDir, "offline_storage").apply { mkdirs() }
-                val target = File(directory, "daily_reading.json")
-                val part = File(directory, "daily_reading.json.part")
-                part.writeText(JSONObject().put("ok", true).put("daily_reading", daily).toString())
-                if (target.exists()) target.delete()
-                if (!part.renameTo(target)) {
-                    part.copyTo(target, overwrite = true)
-                    part.delete()
-                }
-                applicationContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-                    .edit().putString("daily_reading_date", daily.optString("date")).apply()
-                Result.success()
-            }
+            val daily = OfflineModuleManager.refreshDailyReadingSnapshot(applicationContext)
+            if (daily != null) Result.success()
+            else if (runAttemptCount < 3) Result.retry() else Result.failure()
         } catch (error: Exception) {
             android.util.Log.w("MCNOffline", "Daily Scripture and hymn refresh failed", error)
             if (runAttemptCount < 3) Result.retry() else Result.failure()
