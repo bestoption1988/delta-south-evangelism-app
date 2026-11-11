@@ -2225,7 +2225,12 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // fail to toggle visually clipped checkbox inputs when their labels are tapped.
                             val menuBridge = """
                                 (function() {
-                                  if (window.__mcnAndroidMenuBridge) return;
+                                  // Apply this handler only to the public diocesan homepage.
+                                  // Dashboard and member navigation are deliberately excluded.
+                                  if (window.location.pathname !== '/' ||
+                                      !document.querySelector('body .topbar') ||
+                                      !document.getElementById('home') ||
+                                      window.__mcnPublicHomeMenuBridge) return;
                                   var updateLink = document.getElementById('saveOfflineApp');
                                   if (updateLink) updateLink.textContent = 'Update Offline Content';
                                   var nav = document.querySelector('.ds-site-nav');
@@ -2235,7 +2240,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   var toggle = document.querySelector('#dsMenuToggle');
                                   var subToggle = document.querySelector('#dsFellowshipsToggle');
                                   if (!nav || !menu || !trigger || !panel) return;
-                                  window.__mcnAndroidMenuBridge = true;
+                                  window.__mcnPublicHomeMenuBridge = true;
 
                                   // Detach the real navigation panel from the page's nested layout.
                                   // This avoids WebView clipping/stacking bugs while preserving the
@@ -2268,47 +2273,41 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     panel.style.setProperty('opacity','1','important');
                                     trigger.setAttribute('aria-expanded','true');
                                   }
-                                  // Keep the menu bar above page content and make the full bar tappable.
-                                  nav.style.setProperty('position','relative','important');
-                                  nav.style.setProperty('z-index','2147483646','important');
-                                  trigger.style.setProperty('min-height','64px','important');
-                                  trigger.style.setProperty('width','100%','important');
-                                  trigger.style.setProperty('cursor','pointer','important');
-                                  var lastMenuTouch = 0;
-                                  function toggleMenuFromTouch(event) {
-                                    var menuHit = event.target && event.target.closest ? event.target.closest('.ds-menu-trigger') : null;
-                                    if (!menuHit) return;
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
-                                    lastMenuTouch = Date.now();
-                                    if (panel.style.display === 'none' || getComputedStyle(panel).display === 'none') openMenu();
-                                    else closeMenu();
-                                  }
-                                  // Some Android WebView versions do not synthesize click from label taps.
-                                  document.addEventListener('touchend',toggleMenuFromTouch,{capture:true,passive:false});
-                                  // Use document-level capture for mouse, stylus and accessibility clicks.
-                                  document.addEventListener('click',function(event) {
-                                    if (Date.now() - lastMenuTouch < 700 && event.target && event.target.closest && event.target.closest('.ds-menu-trigger')) {
-                                      event.preventDefault();
-                                      event.stopPropagation();
-                                      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
-                                      return;
-                                    }
-                                    var menuHit = event.target && event.target.closest ? event.target.closest('.ds-menu-trigger') : null;
-                                    if (!menuHit) return;
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
-                                    if (panel.style.display === 'none' || getComputedStyle(panel).display === 'none') openMenu();
-                                    else closeMenu();
-                                  },true);
-                                  // Make the full visible Menu bar an explicit touch target.
+                                  // Touch handling is attached to the public homepage Menu label only.
                                   trigger.style.setProperty('display','flex','important');
                                   trigger.style.setProperty('position','relative','important');
                                   trigger.style.setProperty('z-index','10','important');
+                                  trigger.style.setProperty('min-height','64px','important');
+                                  trigger.style.setProperty('width','100%','important');
                                   trigger.style.setProperty('pointer-events','auto','important');
                                   trigger.style.setProperty('touch-action','manipulation','important');
+                                  trigger.setAttribute('role','button');
+                                  trigger.setAttribute('tabindex','0');
+                                  function togglePublicHomeMenu(event) {
+                                    if (event) {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                    }
+                                    if (panel.style.display === 'none' || getComputedStyle(panel).display === 'none') openMenu();
+                                    else closeMenu();
+                                  }
+                                  trigger.addEventListener('touchstart', function() {
+                                    trigger.__mcnLastTouch = Date.now();
+                                  }, {passive:true});
+                                  trigger.addEventListener('touchend', function(event) {
+                                    togglePublicHomeMenu(event);
+                                  }, {passive:false});
+                                  trigger.addEventListener('click', function(event) {
+                                    if (Date.now() - (trigger.__mcnLastTouch || 0) < 700) {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      return;
+                                    }
+                                    togglePublicHomeMenu(event);
+                                  });
+                                  trigger.addEventListener('keydown', function(event) {
+                                    if (event.key === 'Enter' || event.key === ' ') togglePublicHomeMenu(event);
+                                  });
                                   panel.addEventListener('click',function(event) {
                                     var groupLabel = event.target.closest('.ds-menu-group-trigger');
                                     if (groupLabel && subToggle) {
@@ -2350,7 +2349,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                           }
                                           return;
                                         }
-                                        var diocesanBase = \${JSONObject.quote(BuildConfig.API_BASE_URL.trimEnd('/'))};
+                                        var diocesanBase = ${JSONObject.quote(BuildConfig.API_BASE_URL.trimEnd('/'))};
                                         window.location.assign(href.charAt(0) === '/' ? diocesanBase + href : new URL(href, document.baseURI).href);
                                       }, 80);
                                     }
