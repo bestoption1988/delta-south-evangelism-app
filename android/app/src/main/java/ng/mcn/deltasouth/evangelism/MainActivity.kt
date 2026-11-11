@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
                 android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
                     object : android.webkit.ServiceWorkerClient() {
                         override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                            OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString())?.let { return it }
+                            OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString(), request.requestHeaders["Range"])?.let { return it }
                             if (!networkAvailable(applicationContext)) {
                                 val localBible = OfflineModuleManager.cachedBibleModuleResponse(applicationContext, request.url.toString())
                                 if (localBible != null) {
@@ -1444,6 +1444,15 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     overScrollMode = android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS
                     setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                     webViewClient = object : WebViewClient() {
+                        // WebViewClient, not only ServiceWorkerClient, must serve locally saved media.
+                        // Audio/video elements issue byte-range requests to discover duration and seek.
+                        override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
+                            return OfflineDevotionalPage.fileResponse(
+                                applicationContext,
+                                request.url.toString(),
+                                request.requestHeaders["Range"]
+                            )
+                        }
                         override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                             val uri = request.url
                             // The online server may return 404 for its homepage while the
