@@ -271,30 +271,32 @@ object OfflineModuleManager {
         val title: String,
         val description: String,
         val saved: Boolean,
+        val savedCount: Int,
         val updatedAt: Long
     )
 
     fun offlineSectionStatuses(context: Context): List<OfflineSectionStatus> {
         val root = File(context.filesDir, "offline_storage")
         val prefs = context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-        fun status(id: String, title: String, description: String, exists: Boolean) =
-            OfflineSectionStatus(id, title, description, exists, prefs.getLong("section_updated_at_$id", 0L))
+        fun countFiles(file: File): Int = if (!file.exists()) 0 else if (file.isFile) 1 else file.listFiles()?.sumOf { countFiles(it) } ?: 0
+        fun status(id: String, title: String, description: String, count: Int) =
+            OfflineSectionStatus(id, title, description, count > 0, count, prefs.getLong("section_updated_at_$id", 0L))
+        val devotional = devotionalDirectory(context)
+        val homepageArchive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+        val fellowshipFiles = root.listFiles()?.filter { it.name == "fellowships.json" || it.name.startsWith("fellowship_") }?.sumOf { countFiles(it) } ?: 0
         return listOf(
             status("homepage", "Homepage", "Homepage pages, layout, styles and images",
-                File(context.filesDir, "offline_homepage/diocesan-homepage.mht").let { it.isFile && it.length() > 0L } ||
-                    File(root, "homepage.json").isFile),
+                countFiles(homepageArchive) + countFiles(File(root, "homepage.json"))),
             status("leadership", "Leadership profiles", "Leadership names, biographies and uploaded portraits",
-                File(root, "homepage.json").isFile),
+                countFiles(File(root, "homepage.json")) + countFiles(File(context.filesDir, "offline_storage/homepage_media"))),
             status("fellowships", "Fellowships", "Men, Women, Youth and Campus fellowship profiles and photos",
-                File(root, "fellowships.json").isFile),
+                fellowshipFiles + countFiles(File(context.filesDir, "offline_storage/fellowship_media"))),
             status("daily", "Daily Scripture and Hymn", "Daily reading, hymn text and saved readings",
-                File(root, "daily_reading.json").isFile),
+                countFiles(File(root, "daily_reading.json"))),
             status("worship", "Worship resources", "Bible modules, hymns, devotional books and lectionary",
-                File(devotionalDirectory(context), "Bible").listFiles()?.any { it.isFile } == true ||
-                    File(devotionalDirectory(context), "English_Hymns").isDirectory ||
-                    File(devotionalDirectory(context), "english_hymns").isDirectory),
+                countFiles(devotional)),
             status("media", "Church media library", "Published audio, video, photographs and documents",
-                File(devotionalDirectory(context), "Church_Media/index.json").isFile)
+                countFiles(File(devotional, "Church_Media")))
         )
     }
 
