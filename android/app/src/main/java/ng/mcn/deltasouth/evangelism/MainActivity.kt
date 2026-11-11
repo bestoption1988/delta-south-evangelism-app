@@ -2127,6 +2127,33 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     (parsed.path.isNullOrBlank() || parsed.path == "/") &&
                                     !url.orEmpty().startsWith("file:")) {
                                     val archive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+                                    // Force every lazy-loaded homepage image into the DOM before
+                                    // creating the offline archive. Scroll through the entire page so
+                                    // leadership portraits, gallery cards and lower sections are loaded.
+                                    val prepareFullPage = """
+                                        (function() {
+                                          var images = Array.from(document.images || []);
+                                          images.forEach(function(img) {
+                                            img.loading = 'eager';
+                                            var lazy = img.getAttribute('data-src') || img.getAttribute('data-lazy-src');
+                                            if (lazy && !img.getAttribute('src')) img.setAttribute('src', lazy);
+                                            var srcset = img.getAttribute('data-srcset');
+                                            if (srcset && !img.getAttribute('srcset')) img.setAttribute('srcset', srcset);
+                                          });
+                                          var height = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight);
+                                          var step = Math.max(400, Math.floor(window.innerHeight * 0.75));
+                                          var y = 0;
+                                          function sweep() {
+                                            window.scrollTo(0, y);
+                                            y += step;
+                                            if (y <= height) window.setTimeout(sweep, 180);
+                                            else window.setTimeout(function() { window.scrollTo(0, 0); }, 300);
+                                          }
+                                          sweep();
+                                          return images.length;
+                                        })();
+                                    """.trimIndent()
+                                    view.evaluateJavascript(prepareFullPage, null)
                                     view.postDelayed({
                                         archive.parentFile?.mkdirs()
                                         fun saveHomepageArchive(attempt: Int) {
@@ -2138,8 +2165,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                                         .putBoolean("homepage_snapshot_saved", true)
                                                         .putLong("homepage_snapshot_saved_at", System.currentTimeMillis())
                                                         .putLong("homepage_snapshot_version_code", currentAppVersionCode(context))
+                                                        .putLong("section_updated_at_homepage", System.currentTimeMillis())
                                                         .apply()
-                                                    Log.i("DeltaSouthOffline", "Homepage archive saved: ${saved.length()} bytes")
+                                                    Log.i("DeltaSouthOffline", "Full homepage archive saved: ${saved.length()} bytes")
                                                 } else if (attempt < 3) {
                                                     view.postDelayed({ saveHomepageArchive(attempt + 1) }, 1800L)
                                                 } else {
@@ -2148,7 +2176,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                             }
                                         }
                                         saveHomepageArchive(1)
-                                    }, 2500L)
+                                    }, 6500L)
                                 } else if (parsed != null && parsed.host == configuredHost) {
                                     val archive = offlinePageArchiveFile(context, url.orEmpty())
                                     view.postDelayed({
@@ -2275,7 +2303,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                       window.setTimeout(function() {
                                         if (href === '#' || href === '') {
                                           if (link.id === 'saveOfflineApp') {
-                                            Promise.resolve(window.mcnCacheEntireApp ? window.mcnCacheEntireApp() : null).finally(function() { window.location.href = 'mcn-app://offline'; });
+                                            window.location.href = 'mcn-app://offline';
                                           }
                                           return;
                                         }
