@@ -1829,7 +1829,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // Do not gate this on onPageStarted: WebView may request CSS/images
                             // before that callback flips localArchiveActive, causing a blank page
                             // when the phone is in Airplane Mode.
-                            if (requestedUri.host == configuredHost && !request.isForMainFrame) {
+                            // Only substitute APK-bundled assets for the local homepage or
+                            // while offline. A live login/registration/payment page must receive
+                            // its real Naijacloud CSS, JavaScript, images and form resources.
+                            if (requestedUri.host == configuredHost && !request.isForMainFrame &&
+                                (localArchiveActive.get() || !onlineState)) {
                                 val requestPath = android.net.Uri.decode(requestedUri.encodedPath.orEmpty()).trimStart('/')
                                 if (requestPath.startsWith("api/") || requestPath.startsWith("socket.io/")) {
                                     return android.webkit.WebResourceResponse(
