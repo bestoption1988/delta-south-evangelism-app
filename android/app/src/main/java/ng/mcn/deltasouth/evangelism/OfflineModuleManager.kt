@@ -402,6 +402,13 @@ object OfflineModuleManager {
         Backend.initialize(context.applicationContext)
         // Every library card owns one folder. Its index and hymn recordings stay together.
         val directory = devotionalCardFolder(context, collection)
+        // Keep the last known-good audio index while refreshing lyrics/metadata. A failed
+        // signed-URL request must never erase a recording that was already saved offline.
+        val previousItems = runCatching {
+            val previous = JSONArray(File(directory, "resources.json").readText())
+            (0 until previous.length()).mapNotNull { previous.optJSONObject(it) }
+                .associateBy { it.optString("resource_id") }
+        }.getOrDefault(emptyMap())
         val longClient = Backend.client.newBuilder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(300, TimeUnit.SECONDS)
@@ -425,6 +432,25 @@ object OfflineModuleManager {
             val items = result.optJSONArray("items") ?: JSONArray()
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
+                val previousItem = previousItems[item.optString("resource_id")]
+                val previousAudio = previousItem?.optString("audio_file").orEmpty()
+                if (previousAudio.isNotBlank() && File(directory, previousAudio).isFile) {
+                    item.put("audio_file", previousAudio)
+                }
+                val payload = item.optJSONObject("payload") ?: JSONObject()
+                val previousPayload = previousItem?.optJSONObject("payload")
+                val previousTunes = previousPayload?.optJSONArray("otherTunes")
+                val tunes = payload.optJSONArray("otherTunes")
+                if (tunes != null && previousTunes != null) {
+                    for (tuneIndex in 0 until minOf(tunes.length(), previousTunes.length())) {
+                        val tune = tunes.optJSONObject(tuneIndex) ?: continue
+                        val oldTune = previousTunes.optJSONObject(tuneIndex) ?: continue
+                        val oldFile = oldTune.optString("offline_file")
+                        if (oldFile.isNotBlank() && File(directory, oldFile).isFile) {
+                            tune.put("offline_file", oldFile)
+                        }
+                    }
+                }
                 if (includeAudio) {
                     val id = item.optString("resource_id").replace(Regex("[^A-Za-z0-9_-]"), "_")
                     val audioUrl = item.optString("audio_url")
@@ -436,8 +462,6 @@ object OfflineModuleManager {
                             audioDownloaded++
                         }
                     }
-                    val payload = item.optJSONObject("payload") ?: JSONObject()
-                    val tunes = payload.optJSONArray("otherTunes")
                     if (tunes != null) {
                         for (tuneIndex in 0 until tunes.length()) {
                             val tune = tunes.optJSONObject(tuneIndex) ?: continue
@@ -453,6 +477,7 @@ object OfflineModuleManager {
                     }
                     item.put("payload", payload)
                 }
+                item.put("payload", payload)
                 item.remove("offline_file")
                 allItems.put(item)
             }
