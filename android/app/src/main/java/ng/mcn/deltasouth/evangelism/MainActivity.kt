@@ -1530,6 +1530,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
             factory = { ctx ->
                 // Read this flag from WebView request worker threads instead of calling view.url.
                 val localArchiveActive = java.util.concurrent.atomic.AtomicBoolean(false)
+                val dailyRefreshRequested = java.util.concurrent.atomic.AtomicBoolean(false)
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
                     // Identify this WebView to the diocesan homepage so Android-only UI is selected.
@@ -1840,6 +1841,32 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // into the devotional/media libraries. The public page's signed
                             // Supabase URLs require internet and therefore cannot play offline.
                             if (url?.startsWith("file:") == true) {
+                                val homepageSnapshot = runCatching {
+                                    JSONObject(File(ctx.filesDir, "offline_storage/homepage.json").readText())
+                                }.getOrDefault(JSONObject())
+                                val dailySnapshot = runCatching {
+                                    JSONObject(File(ctx.filesDir, "offline_storage/daily_reading.json").readText())
+                                        .optJSONObject("daily_reading")
+                                }.getOrNull() ?: homepageSnapshot.optJSONObject("daily_reading") ?: JSONObject()
+                                val savedHymns = runCatching {
+                                    JSONArray(File(File(ctx.filesDir, "offline_storage/english_hymns"), "resources.json").readText())
+                                }.getOrDefault(JSONArray())
+                                view.evaluateJavascript(offlineDailyReadingScript(dailySnapshot, savedHymns), null)
+                                view.evaluateJavascript(offlineHomepageImagesScript(homepageSnapshot), null)
+
+                                // A lightweight fresh daily fetch updates this screen immediately
+                                // after the app opens online; it does not redownload the media library.
+                                if (onlineState && dailyRefreshRequested.compareAndSet(false, true)) {
+                                    Thread {
+                                        val freshDaily = OfflineModuleManager.refreshDailyReadingSnapshot(ctx)
+                                        if (freshDaily != null) {
+                                            view.post {
+                                                view.evaluateJavascript(offlineDailyReadingScript(freshDaily, savedHymns), null)
+                                            }
+                                        }
+                                    }.start()
+                                }
+
                                 val hymnRows = runCatching {
                                     org.json.JSONArray(
                                         File(File(ctx.filesDir, "offline_storage/english_hymns"), "resources.json").readText()
