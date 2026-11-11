@@ -1524,6 +1524,21 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
         }
     }
     BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
+    LaunchedEffect(online) {
+        if (online) {
+            val refreshedDaily = withContext(Dispatchers.IO) {
+                OfflineModuleManager.refreshDailyReadingSnapshot(context)
+            }
+            if (refreshedDaily != null) {
+                val hymns = runCatching {
+                    JSONArray(File(File(context.filesDir, "offline_storage/english_hymns"), "resources.json").readText())
+                }.getOrDefault(JSONArray())
+                webView?.post {
+                    webView?.evaluateJavascript(offlineDailyReadingScript(refreshedDaily, hymns), null)
+                }
+            }
+        }
+    }
     Box(Modifier.fillMaxSize()) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
