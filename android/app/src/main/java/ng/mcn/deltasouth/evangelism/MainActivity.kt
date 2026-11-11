@@ -1448,7 +1448,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         // Audio/video elements issue byte-range requests to discover duration and seek.
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
                             return OfflineDevotionalPage.fileResponse(
-                                applicationContext,
+                                view.context.applicationContext,
                                 request.url.toString(),
                                 request.requestHeaders["Range"]
                             )
