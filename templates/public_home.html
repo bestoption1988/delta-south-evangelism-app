@@ -292,7 +292,7 @@
 <article class="leader-card">
 {% if profile.title == "Youth Fellowship President" %}
   {% if profile.public_photo_url %}
-  <img class="leader-photo" data-leadership-title="{{ profile.title }}" src="{{ profile.public_photo_url }}" alt="Youth Fellowship logo" loading="lazy" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'leader-photo leader-placeholder',textContent:'✝'}));">
+  <img class="leader-photo" data-leadership-title="{{ profile.title }}" src="{{ profile.public_photo_url }}" alt="Youth Fellowship logo or approved fellowship photograph" loading="lazy" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'leader-photo leader-placeholder',textContent:'✝'}));">
   {% else %}
   <div class="leader-photo leader-placeholder" aria-label="Youth Fellowship logo not yet uploaded">✝</div>
   {% endif %}
