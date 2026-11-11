@@ -2949,7 +2949,7 @@ def public_home():
     ).fetchall()
     profiles = [dict(profile) for profile in profiles]
     youth_fellowship_logo = db().execute(
-        "SELECT id, logo_path FROM fellowships WHERE slug=? AND active=1 LIMIT 1",
+        "SELECT id, logo_path, cover_path FROM fellowships WHERE slug=? AND active=1 LIMIT 1",
         ("methodist-youth-fellowship",),
     ).fetchone()
     for profile in profiles:
@@ -2960,10 +2960,10 @@ def public_home():
                 url_for(
                     "fellowship_public_image",
                     slug="methodist-youth-fellowship",
-                    kind="logo",
+                    kind="logo" if youth_fellowship_logo["logo_path"] else "cover",
                     item_id=youth_fellowship_logo["id"],
                 )
-                if youth_fellowship_logo and youth_fellowship_logo["logo_path"] else ""
+                if youth_fellowship_logo and (youth_fellowship_logo["logo_path"] or youth_fellowship_logo["cover_path"]) else ""
             )
     rows = db().execute(
         "SELECT content_key, content_value FROM homepage_content"
@@ -13771,10 +13771,10 @@ def api_public_homepage():
                 url_for(
                     "fellowship_public_image",
                     slug="methodist-youth-fellowship",
-                    kind="logo",
+                    kind="logo" if youth_logo["logo_path"] else "cover",
                     item_id=youth_logo["id"],
                 )
-                if youth_logo and youth_logo["logo_path"] else ""
+                if youth_logo and (youth_logo["logo_path"] or youth_logo["cover_path"]) else ""
             )
         else:
             profile["photo_url"] = url_for("public_leadership_photo", profile_id=profile["id"])
