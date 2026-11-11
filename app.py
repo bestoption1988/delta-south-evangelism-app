@@ -2868,28 +2868,54 @@ def public_leadership_photo(profile_id):
     import requests
 
     row = db().execute(
-        "SELECT photo_path FROM leadership_profiles "
+        "SELECT title, photo_path FROM leadership_profiles "
         "WHERE id=? AND LOWER(CAST(active AS TEXT)) IN ('1','true','t')",
         (profile_id,),
     ).fetchone()
-    if not row or not row["photo_path"]:
+    if not row:
         abort(404)
-    photo_path = str(row["photo_path"]).strip()
+    photo_path = str(row["photo_path"] or "").strip()
+    title_key = str(row["title"] or "").strip().lower()
+    fallback_names = {
+        "men fellowship president": "men-fellowship-president.jpg",
+        "women fellowship president": "women-fellowship-president.jpg",
+        "youth fellowship president": "youth-fellowship-president.jpg",
+        "prelate": "prelate.jpg",
+        "archbishop": "archbishop.jpg",
+        "bishop": "bishop.jpg",
+        "synod secretary": "synod-secretary.jpg",
+        "minister of evangelism": "minister-of-evangelism.jpg",
+        "lay president": "lay-president.jpg",
+        "evangelism coordinator": "evangelism-coordinator.jpg",
+    }
+    def bundled_fallback():
+        filename = fallback_names.get(title_key)
+        candidate = Path(app.static_folder) / "uploads" / "leadership" / filename if filename else None
+        if candidate and candidate.is_file():
+            return send_file(candidate, mimetype="image/jpeg", max_age=3600)
+        abort(404)
+
     if not photo_path:
-        abort(404)
+        return bundled_fallback()
 
     # Existing static uploads remain supported.
     if photo_path.startswith("/static/"):
-        return redirect(photo_path)
+        candidate = Path(app.static_folder) / photo_path.removeprefix("/static/").lstrip("/")
+        if candidate.is_file():
+            return send_file(candidate, mimetype="image/jpeg", max_age=3600)
+        return bundled_fallback()
     if not photo_path.startswith(("https://", "http://")):
-        return redirect(url_for("static", filename=photo_path.lstrip("/")))
+        candidate = Path(app.static_folder) / photo_path.lstrip("/")
+        if candidate.is_file():
+            return send_file(candidate, mimetype="image/jpeg", max_age=3600)
+        return bundled_fallback()
 
     base, key = _leadership_storage_credentials()
     parsed = urlparse(photo_path)
     marker = "/storage/v1/object/"
     marker_at = parsed.path.find(marker)
     if marker_at < 0:
-        abort(404)
+        return bundled_fallback()
     object_part = parsed.path[marker_at + len(marker):]
     if object_part.startswith("public/"):
         object_part = object_part[len("public/"):]
@@ -2897,7 +2923,7 @@ def public_leadership_photo(profile_id):
         object_part = object_part[len("sign/"):]
     bucket, separator, object_path = object_part.partition("/")
     if not separator or bucket != _LEADERSHIP_BUCKET or not object_path:
-        abort(404)
+        return bundled_fallback()
 
     response = requests.get(
         f"{base}/storage/v1/object/{bucket}/{quote(unquote(object_path), safe='/')}",
@@ -2905,11 +2931,11 @@ def public_leadership_photo(profile_id):
         timeout=25,
     )
     if response.status_code != 200:
-        app.logger.warning("Leadership photo proxy returned HTTP %s for profile %s", response.status_code, profile_id)
-        abort(404)
+        app.logger.warning("Leadership photo proxy returned HTTP %s for profile %s; using bundled fallback", response.status_code, profile_id)
+        return bundled_fallback()
     mime = response.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
     if not mime.startswith("image/"):
-        abort(415)
+        return bundled_fallback()
     result = send_file(BytesIO(response.content), mimetype=mime, max_age=3600)
     result.headers["X-Content-Type-Options"] = "nosniff"
     return result
@@ -13694,6 +13720,15 @@ if __name__ == "__main__":
 
 
 
+@app.get("/api/public/daily-reading")
+def api_public_daily_reading():
+    """Return the current Nigeria-local daily Scripture and hymn for lightweight offline refresh."""
+    reading = _homepage_daily_reading()
+    response = jsonify({"ok": True, "daily_reading": reading})
+    response.headers["Cache-Control"] = "no-store, max-age=0"
+    return response
+
+
 @app.get("/api/public/homepage")
 def api_public_homepage():
     """Read-only public homepage payload for the native Android client."""
@@ -13701,11 +13736,20 @@ def api_public_homepage():
         return [dict(row) for row in rows]
 
     profiles = db().execute(
-        """SELECT title, full_name, biography, photo_path, display_order
+        """SELECT id, title, full_name, biography, photo_path, display_order
            FROM leadership_profiles
            WHERE LOWER(CAST(active AS TEXT)) IN ('1','true','t')
            ORDER BY display_order, title"""
     ).fetchall()
+    leadership_payload = []
+    for profile_row in profiles:
+        profile = dict(profile_row)
+        profile["photo_url"] = (
+            url_for("public_leadership_photo", profile_id=profile["id"])
+            if profile.get("photo_path") else
+            url_for("public_leadership_photo", profile_id=profile["id"])
+        )
+        leadership_payload.append(profile)
     content_rows = db().execute(
         "SELECT content_key, content_value FROM homepage_content"
     ).fetchall()
@@ -13745,6 +13789,10 @@ def api_public_homepage():
                 except Exception:
                     item["signed_url"] = ""
                 item["original_name"] = str(item.get("storage_path") or "").rsplit("/", 1)[-1]
+                if str(item.get("mime_type") or "").lower().startswith("image/"):
+                    item["offline_image_url"] = url_for(
+                        "media_document_view", media_id=item["id"], raw="1"
+                    )
                 destination.append(item)
         except Exception:
             app.logger.exception("Native homepage published media could not be loaded")
@@ -13800,7 +13848,7 @@ def api_public_homepage():
         "ok": True,
         "generated_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
         "homepage_content": {row["content_key"]: row["content_value"] for row in content_rows},
-        "leadership": public_rows(profiles),
+        "leadership": leadership_payload,
         "sermons": public_rows(sermons),
         "events": public_rows(events),
         "churches": public_rows(churches),
