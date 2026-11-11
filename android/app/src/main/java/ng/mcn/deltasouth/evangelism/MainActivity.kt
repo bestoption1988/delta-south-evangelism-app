@@ -1679,7 +1679,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // Never let ordinary homepage navigation silently contact Naijacloud.
                             // Public pages that have local renderers open from saved phone data;
                             // other pages use a saved MHTML copy or a clear offline notice.
-                            val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                             if ((uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost) {
                                 val route = localPath.ifBlank { "/" }
                                 if (route == "/" || route == "/index.html") {
@@ -1718,11 +1717,20 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 return true
                             }
                             if (uri.scheme == "file" && bundledPagePath.isNotBlank()) {
-                                val route = bundledPagePath.removePrefix("/")
-                                if (route in setOf("login", "register", "registration", "giving", "payment", "prayer-request")) {
-                                    view.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/" + route)
+                                val route = bundledPagePath.removePrefix("/").substringBefore('?')
+                                if (isOnlineOnlyDiocesanRoute("/" + route)) {
+                                    if (onlineState) {
+                                        val target = BuildConfig.API_BASE_URL.trimEnd('/') + "/" + route +
+                                            (uri.encodedQuery?.let { "?$it" } ?: "") +
+                                            (uri.encodedFragment?.let { "#$it" } ?: "")
+                                        view.loadUrl(target)
+                                    } else {
+                                        view.loadDataWithBaseURL("https://offline.mcn-app/", offlineInternetRequiredNotice(), "text/html", "UTF-8", null)
+                                    }
+                                    return true
                                 }
-                                return true
+                                // Let ordinary relative links in the packaged homepage load as files.
+                                return false
                             }
                             if (uri.scheme == "file" && isOnlineOnlyDiocesanRoute(uri.path.orEmpty())) {
                                 if (onlineState) {
@@ -1948,6 +1956,28 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     if (url) window.location.assign(url);
                                     return window;
                                   };
+                                  // A bundled file:// homepage cannot submit a form to a file URL.
+                                  // Route all authentication and payment forms to the live site,
+                                  // and stop them clearly when the device is offline.
+                                  if (location.protocol === 'file:') {
+                                    var liveBase = "https://mcn-delta-south.naijacloud.app";
+                                    var online = true;
+                                    var protectedPath = function(path) {
+                                      return /^\/(login|logout|register|registration|member|member-portal|member_portal|portal|account|auth|password|reset-password|forgot-password|payment|payments|giving|donate|donation|checkout|flutterwave|new-member|membership\/register|apply|application)(\/|$)/i.test(path || '/');
+                                    };
+                                    document.querySelectorAll('form').forEach(function(form) {
+                                      var action = new URL(form.getAttribute('action') || location.href, location.href);
+                                      if (!protectedPath(action.pathname)) return;
+                                      if (online) {
+                                        form.action = liveBase + action.pathname + action.search + action.hash;
+                                      } else {
+                                        form.addEventListener('submit', function(event) {
+                                          event.preventDefault();
+                                          document.body.innerHTML = '<main style="font:16px system-ui;padding:24px;color:#17345b"><h2>Internet connection required</h2><p>Login, registration and online payments must connect to the live diocesan website. Connect to the internet and try again.</p><p><a href="mcn-app://home">Return to saved homepage</a></p></main>';
+                                        }, true);
+                                      }
+                                    });
+                                  }
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(keepNavigationInsideApp, null)
