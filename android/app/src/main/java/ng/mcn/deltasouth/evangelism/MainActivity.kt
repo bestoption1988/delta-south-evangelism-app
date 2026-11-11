@@ -152,6 +152,28 @@ private fun offlineHomepageImagesScript(snapshot: JSONObject): String {
     """.trimIndent()
 }
 
+private fun isOnlineOnlyDiocesanRoute(path: String): Boolean {
+    val route = path.lowercase().trimEnd('/').ifBlank { "/" }
+    val protectedPrefixes = listOf(
+        "/login", "/logout", "/register", "/registration", "/member",
+        "/member-portal", "/member_portal", "/portal", "/account",
+        "/auth", "/password", "/reset-password", "/forgot-password",
+        "/payment", "/payments", "/giving", "/donate", "/donation",
+        "/checkout", "/flutterwave", "/new-member", "/membership/register",
+        "/apply", "/application"
+    )
+    return protectedPrefixes.any { route == it || route.startsWith("$it/") }
+}
+
+private fun isFlutterwaveCheckoutHost(host: String?): Boolean {
+    val value = host.orEmpty().lowercase()
+    return value == "flutterwave.com" || value.endsWith(".flutterwave.com") ||
+        value == "ravepay.co" || value.endsWith(".ravepay.co")
+}
+
+private fun offlineInternetRequiredNotice(): String =
+    "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px;background:#f3f6fa;color:#17345b'><h2>Internet connection required</h2><p>Login, registration, account access and online payments must connect to the live diocesan website. Connect to the internet and try again.</p><p><a href='mcn-app://home'>Return to saved homepage</a></p></body>"
+
 private fun offlinePageArchiveFile(context: Context, url: String): File {
     val uri = android.net.Uri.parse(url)
     val key = (uri.encodedPath.orEmpty() + "?" + uri.encodedQuery.orEmpty())
@@ -1581,6 +1603,18 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                             val uri = request.url
+                            val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                            val isDiocesanHttp = (uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost
+                            // When connected, all diocesan links must reach the live server.
+                            // The offline archive is only a fallback when the phone is offline.
+                            if ((isDiocesanHttp || isFlutterwaveCheckoutHost(uri.host)) && onlineState) {
+                                view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                return false
+                            }
+                            if (isDiocesanHttp && isOnlineOnlyDiocesanRoute(uri.path.orEmpty())) {
+                                view.loadDataWithBaseURL("https://offline.mcn-app/", offlineInternetRequiredNotice(), "text/html", "UTF-8", null)
+                                return true
+                            }
                             // The online server may return 404 for its homepage while the
                             // installed app still has usable local libraries. Keep navigation
                             // inside the app and show the on-device library instead of a raw 404.
@@ -1678,8 +1712,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // All website navigation stays inside this WebView, including links
                             // to other diocesan pages and pages opened with target=_blank.
                             if (uri.scheme == "http" || uri.scheme == "https") {
-                                // External web links are not opened as background navigation from
-                                // the bundled homepage. Login/payment actions are handled above.
+                                // Permit the real hosted Flutterwave checkout when online.
+                                if (isFlutterwaveCheckoutHost(uri.host) && onlineState) return false
                                 return true
                             }
                             // Let phone/email handlers work without launching a browser.
@@ -1696,6 +1730,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         @Suppress("DEPRECATION")
                         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                             val uri = android.net.Uri.parse(url)
+                            val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                            val isDiocesanHttp = (uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost
+                            if ((isDiocesanHttp || isFlutterwaveCheckoutHost(uri.host)) && onlineState) {
+                                view.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                return false
+                            }
+                            if (isDiocesanHttp && isOnlineOnlyDiocesanRoute(uri.path.orEmpty())) {
+                                view.loadDataWithBaseURL("https://offline.mcn-app/", offlineInternetRequiredNotice(), "text/html", "UTF-8", null)
+                                return true
+                            }
                             if (uri.scheme == "mcn-app" && uri.host == "home") {
                                 openSavedDiocesanHome(view)
                                 return true
@@ -1751,8 +1795,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 }
                                 return true
                             }
-                            // Do not allow a legacy WebView navigation path to load the
-                            // diocesan website directly. Only explicit Update/Login/payment flows do.
+                            // Connected same-origin links returned false above so WebView loads
+                            // the live page; disconnected links must never open an archive for auth/payment.
                             return true
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
