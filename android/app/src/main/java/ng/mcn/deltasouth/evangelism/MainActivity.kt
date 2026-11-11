@@ -35,6 +35,115 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+private fun offlineDailyReadingScript(daily: JSONObject, hymnRows: JSONArray): String {
+    val dailyJson = daily.toString()
+    val hymnsJson = hymnRows.toString()
+    return """
+        (function() {
+          const daily = $dailyJson;
+          const hymns = $hymnsJson;
+          const verse = daily.verse || {};
+          const hymn = daily.hymn || {};
+          const scriptureCard = document.querySelector('.android-daily-card.scripture-preview');
+          const hymnCard = document.querySelector('.android-daily-card.hymn-preview');
+          const setText = (selector, value) => {
+            const node = document.querySelector(selector);
+            if (node && value != null) node.textContent = String(value);
+          };
+          const reference = verse.reference || 'Scripture for Today';
+          const verseText = verse.text || verse.verse || 'Open the Bible and spend time in God’s Word today.';
+          const number = hymn.number || hymn.hymn_number || hymn.item_number || '';
+          const title = hymn.title || 'Methodist Hymn for Today';
+          const lyrics = hymn.lyrics || hymn.content || hymn.text || 'Visit the Devotional Centre to explore the Methodist hymn collection.';
+          if (scriptureCard) {
+            const heading = scriptureCard.querySelector('h3');
+            const full = scriptureCard.querySelector('.android-daily-full-text');
+            if (heading) heading.textContent = reference;
+            if (full) full.textContent = verseText;
+          }
+          if (hymnCard) {
+            const heading = hymnCard.querySelector('h3');
+            const full = hymnCard.querySelector('.android-daily-full-text');
+            if (heading) heading.textContent = (number ? number + ' ' : '') + title;
+            if (full) full.textContent = lyrics;
+            const details = hymnCard.querySelector('details');
+            if (details) {
+              details.querySelectorAll('.daily-preview-audio-wrap').forEach(node => node.remove());
+              const key = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+              const row = hymns.find(item =>
+                (number && key(item.item_number || item.number) === key(number)) ||
+                (title && key(item.title) === key(title))
+              );
+              if (row && details) {
+                const payload = row.payload || {};
+                const audioWrap = document.createElement('div');
+                audioWrap.className = 'daily-preview-audio-wrap';
+                const addAudio = (file, label) => {
+                  if (!file) return;
+                  const text = document.createElement('span');
+                  text.className = 'daily-preview-audio-label';
+                  text.textContent = '▶ ' + label;
+                  const audio = document.createElement('audio');
+                  audio.className = 'daily-preview-audio';
+                  audio.controls = true;
+                  audio.preload = 'none';
+                  audio.playsInline = true;
+                  audio.src = 'https://offline.mcn-app/__mcn_offline/file/' + encodeURIComponent(file);
+                  audioWrap.append(text, audio);
+                };
+                addAudio(row.audio_file, payload.musicTitle || payload.tuneName || 'Play downloaded hymn tune');
+                const tunes = payload.otherTunes || payload.other_tunes || [];
+                tunes.forEach((tune, index) => addAudio(tune.offline_file, tune.musicTitle || tune.tuneName || ('Alternative tune ' + (index + 1))));
+                if (audioWrap.childNodes.length) {
+                  if (full) full.insertAdjacentElement('afterend', audioWrap);
+                  else details.appendChild(audioWrap);
+                }
+              }
+            }
+          }
+          const scriptureTicker = document.querySelector('.scripture-ticker .daily-ticker-text');
+          const hymnTicker = document.querySelector('.hymn-ticker .daily-ticker-text');
+          if (scriptureTicker) scriptureTicker.textContent = reference + ' — ' + verseText.replace(/\\s+/g, ' ');
+          if (hymnTicker) hymnTicker.textContent = title + ' — ' + lyrics.replace(/\\s+/g, ' ');
+          setText('#dailyScriptureFull', reference + '\\n\\n' + verseText);
+          setText('#dailyHymnFull', title + '\\n\\n' + lyrics);
+          const date = daily.date || '';
+          setText('.daily-reading-modal-footer span', date);
+          if (date) {
+            const dateNode = document.querySelector('.android-daily-date');
+            if (dateNode) dateNode.textContent = date;
+          }
+        })();
+    """.trimIndent()
+}
+
+private fun offlineHomepageImagesScript(snapshot: JSONObject): String {
+    val payload = JSONObject()
+        .put("leadership", snapshot.optJSONArray("leadership") ?: JSONArray())
+        .put("gallery", snapshot.optJSONArray("gallery") ?: JSONArray())
+        .toString()
+    return """
+        (function() {
+          const data = $payload;
+          const localFile = name => 'https://offline.mcn-app/__mcn_offline/file/' + encodeURIComponent(name);
+          (data.leadership || []).forEach(profile => {
+            if (!profile.offline_file) return;
+            const title = String(profile.title || '').toLowerCase();
+            document.querySelectorAll('[data-leadership-title]').forEach(img => {
+              if (String(img.getAttribute('data-leadership-title') || '').toLowerCase() === title) {
+                img.src = localFile(profile.offline_file);
+              }
+            });
+          });
+          (data.gallery || []).forEach(photo => {
+            if (!photo.offline_file) return;
+            const image = document.querySelector('[data-gallery-media-id="' + String(photo.id) + '"]');
+            if (image) image.src = localFile(photo.offline_file);
+          });
+        })();
+    """.trimIndent()
+}
+
 private fun offlinePageArchiveFile(context: Context, url: String): File {
     val uri = android.net.Uri.parse(url)
     val key = (uri.encodedPath.orEmpty() + "?" + uri.encodedQuery.orEmpty())
