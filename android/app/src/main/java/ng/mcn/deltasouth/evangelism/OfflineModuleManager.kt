@@ -105,6 +105,7 @@ object OfflineModuleManager {
         "api/command-centre",
         "api/public/churches",
         "api/public/homepage",
+        "api/public/daily-reading",
         "api/public/fellowships",
         "api/public/fellowships/methodist-mens-fellowship",
         "api/public/fellowships/methodist-womens-fellowship",
@@ -149,56 +150,65 @@ object OfflineModuleManager {
         "api/church-accounts",
     )
 
+    private fun cacheRemoteImage(context: Context, url: String, stem: String, folderName: String): String {
+        if (url.isBlank()) return ""
+        return runCatching {
+            val fullUrl = if (url.startsWith("http://") || url.startsWith("https://")) {
+                url
+            } else {
+                BuildConfig.API_BASE_URL.trimEnd('/') + "/" + url.trimStart('/')
+            }
+            val request = Request.Builder().url(fullUrl).get().build()
+            Backend.client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    android.util.Log.w("MCNOffline", "Image download returned HTTP ${response.code}: ${url.take(100)}")
+                    return@use ""
+                }
+                val body = response.body ?: return@use ""
+                val mime = body.contentType()?.toString()?.substringBefore(';')?.lowercase(Locale.ROOT).orEmpty()
+                if (!mime.startsWith("image/")) {
+                    android.util.Log.w("MCNOffline", "Image URL returned non-image content ($mime): ${url.take(100)}")
+                    return@use ""
+                }
+                val ext = when (mime) {
+                    "image/png" -> ".png"
+                    "image/webp" -> ".webp"
+                    "image/gif" -> ".gif"
+                    "image/svg+xml" -> ".svg"
+                    "image/avif" -> ".avif"
+                    else -> ".jpg"
+                }
+                val folder = File(context.filesDir, "offline_storage/$folderName").apply { mkdirs() }
+                val fileName = stem.replace(Regex("[^A-Za-z0-9_-]"), "_") + ext
+                val target = File(folder, fileName)
+                val bytes = body.bytes()
+                if (bytes.isEmpty()) return@use ""
+                val part = File(folder, fileName + ".part")
+                part.writeBytes(bytes)
+                if (target.exists()) target.delete()
+                if (!part.renameTo(target)) {
+                    part.copyTo(target, overwrite = true)
+                    part.delete()
+                }
+                fileName
+            }
+        }.getOrElse {
+            android.util.Log.w("MCNOffline", "Could not cache image ${url.take(100)}", it)
+            ""
+        }
+    }
+
     private fun cacheFellowshipImages(context: Context, apiPath: String, source: String): String {
         val root = runCatching { JSONObject(source) }.getOrNull() ?: return source
         val slug = apiPath.substringAfterLast('/').replace(Regex("[^A-Za-z0-9_-]"), "")
         if (slug.isBlank()) return source
-        val folder = File(context.filesDir, "offline_storage/fellowship_media").apply { mkdirs() }
         var saved = 0
-
-        fun fetch(url: String, stem: String): String {
-            if (url.isBlank()) return ""
-            return runCatching {
-                val fullUrl = if (url.startsWith("http://") || url.startsWith("https://")) {
-                    url
-                } else {
-                    BuildConfig.API_BASE_URL.trimEnd('/') + "/" + url.trimStart('/')
-                }
-                val request = Request.Builder().url(fullUrl).get().build()
-                Backend.client.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) return@use ""
-                    val body = response.body ?: return@use ""
-                    val mime = body.contentType()?.toString()?.substringBefore(';')?.lowercase(Locale.ROOT).orEmpty()
-                    val ext = when (mime) {
-                        "image/png" -> ".png"
-                        "image/webp" -> ".webp"
-                        "image/gif" -> ".gif"
-                        "image/svg+xml" -> ".svg"
-                        else -> ".jpg"
-                    }
-                    val fileName = stem + ext
-                    val target = File(folder, fileName)
-                    val bytes = body.bytes()
-                    if (bytes.isEmpty()) return@use ""
-                    val part = File(folder, fileName + ".part")
-                    part.writeBytes(bytes)
-                    if (target.exists()) target.delete()
-                    if (!part.renameTo(target)) {
-                        part.copyTo(target, overwrite = true)
-                        part.delete()
-                    }
-                    saved++
-                    fileName
-                }
-            }.getOrDefault("")
-        }
-
         val fellowship = root.optJSONObject("fellowship")
         if (fellowship != null) {
-            val logo = fetch(fellowship.optString("offline_logo_url"), slug + "-logo")
-            if (logo.isNotBlank()) fellowship.put("offline_logo_file", logo)
-            val cover = fetch(fellowship.optString("offline_cover_url"), slug + "-cover")
-            if (cover.isNotBlank()) fellowship.put("offline_cover_file", cover)
+            val logo = cacheRemoteImage(context, fellowship.optString("offline_logo_url"), "$slug-logo", "fellowship_media")
+            if (logo.isNotBlank()) { fellowship.put("offline_logo_file", logo); saved++ }
+            val cover = cacheRemoteImage(context, fellowship.optString("offline_cover_url"), "$slug-cover", "fellowship_media")
+            if (cover.isNotBlank()) { fellowship.put("offline_cover_file", cover); saved++ }
         }
         val groups = listOf(
             "leaders" to "leader",
@@ -212,11 +222,40 @@ object OfflineModuleManager {
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
                 val id = item.optString("id", index.toString()).ifBlank { index.toString() }
-                val file = fetch(item.optString("offline_image_url"), "$slug-$prefix-$id")
-                if (file.isNotBlank()) item.put("offline_file", file)
+                var file = cacheRemoteImage(context, item.optString("offline_image_url"), "$slug-$prefix-$id", "fellowship_media")
+                if (file.isBlank()) {
+                    file = cacheRemoteImage(context, item.optString("offline_fallback_image_url"), "$slug-$prefix-$id-fallback", "fellowship_media")
+                }
+                if (file.isNotBlank()) { item.put("offline_file", file); saved++ }
             }
         }
         android.util.Log.i("MCNOffline", "Saved $saved fellowship image(s) for $slug")
+        return root.toString()
+    }
+
+    private fun cacheHomepageImages(context: Context, source: String): String {
+        val root = runCatching { JSONObject(source) }.getOrNull() ?: return source
+        var saved = 0
+        val leaders = root.optJSONArray("leadership")
+        if (leaders != null) {
+            for (index in 0 until leaders.length()) {
+                val item = leaders.optJSONObject(index) ?: continue
+                val id = item.optString("id", index.toString()).ifBlank { index.toString() }
+                val title = item.optString("title", "leader").replace(Regex("[^A-Za-z0-9_-]"), "-")
+                val file = cacheRemoteImage(context, item.optString("photo_url"), "diocese-$title-$id", "homepage_media")
+                if (file.isNotBlank()) { item.put("offline_file", file); saved++ }
+            }
+        }
+        val gallery = root.optJSONArray("gallery")
+        if (gallery != null) {
+            for (index in 0 until gallery.length()) {
+                val item = gallery.optJSONObject(index) ?: continue
+                val id = item.optString("id", index.toString()).ifBlank { index.toString() }
+                val file = cacheRemoteImage(context, item.optString("offline_image_url"), "diocese-gallery-$id", "homepage_media")
+                if (file.isNotBlank()) { item.put("offline_file", file); saved++ }
+            }
+        }
+        android.util.Log.i("MCNOffline", "Saved $saved diocesan homepage image(s)")
         return root.toString()
     }
 
@@ -245,6 +284,7 @@ object OfflineModuleManager {
                             val snapshotDir = File(context.filesDir, "offline_storage").apply { mkdirs() }
                             val snapshotName = when {
                                 path == "api/public/homepage" -> "homepage.json"
+                                path == "api/public/daily-reading" -> "daily_reading.json"
                                 path == "api/public/fellowships" -> "fellowships.json"
                                 path.startsWith("api/public/fellowships/") -> "fellowship_" + path.substringAfterLast('/') + ".json"
                                 else -> ""
@@ -252,6 +292,15 @@ object OfflineModuleManager {
                             if (snapshotName.isNotBlank()) {
                                 if (path.startsWith("api/public/fellowships/") && bodyText.isNotBlank()) {
                                     bodyText = cacheFellowshipImages(context, path, bodyText)
+                                } else if (path == "api/public/homepage" && bodyText.isNotBlank()) {
+                                    bodyText = cacheHomepageImages(context, bodyText)
+                                    runCatching {
+                                        val daily = JSONObject(bodyText).optJSONObject("daily_reading")
+                                        if (daily != null) {
+                                            val dailyFile = File(snapshotDir, "daily_reading.json")
+                                            dailyFile.writeText(JSONObject().put("ok", true).put("daily_reading", daily).toString())
+                                        }
+                                    }
                                 }
                                 val target = File(snapshotDir, snapshotName)
                                 val part = File(snapshotDir, snapshotName + ".part")
