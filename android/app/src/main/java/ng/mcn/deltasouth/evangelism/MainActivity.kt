@@ -260,6 +260,8 @@ private fun NativeDioceseApp() {
     var downloadMessage by remember { mutableStateOf("") }
     var downloadProgress by remember { mutableIntStateOf(0) }
     var downloadStage by remember { mutableStateOf("Waiting to download…") }
+    var offlineManagerOpen by remember { mutableStateOf(false) }
+    var offlineSections by remember { mutableStateOf(OfflineModuleManager.offlineSectionStatuses(appContext)) }
     var pendingAttendanceCount by remember { mutableIntStateOf(OfflineAttendanceQueue.pendingCount(appContext)) }
     DisposableEffect(appContext) {
         val manager = appContext.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -417,58 +419,40 @@ private fun NativeDioceseApp() {
             offlineDownloadBusy = downloadBusy,
             offlineDownloadProgress = downloadProgress,
             offlineDownloadStage = downloadStage,
+            offlineManagerOpen = offlineManagerOpen,
+            offlineSectionStatuses = offlineSections,
+            onCloseOfflineManager = { offlineManagerOpen = false },
             onStaffLogin = { showStaffLogin = true },
-            onOfflineDownload = { homepageView ->
-                if (online && !downloadBusy) {
+            onOfflineDownload = { homepageView, sectionId ->
+                if (sectionId == "open-manager") {
+                    offlineManagerOpen = true
+                } else if (!online) {
+                    android.widget.Toast.makeText(appContext, "Connect to the internet to update offline files.", android.widget.Toast.LENGTH_LONG).show()
+                } else if (!downloadBusy) {
                     downloadBusy = true
-                    downloadMessage = "Updating the saved homepage and offline content…"
                     downloadProgress = 0
-                    downloadStage = "Checking for updated diocesan content…"
-                    // Record the previous archive timestamp so this update can confirm that
-                    // the live homepage itself (not just its API data) was refreshed.
-                    val homepageUpdateStartedAt = System.currentTimeMillis()
-                    // Only this deliberate action contacts the live homepage for a fresh copy.
-                    homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                    homepageView.loadUrl(BuildConfig.API_BASE_URL)
+                    downloadStage = "Preparing ${sectionId} update…"
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
                             runCatching {
-                                OfflineModuleManager.downloadAll(appContext) { stage, percent ->
+                                if (sectionId == "homepage") {
+                                    homepageView.post {
+                                        homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                                        homepageView.loadUrl(BuildConfig.API_BASE_URL)
+                                    }
+                                }
+                                OfflineModuleManager.updateOfflineSection(appContext, sectionId) { stage, percent ->
                                     scope.launch(Dispatchers.Main) { downloadStage = stage; downloadProgress = percent }
                                 }
                             }
                         }
-                        result.onSuccess { summary ->
-                            val offlinePrefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-                            val bibleModules = offlinePrefs.getInt("last_uploaded_bible_module_count", 0)
-                            offlinePrefs.edit().putBoolean("initial_download_complete", true).apply()
-                            downloadMessage = "Offline update saved: ${summary.downloaded} data sets, ${summary.mediaDownloaded} media files, ${bibleModules} uploaded Bible modules, ${summary.unavailable} restricted items and ${summary.failed} failed."
+                        result.onSuccess { count ->
+                            offlineSections = OfflineModuleManager.offlineSectionStatuses(appContext)
+                            downloadMessage = "${sectionId.replaceFirstChar { it.uppercase() }} updated. ${count} item(s) saved."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }.onFailure { error ->
-                            downloadMessage = error.message ?: "The offline package could not be updated."
+                            downloadMessage = error.message ?: "The selected offline section could not be updated."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
-                        }
-                        // Wait briefly for WebView's asynchronous MHTML save callback.
-                        // The data/media package and the homepage archive are both part of this
-                        // explicit update; never report a refreshed homepage before it is saved.
-                        withContext(Dispatchers.IO) {
-                            repeat(20) {
-                                val prefs = appContext.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
-                                val savedAt = prefs.getLong("homepage_snapshot_saved_at", 0L)
-                                if (savedAt >= homepageUpdateStartedAt && latestSavedHomepageArchive(appContext) != null) return@withContext
-                                Thread.sleep(500L)
-                            }
-                        }
-                        // Return to the on-device homepage when the deliberate update is finished.
-                        // Prefer the newly refreshed archive; otherwise use the bundled first-install copy.
-                        homepageView.post {
-                            homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                            val savedHomepage = latestSavedHomepageArchive(appContext)
-                            if (savedHomepage != null) {
-                                homepageView.loadUrl(android.net.Uri.fromFile(savedHomepage).toString())
-                            } else {
-                                homepageView.loadUrl("file:///android_asset/offline-home/index.html")
-                            }
                         }
                         downloadBusy = false
                     }
@@ -1563,7 +1547,7 @@ private fun KeyValueList(values: Map<String, Any?>) {
 
 
 @Composable
-private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, onStaffLogin: () -> Unit, onOfflineDownload: (WebView) -> Unit, onBackPressed: () -> Unit) {
+private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean, offlineDownloadProgress: Int, offlineDownloadStage: String, offlineManagerOpen: Boolean, offlineSectionStatuses: List<OfflineModuleManager.OfflineSectionStatus>, onCloseOfflineManager: () -> Unit, onStaffLogin: () -> Unit, onOfflineDownload: (WebView, String) -> Unit, onBackPressed: () -> Unit) {
     val context = LocalContext.current
     val onlineState by rememberUpdatedState(online)
     var pageError by remember { mutableStateOf(false) }
@@ -1776,7 +1760,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
-                                onOfflineDownload(view)
+                                onOfflineDownload(view, "open-manager")
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline-library") {
@@ -1871,7 +1855,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "offline") {
-                                onOfflineDownload(view)
+                                onOfflineDownload(view, "open-manager")
                                 return true
                             }
                             if (uri.scheme == "mcn-app" && uri.host == "staff-login") {
@@ -2405,6 +2389,53 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     LinearProgressIndicator(progress = { offlineDownloadProgress / 100f }, modifier = Modifier.fillMaxWidth())
                 }
             }
+        }
+        if (offlineManagerOpen) {
+            AlertDialog(
+                onDismissRequest = { if (!offlineDownloadBusy) onCloseOfflineManager() },
+                title = { Text("Offline content manager") },
+                text = {
+                    Column(
+                        Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Text(if (online) "Choose exactly what to download or update. Each section updates separately." else "Your saved files are listed below. Connect to the internet to download updates.")
+                        offlineSectionStatuses.forEach { section ->
+                            ElevatedCard(Modifier.fillMaxWidth()) {
+                                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    Text(section.title, style = MaterialTheme.typography.titleSmall)
+                                    Text(section.description, style = MaterialTheme.typography.bodySmall)
+                                    Text(
+                                        if (section.saved) "On this device" + if (section.updatedAt > 0L) " • Updated " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(section.updatedAt)) else " • Saved file found"
+                                        else "Not downloaded yet",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = if (section.saved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                                    )
+                                    if (offlineDownloadBusy && offlineDownloadStage.contains(section.id, ignoreCase = true)) {
+                                        Text("$offlineDownloadStage • $offlineDownloadProgress%")
+                                        LinearProgressIndicator(progress = { offlineDownloadProgress / 100f }, modifier = Modifier.fillMaxWidth())
+                                    }
+                                    Button(
+                                        enabled = online && !offlineDownloadBusy,
+                                        onClick = {
+                                            val current = webView
+                                            if (current != null) onOfflineDownload(current, section.id)
+                                        },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) { Text(if (section.saved) "Update this section" else "Download this section") }
+                                }
+                            }
+                        }
+                        if (offlineDownloadBusy) {
+                            Text("$offlineDownloadStage • $offlineDownloadProgress%")
+                            LinearProgressIndicator(progress = { offlineDownloadProgress / 100f }, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = onCloseOfflineManager, enabled = !offlineDownloadBusy) { Text("Close") }
+                }
+            )
         }
         if (pageError) {
             ElevatedCard(Modifier.align(androidx.compose.ui.Alignment.Center).padding(24.dp)) {
