@@ -8,6 +8,7 @@ import subprocess
 import sys
 import hashlib
 import mimetypes
+import shutil
 import html as html_lib
 import urllib.request
 from html.parser import HTMLParser
@@ -132,6 +133,43 @@ for image_url in sorted(external_image_urls)[:40]:
         print(f"Could not package external homepage image {image_url[:100]}: {error}")
 
 print(f"Packaged {packaged_external_images} external homepage images for offline viewing.")
+
+# Always include the diocesan leadership fallback portraits. Some records use a
+# remote/private image URL which the static crawler cannot discover as a fallback
+# because that URL is assigned only after an image error in JavaScript.
+leadership_fallbacks = [
+    "men-fellowship-president.jpg",
+    "women-fellowship-president.jpg",
+    "youth-fellowship-president.jpg",
+    "prelate.jpg",
+    "archbishop.jpg",
+    "bishop.jpg",
+    "synod-secretary.jpg",
+    "minister-of-evangelism.jpg",
+    "lay-president.jpg",
+    "evangelism-coordinator.jpg",
+]
+source_leadership = Path(__file__).resolve().parents[1] / "static" / "uploads" / "leadership"
+target_leadership = DEST / "static" / "uploads" / "leadership"
+for portrait in leadership_fallbacks:
+    source = source_leadership / portrait
+    if source.is_file():
+        target_leadership.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target_leadership / portrait)
+    else:
+        # If a portrait is not committed as a static asset, try its public URL.
+        try:
+            request = urllib.request.Request(
+                BASE_URL.rstrip("/") + "/static/uploads/leadership/" + portrait,
+                headers={"User-Agent": "Mozilla/5.0 MCN-Delta-South-Offline-Packager"},
+            )
+            with urllib.request.urlopen(request, timeout=6) as response:
+                if response.headers.get("Content-Type", "").lower().startswith("image/"):
+                    target_leadership.mkdir(parents=True, exist_ok=True)
+                    (target_leadership / portrait).write_bytes(response.read())
+        except Exception as error:
+            print(f"Leadership fallback portrait unavailable ({portrait}): {error}")
+
 index.write_text(html, encoding="utf-8")
 
 def local_path(value: str) -> str | None:
