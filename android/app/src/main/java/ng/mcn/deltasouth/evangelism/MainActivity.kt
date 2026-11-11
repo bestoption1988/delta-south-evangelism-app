@@ -1587,6 +1587,23 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
     }
     BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
     LaunchedEffect(online) {
+        // Keep the public homepage live whenever connectivity is available, and return
+        // to the saved homepage when the device loses internet. Authentication and
+        // registration are never served from the offline snapshot.
+        webView?.post { currentView ->
+            val currentUri = runCatching { android.net.Uri.parse(currentView.url.orEmpty()) }.getOrNull()
+            val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+            val isLocalHomepage = currentUri?.scheme == "file" ||
+                currentUri?.host == "offline.mcn-app"
+            val isLiveHomepage = currentUri?.host == diocesanHost &&
+                currentUri?.path.orEmpty().trimEnd('/').isEmpty()
+            if (online && isLocalHomepage) {
+                currentView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                currentView.loadUrl(BuildConfig.API_BASE_URL)
+            } else if (!online && isLiveHomepage) {
+                openSavedDiocesanHome(currentView)
+            }
+        }
         if (online) {
             val refreshedDaily = withContext(Dispatchers.IO) {
                 OfflineModuleManager.refreshDailyReadingSnapshot(context)
@@ -2317,9 +2334,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     pageErrorDetails = ""
                                     view.post {
                                         view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                                        // Recover to the homepage packaged in this APK, never an
-                                        // old MHTML archive left behind by an earlier installation.
-                                        view.loadUrl("file:///android_asset/offline-home/index.html")
+                                        // Recover to the best verified saved homepage: the latest
+                                        // in-app snapshot, falling back to the homepage packaged in this APK.
+                                        openSavedDiocesanHome(view)
                                     }
                                     return
                                 }
@@ -2358,9 +2375,15 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     }
                     webChromeClient = WebChromeClient()
                     settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                    // Always start with the current homepage bundled in this APK.
-                    // Do not prefer an MHTML archive from a previous app version.
-                    loadUrl("file:///android_asset/offline-home/index.html")
+                    // Start on the live Naijacloud homepage when connected. In airplane
+                    // mode or without validated internet, open the packaged/saved homepage.
+                    if (online) {
+                        settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                        loadUrl(BuildConfig.API_BASE_URL)
+                    } else {
+                        settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                        openSavedDiocesanHome(this)
+                    }
                     webView = this
                 }
             },
