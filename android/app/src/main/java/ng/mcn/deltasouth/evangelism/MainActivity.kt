@@ -1493,6 +1493,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // other pages use a saved MHTML copy or a clear offline notice.
                             val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                             if ((uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost) {
+                                // The diocesan backend is an online website. When connected,
+                                // let WebView handle every same-site page, form, dashboard link,
+                                // redirect and menu navigation exactly as it does in Chrome.
+                                // Offline routing is only used when the device has no connection.
+                                if (onlineState) return false
                                 val route = localPath.ifBlank { "/" }
                                 if (route == "/" || route == "/index.html") {
                                     openSavedDiocesanHome(view)
@@ -1585,6 +1590,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             }
                             if ((uri.scheme == "http" || uri.scheme == "https") &&
                                 uri.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host) {
+                                // Preserve the live website's native navigation while online.
+                                if (onlineState) return false
                                 if (legacyPath.isBlank() || legacyPath == "/" || legacyPath == "/index.html") {
                                     openSavedDiocesanHome(view)
                                 } else {
@@ -1992,7 +1999,12 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   window.addEventListener('scroll',function(){if(panel.style.display!=='none')closeMenu();},{passive:true});
                                 })();
                             """.trimIndent()
-                            view.evaluateJavascript(menuBridge, null)
+                            // The Android menu workaround is strictly for the bundled offline
+                            // homepage. Never alter the live website's dashboard/menu DOM: its own
+                            // JavaScript and CSS already work correctly in Chrome.
+                            if (url?.startsWith("file:///android_asset/offline-home/") == true) {
+                                view.evaluateJavascript(menuBridge, null)
+                            }
                             // Daily Scripture and hymn use the same tested webpage implementation as Chrome.
                             pageLoading = false
                         }
