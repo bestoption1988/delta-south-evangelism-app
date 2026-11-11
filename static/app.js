@@ -5161,14 +5161,14 @@ document.addEventListener("DOMContentLoaded", function () {
    Reuses #menuToggle and #menuPanel; no duplicate mobile toggles or competing handlers. */
 (function(){
   function installStableDashboardMenu(){
-    const nav = document.getElementById("nav");
+    const navElement = document.getElementById("nav");
     const originalToggle = document.getElementById("menuToggle");
     const panel = document.getElementById("menuPanel");
-    if(!nav || !originalToggle || !panel || window.innerWidth > 700) return;
+    if(!navElement || !originalToggle || !panel || window.innerWidth > 700) return;
     if(originalToggle.dataset.stableDashboardMenu === "1") return;
 
     document.querySelectorAll("#mobileNavToggle,.mobile-nav-toggle-final,.mobile-nav-toggle").forEach(el=>el.remove());
-    nav.classList.remove("mobile-nav-open");
+    navElement.classList.remove("mobile-nav-open");
     panel.classList.remove("open");
 
     const toggle = originalToggle.cloneNode(true);
@@ -5208,7 +5208,7 @@ document.addEventListener("DOMContentLoaded", function () {
       event.preventDefault();
       event.stopImmediatePropagation();
       const page = pageButton.dataset.page;
-      if(typeof nav === "function") nav(page);
+      if(typeof window.nav === "function") window.nav(page);
       closeDashboardMenu();
     },true);
 
