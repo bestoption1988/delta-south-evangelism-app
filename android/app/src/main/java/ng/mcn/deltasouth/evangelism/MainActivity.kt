@@ -174,6 +174,24 @@ private fun isFlutterwaveCheckoutHost(host: String?): Boolean {
 private fun offlineInternetRequiredNotice(): String =
     "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px;background:#f3f6fa;color:#17345b'><h2>Internet connection required</h2><p>Login, registration, account access and online payments must connect to the live diocesan website. Connect to the internet and try again.</p><p><a href='mcn-app://home'>Return to saved homepage</a></p></body>"
 
+private fun currentAppVersionCode(context: Context): Long = runCatching {
+    if (android.os.Build.VERSION.SDK_INT >= 28) {
+        context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode
+    } else {
+        @Suppress("DEPRECATION")
+        context.packageManager.getPackageInfo(context.packageName, 0).versionCode.toLong()
+    }
+}.getOrDefault(-1L)
+
+private fun latestSavedHomepageArchive(context: Context): File? {
+    val archive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+    val savedVersion = context.getSharedPreferences("mcn_offline_status", Context.MODE_PRIVATE)
+        .getLong("homepage_snapshot_version_code", -1L)
+    return archive.takeIf {
+        it.isFile && it.length() > 0L && savedVersion == currentAppVersionCode(context)
+    }
+}
+
 private fun offlinePageArchiveFile(context: Context, url: String): File {
     val uri = android.net.Uri.parse(url)
     val key = (uri.encodedPath.orEmpty() + "?" + uri.encodedQuery.orEmpty())
@@ -432,8 +450,8 @@ private fun NativeDioceseApp() {
                         // during this explicit update and otherwise the APK-bundled first-install copy.
                         homepageView.post {
                             homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                            val savedHomepage = File(appContext.filesDir, "offline_homepage/diocesan-homepage.mht")
-                            if (savedHomepage.isFile && savedHomepage.length() > 0L) {
+                            val savedHomepage = latestSavedHomepageArchive(appContext)
+                            if (savedHomepage != null) {
                                 homepageView.loadUrl(android.net.Uri.fromFile(savedHomepage).toString())
                             } else {
                                 homepageView.loadUrl("file:///android_asset/offline-home/index.html")
@@ -1542,15 +1560,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
     fun openSavedDiocesanHome(target: WebView?) {
         if (target == null) return
         target.post {
-            // Always open the homepage shipped inside this APK. Older app installs may
-            // contain a stale MHTML snapshot from a previous broken release; preferring
-            // that file makes every newer APK appear unchanged even after its assets are fixed.
+            // Prefer the latest homepage deliberately saved by Update Offline Content,
+            // but only when it was captured by this installed app version. An older APK's
+            // stale archive is ignored automatically after an app upgrade.
             target.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-            val staleArchive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
-            if (staleArchive.exists()) {
-                runCatching { staleArchive.delete() }
+            val savedArchive = latestSavedHomepageArchive(context)
+            if (savedArchive != null) {
+                target.loadUrl(android.net.Uri.fromFile(savedArchive).toString())
+            } else {
+                target.loadUrl("file:///android_asset/offline-home/index.html")
             }
-            target.loadUrl("file:///android_asset/offline-home/index.html")
         }
     }
     BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
@@ -2027,6 +2046,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                                         .edit()
                                                         .putBoolean("homepage_snapshot_saved", true)
                                                         .putLong("homepage_snapshot_saved_at", System.currentTimeMillis())
+                                                        .putLong("homepage_snapshot_version_code", currentAppVersionCode(context))
                                                         .apply()
                                                     Log.i("DeltaSouthOffline", "Homepage archive saved: ${saved.length()} bytes")
                                                 } else if (attempt < 3) {
