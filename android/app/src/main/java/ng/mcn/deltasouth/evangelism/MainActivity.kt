@@ -262,12 +262,12 @@ private fun NativeDioceseApp() {
             onOfflineDownload = { homepageView ->
                 if (online && !downloadBusy) {
                     downloadBusy = true
-                    downloadMessage = "Updating the saved homepage and offline content…"
+                    downloadMessage = "Updating offline content without interrupting the current page…"
                     downloadProgress = 0
                     downloadStage = "Checking for updated diocesan content…"
-                    // Only this deliberate action contacts the live homepage for a fresh copy.
-                    homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                    homepageView.loadUrl(BuildConfig.API_BASE_URL)
+                    // Do not navigate or reload this WebView during an update. It may be
+                    // displaying a hymn/audio player; navigation would stop playback and
+                    // replace the user's current page even though the download is separate.
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
                             runCatching {
@@ -286,18 +286,8 @@ private fun NativeDioceseApp() {
                             downloadMessage = error.message ?: "The offline package could not be updated."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }
-                        // Return to the on-device homepage when the deliberate update is finished.
-                        // Return to the same real homepage, preferring the latest archive saved
-                        // during this explicit update and otherwise the APK-bundled first-install copy.
-                        homepageView.post {
-                            homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                            val savedHomepage = File(appContext.filesDir, "offline_homepage/diocesan-homepage.mht")
-                            if (savedHomepage.isFile && savedHomepage.length() > 0L) {
-                                homepageView.loadUrl(android.net.Uri.fromFile(savedHomepage).toString())
-                            } else {
-                                homepageView.loadUrl("file:///android_asset/offline-home/index.html")
-                            }
-                        }
+                        // Keep the current page and any active hymn playback intact.
+                        // Downloaded resources are saved independently in app-private storage.
                         downloadBusy = false
                     }
                 }
