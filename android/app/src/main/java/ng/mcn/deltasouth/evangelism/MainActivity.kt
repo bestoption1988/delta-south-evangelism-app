@@ -425,6 +425,7 @@ private fun NativeDioceseApp() {
             onStaffLogin = { showStaffLogin = true },
             onOfflineDownload = { homepageView, sectionId ->
                 if (sectionId == "open-manager") {
+                    offlineSections = OfflineModuleManager.offlineSectionStatuses(appContext)
                     offlineManagerOpen = true
                 } else if (!online) {
                     android.widget.Toast.makeText(appContext, "Connect to the internet to update offline files.", android.widget.Toast.LENGTH_LONG).show()
@@ -2434,7 +2435,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     Text(section.title, style = MaterialTheme.typography.titleSmall)
                                     Text(section.description, style = MaterialTheme.typography.bodySmall)
                                     Text(
-                                        if (section.saved) "On this device" + if (section.updatedAt > 0L) " • Updated " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(section.updatedAt)) else " • Saved file found"
+                                        if (section.saved) "${section.savedCount} file(s) on this device" + if (section.updatedAt > 0L) " • Updated " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(section.updatedAt)) else " • Saved file found"
                                         else "Not downloaded yet",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = if (section.saved) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
