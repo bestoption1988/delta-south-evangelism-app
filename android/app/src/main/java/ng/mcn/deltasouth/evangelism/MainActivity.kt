@@ -2317,7 +2317,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                         }
                                         if (href.indexOf('mcn-app://') === 0) {
                                           if (href === 'mcn-app://offline') {
-                                            Promise.resolve(window.mcnCacheEntireApp ? window.mcnCacheEntireApp() : null).finally(function() { window.location.href = href; });
+                                            window.location.href = href;
                                           } else {
                                             window.location.href = href;
                                           }
