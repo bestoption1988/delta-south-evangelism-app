@@ -80,6 +80,18 @@ object OfflineDevotionalPage {
                 b.append("""<article class="item"><h3>${e(event.optString("title"))}</h3><p>${e(event.optString("description"))}</p><p class="muted">${e(event.optString("event_date"))} · ${e(event.optString("venue"))}</p></article>""")
             }
         }
+        val gallery=snapshot.optJSONArray("gallery")?:JSONArray()
+        if(gallery.length()>0) {
+            b.append("<h2>Our Church Gallery</h2><div class='grid'>")
+            for(i in 0 until gallery.length()) {
+                val item=gallery.optJSONObject(i)?:continue
+                val file=item.optString("offline_file")
+                if(file.isBlank()) continue
+                val imageUrl="/__mcn_offline/file/${Uri.encode(file)}"
+                b.append("""<article class="item" style="padding:10px"><img src="$imageUrl" alt="${e(item.optString("title","Church gallery photo"))}" loading="lazy" style="display:block;width:100%;max-height:280px;object-fit:cover;border-radius:10px"><h3>${e(item.optString("title"))}</h3><p>${e(item.optString("description"))}</p></article>""")
+            }
+            b.append("</div>")
+        }
         val churches=snapshot.optJSONArray("churches")?:JSONArray()
         if(churches.length()>0) {
             b.append("<h2>Our Churches</h2>")
@@ -265,8 +277,14 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
         if(!u.path.orEmpty().startsWith("/__mcn_offline/file/"))return null
         val name=Uri.decode(u.path!!.substringAfterLast('/'))
         if(name.isBlank()||name.contains("/")||name.contains(".."))return null
-        val f=(sequenceOf(d(c),File(d(c),"Church_Media"),File(d(c),"Bible")) + (d(c).listFiles()?.filter{it.isDirectory}?.asSequence()?:emptySequence())).map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0} ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0} ?: return null
-        val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
+        val mediaFolders = sequenceOf(
+            d(c), File(d(c),"Church_Media"), File(d(c),"Bible"),
+            File(d(c),"fellowship_media"), File(d(c),"homepage_media")
+        ) + (d(c).listFiles()?.filter{it.isDirectory}?.asSequence()?:emptySequence())
+        val f=(mediaFolders.map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0}
+            ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0}
+            ?: return null)
+        val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"svg"->"image/svg+xml";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
         val length=f.length()
         val headers=linkedMapOf("Accept-Ranges" to "bytes","Content-Type" to mime,"Content-Length" to length.toString())
         val range=Regex("^bytes=(\\d*)-(\\d*)$").matchEntire(rangeHeader.orEmpty().trim())
