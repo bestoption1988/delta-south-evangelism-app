@@ -1703,10 +1703,35 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 }
                                 return true
                             }
+                            // Root-relative links from the bundled offline homepage resolve as
+                            // file:///login (rather than https://.../login). Re-route protected
+                            // actions to the live Naijacloud origin whenever connectivity exists.
+                            if (uri.scheme == "file" && isOnlineOnlyDiocesanRoute(uri.path.orEmpty())) {
+                                if (onlineState) {
+                                    val target = BuildConfig.API_BASE_URL.trimEnd('/') + uri.encodedPath.orEmpty() +
+                                        (uri.encodedQuery?.let { "?$it" } ?: "") +
+                                        (uri.encodedFragment?.let { "#$it" } ?: "")
+                                    view.loadUrl(target)
+                                } else {
+                                    view.loadDataWithBaseURL("https://offline.mcn-app/", offlineInternetRequiredNotice(), "text/html", "UTF-8", null)
+                                }
+                                return true
+                            }
                             if (uri.scheme == "file" && bundledPagePath.isNotBlank()) {
                                 val route = bundledPagePath.removePrefix("/")
                                 if (route in setOf("login", "register", "registration", "giving", "payment", "prayer-request")) {
                                     view.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/" + route)
+                                }
+                                return true
+                            }
+                            if (uri.scheme == "file" && isOnlineOnlyDiocesanRoute(uri.path.orEmpty())) {
+                                if (onlineState) {
+                                    val target = BuildConfig.API_BASE_URL.trimEnd('/') + uri.encodedPath.orEmpty() +
+                                        (uri.encodedQuery?.let { "?$it" } ?: "") +
+                                        (uri.encodedFragment?.let { "#$it" } ?: "")
+                                    view.loadUrl(target)
+                                } else {
+                                    view.loadDataWithBaseURL("https://offline.mcn-app/", offlineInternetRequiredNotice(), "text/html", "UTF-8", null)
                                 }
                                 return true
                             }
