@@ -69,7 +69,7 @@ if "METHODIST CHURCH NIGERIA" not in html or "DELTA SOUTH DIOCESE" not in html:
 # first viewport. Lazy-loaded leadership portraits and gallery images otherwise
 # remain blank when the MHTML is opened without a network connection.
 html = re.sub(
-    r"""\sloading\s*=\s*([\"'])lazy\\1""",
+    r"""\sloading\s*=\s*(["'])lazy\1""",
     ' loading="eager"',
     html,
     flags=re.I,
@@ -112,7 +112,7 @@ for attribute in re.finditer(r"""(?:src|poster|srcset)\s*=\s*(["'])(.*?)\1""", h
             external_image_urls.add(candidate)
 
 packaged_external_images = 0
-for image_url in sorted(external_image_urls)[:40]:
+for image_url in sorted(external_image_urls)[:160]:
     parsed = urlparse(image_url)
     ext = Path(unquote(parsed.path)).suffix.lower()
     if ext and ext not in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg", ".avif", ".ico"}:
