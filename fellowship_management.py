@@ -147,6 +147,13 @@ def register_fellowship_routes(app, db_getter, user_getter):
         }.get(slug)
 
         def fallback_leadership_photo():
+            # An unannounced Youth Fellowship president must show the Youth Fellowship
+            # logo, not a diocesan officer's personal portrait.
+            if slug == "methodist-youth-fellowship":
+                return (
+                    url_for("fellowship_public_image", slug=slug, kind="logo", item_id=fid)
+                    if fellowship.get("logo_path") else ""
+                )
             if not fellowship_leadership_title:
                 return ""
             profile = query(
@@ -167,9 +174,14 @@ def register_fellowship_routes(app, db_getter, user_getter):
                         "fellowship_public_image", slug=slug, kind=kind,
                         item_id=record["id"],
                     )
+                unannounced_youth_leader = (
+                    slug == "methodist-youth-fellowship" and kind == "leader"
+                    and str(record.get("full_name") or "").strip().lower()
+                    in {"to be announced", "to be confirmed", "tba", "vacant"}
+                )
                 if kind == "leader" and fallback_photo:
                     record["offline_fallback_image_url"] = fallback_photo
-                    if not record.get("offline_image_url"):
+                    if unannounced_youth_leader or not record.get("offline_image_url"):
                         record["offline_image_url"] = fallback_photo
                 output.append(record)
             return output
@@ -389,17 +401,23 @@ def register_fellowship_routes(app, db_getter, user_getter):
             "methodist-youth-fellowship": "Youth Fellowship President",
         }.get(slug)
         fallback_leader_profile = None
-        if fellowship_leadership_title:
-            fallback_leader_profile = query(
-                "SELECT id FROM leadership_profiles WHERE title=? "
-                "AND LOWER(CAST(active AS TEXT)) IN ('1','true','t') "
-                "ORDER BY display_order LIMIT 1",
-                (fellowship_leadership_title,),
-            ).fetchone()
-        fallback_leader_url = (
-            url_for("public_leadership_photo", profile_id=fallback_leader_profile["id"])
-            if fallback_leader_profile else ""
-        )
+        if slug == "methodist-youth-fellowship":
+            fallback_leader_url = (
+                url_for("fellowship_public_image", slug=slug, kind="logo", item_id=fid)
+                if f.get("logo_path") else ""
+            )
+        else:
+            if fellowship_leadership_title:
+                fallback_leader_profile = query(
+                    "SELECT id FROM leadership_profiles WHERE title=? "
+                    "AND LOWER(CAST(active AS TEXT)) IN ('1','true','t') "
+                    "ORDER BY display_order LIMIT 1",
+                    (fellowship_leadership_title,),
+                ).fetchone()
+            fallback_leader_url = (
+                url_for("public_leadership_photo", profile_id=fallback_leader_profile["id"])
+                if fallback_leader_profile else ""
+            )
         leaders = query("""SELECT * FROM fellowship_leaders
             WHERE fellowship_id=? AND active=1 ORDER BY display_order, full_name""", (fid,)).fetchall()
         announcements = query("""SELECT * FROM fellowship_announcements
@@ -420,8 +438,14 @@ def register_fellowship_routes(app, db_getter, user_getter):
                 dict(
                     row_dict(x),
                     photo_display_url=(
-                        fellowship_image_url(row_dict(x).get("photo_path"), "leader", row_dict(x)["id"])
-                        if row_dict(x).get("photo_path") else fallback_leader_url
+                        fallback_leader_url
+                        if slug == "methodist-youth-fellowship"
+                        and str(row_dict(x).get("full_name") or "").strip().lower()
+                        in {"to be announced", "to be confirmed", "tba", "vacant"}
+                        else (
+                            fellowship_image_url(row_dict(x).get("photo_path"), "leader", row_dict(x)["id"])
+                            if row_dict(x).get("photo_path") else fallback_leader_url
+                        )
                     ),
                     photo_fallback_url=fallback_leader_url,
                 )
