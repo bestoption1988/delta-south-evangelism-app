@@ -1590,18 +1590,20 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
         // Keep the public homepage live whenever connectivity is available, and return
         // to the saved homepage when the device loses internet. Authentication and
         // registration are never served from the offline snapshot.
-        webView?.post { currentView ->
-            val currentUri = runCatching { android.net.Uri.parse(currentView.url.orEmpty()) }.getOrNull()
-            val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
-            val isLocalHomepage = currentUri?.scheme == "file" ||
-                currentUri?.host == "offline.mcn-app"
-            val isLiveHomepage = currentUri?.host == diocesanHost &&
-                currentUri?.path.orEmpty().trimEnd('/').isEmpty()
-            if (online && isLocalHomepage) {
-                currentView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
-                currentView.loadUrl(BuildConfig.API_BASE_URL)
-            } else if (!online && isLiveHomepage) {
-                openSavedDiocesanHome(currentView)
+        webView?.let { currentView ->
+            currentView.post {
+                val currentUri = runCatching { android.net.Uri.parse(currentView.url.orEmpty()) }.getOrNull()
+                val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                val isLocalHomepage = currentUri?.scheme == "file" ||
+                    currentUri?.host == "offline.mcn-app"
+                val isLiveHomepage = currentUri?.host == diocesanHost &&
+                    currentUri?.path.orEmpty().trimEnd('/').isEmpty()
+                if (online && isLocalHomepage) {
+                    currentView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    currentView.loadUrl(BuildConfig.API_BASE_URL)
+                } else if (!online && isLiveHomepage) {
+                    openSavedDiocesanHome(currentView)
+                }
             }
         }
         if (online) {
