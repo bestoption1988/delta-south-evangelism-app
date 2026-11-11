@@ -476,7 +476,7 @@ private fun NativeDioceseApp() {
                             downloadMessage = "${sectionId.replaceFirstChar { it.uppercase() }} updated. ${count} item(s) saved."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                             if (sectionId == "homepage") {
-                                homepageView.postDelayed({ homepageView.loadUrl("mcn-app://home") }, 7500L)
+                                homepageView.postDelayed({ homepageView.loadUrl("file:///android_asset/offline-home/index.html") }, 7500L)
                             }
                         }.onFailure { error ->
                             downloadMessage = error.message ?: "The selected offline section could not be updated."
@@ -1582,6 +1582,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
     var pageErrorDetails by remember { mutableStateOf("The connection to the diocesan website failed.") }
     var pageLoading by remember { mutableStateOf(true) }
     var webView by remember { mutableStateOf<WebView?>(null) }
+    val localArchiveActive = remember { java.util.concurrent.atomic.AtomicBoolean(false) }
     fun openSavedDiocesanHome(target: WebView?) {
         if (target == null) return
         target.post {
@@ -1589,12 +1590,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
             // but only when it was captured by this installed app version. An older APK's
             // stale archive is ignored automatically after an app upgrade.
             target.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+            // Mark local mode before the first request so packaged CSS, JS and photos
+            // are served from the APK even if WebView starts asset requests immediately.
+            localArchiveActive.set(true)
             val savedArchive = latestSavedHomepageArchive(context)
-            if (savedArchive != null) {
-                target.loadUrl(android.net.Uri.fromFile(savedArchive).toString())
+            val localUrl = if (savedArchive != null) {
+                android.net.Uri.fromFile(savedArchive).toString()
             } else {
-                target.loadUrl("file:///android_asset/offline-home/index.html")
+                "file:///android_asset/offline-home/index.html"
             }
+            target.loadUrl(localUrl)
         }
     }
     BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
@@ -1604,8 +1609,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
-                // Read this flag from WebView request worker threads instead of calling view.url.
-                val localArchiveActive = java.util.concurrent.atomic.AtomicBoolean(false)
+                // Shared with openSavedDiocesanHome; already set before local asset requests.
                 val dailyRefreshRequested = java.util.concurrent.atomic.AtomicBoolean(false)
                 WebView(ctx).apply {
                     settings.javaScriptEnabled = true
@@ -1634,6 +1638,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                             val uri = request.url
+                            if (uri.scheme == "mcn-app" && uri.host == "home") {
+                                openSavedDiocesanHome(view)
+                                return true
+                            }
                             val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                             val isDiocesanHttp = (uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost
                             // When connected, all diocesan links must reach the live server.
@@ -1798,6 +1806,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         @Suppress("DEPRECATION")
                         override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
                             val uri = android.net.Uri.parse(url)
+                            if (uri.scheme == "mcn-app" && uri.host == "home") {
+                                openSavedDiocesanHome(view)
+                                return true
+                            }
                             val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                             val isDiocesanHttp = (uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost
                             if (isFlutterwaveCheckoutHost(uri.host) && onlineState) {
@@ -2376,6 +2388,12 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             if (request.isForMainFrame) {
                                 pageLoading = false
                                 val requestedPath = request.url.path.orEmpty()
+                                if (request.url.scheme == "mcn-app" && request.url.host == "home") {
+                                    pageError = false
+                                    pageErrorDetails = ""
+                                    view.post { openSavedDiocesanHome(view) }
+                                    return
+                                }
                                 // Failed online navigation must never strand the user on Android's
                                 // generic "Webpage not available" screen. Restore the saved homepage.
                                 val isLiveDiocesanPage = request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host
