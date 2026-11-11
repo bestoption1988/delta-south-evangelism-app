@@ -1444,15 +1444,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     overScrollMode = android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS
                     setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
                     webViewClient = object : WebViewClient() {
-                        // WebViewClient, not only ServiceWorkerClient, must serve locally saved media.
-                        // Audio/video elements issue byte-range requests to discover duration and seek.
-                        override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                            return OfflineDevotionalPage.fileResponse(
-                                view.context.applicationContext,
-                                request.url.toString(),
-                                request.requestHeaders["Range"]
-                            )
-                        }
                         override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                             val uri = request.url
                             // The online server may return 404 for its homepage while the
@@ -1641,7 +1632,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             return true
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                            OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
+                            OfflineDevotionalPage.fileResponse(
+                                view.context.applicationContext,
+                                request.url.toString(),
+                                request.requestHeaders["Range"]
+                            )?.let { return it }
                             // Serve same-origin homepage assets directly from the APK. This is
                             // what prevents absolute /static/... image, CSS and JS URLs from
                             // falling through to Naijacloud when the homepage is opened locally.
