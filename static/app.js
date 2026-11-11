@@ -5157,461 +5157,97 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 });
 
-/* =========================================================
-   FINAL MOBILE NAV CLEANUP
-   Keep the new working mobile toggle.
-   Hide only the old duplicate toggle.
-   Reuse the existing menu panel for navigation.
-   ========================================================= */
+/* Single dashboard menu controller.
+   Reuses #menuToggle and #menuPanel; no duplicate mobile toggles or competing handlers. */
 (function(){
-  function fixDuplicateMobileNav(){
+  function installStableDashboardMenu(){
     const nav = document.getElementById("nav");
-    const newToggle = document.getElementById("mobileNavToggle");
-    const oldToggle = document.getElementById("menuToggle");
-    const wrapper = oldToggle ? oldToggle.closest(".nav-dropdown") : null;
+    const originalToggle = document.getElementById("menuToggle");
     const panel = document.getElementById("menuPanel");
+    if(!nav || !originalToggle || !panel || window.innerWidth > 700) return;
+    if(originalToggle.dataset.stableDashboardMenu === "1") return;
 
-    if(!nav || !newToggle || !oldToggle || !wrapper || !panel) return;
+    document.querySelectorAll("#mobileNavToggle,.mobile-nav-toggle-final,.mobile-nav-toggle").forEach(el=>el.remove());
+    nav.classList.remove("mobile-nav-open");
+    panel.classList.remove("open");
 
-    /* Hide ONLY the old duplicate toggle. */
-    oldToggle.style.display = "none";
+    const toggle = originalToggle.cloneNode(true);
+    originalToggle.replaceWith(toggle);
+    toggle.style.setProperty("display","flex","important");
+    toggle.style.setProperty("visibility","visible","important");
+    toggle.style.setProperty("opacity","1","important");
+    toggle.style.setProperty("width","100%","important");
+    toggle.style.setProperty("min-height","52px","important");
+    toggle.style.setProperty("touch-action","manipulation","important");
+    toggle.setAttribute("aria-expanded","false");
+    toggle.setAttribute("aria-controls","menuPanel");
+    toggle.dataset.stableDashboardMenu = "1";
 
-    /* Keep the existing menu panel as the navigation list. */
-    wrapper.style.display = "block";
-    wrapper.style.width = "100%";
-    wrapper.style.position = "static";
-
-    panel.style.position = "static";
-    panel.style.width = "100%";
-    panel.style.maxHeight = "min(58vh,520px)";
-    panel.style.overflowY = "auto";
-    panel.style.marginTop = "8px";
-
-    /* The new working toggle controls the old menu panel. */
-    if(newToggle.dataset.panelConnected !== "1"){
-      newToggle.dataset.panelConnected = "1";
-
-      newToggle.addEventListener("click", function(){
-        setTimeout(function(){
-          const isOpen = nav.classList.contains("mobile-nav-open");
-          panel.classList.toggle("open", isOpen);
-        }, 0);
-      });
+    function positionPanel(){
+      const rect = toggle.getBoundingClientRect();
+      const width = Math.min(300, Math.max(220, window.innerWidth - 24));
+      const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
+      const maxHeight = Math.max(160, Math.min(window.innerHeight * 0.52, 480, window.innerHeight - rect.bottom - 20));
+      panel.style.setProperty("position","fixed","important");
+      panel.style.setProperty("left",left+"px","important");
+      panel.style.setProperty("right","auto","important");
+      panel.style.setProperty("top",(rect.bottom+6)+"px","important");
+      panel.style.setProperty("width",width+"px","important");
+      panel.style.setProperty("max-width",(window.innerWidth-24)+"px","important");
+      panel.style.setProperty("max-height",maxHeight+"px","important");
+      panel.style.setProperty("overflow-y","auto","important");
+      panel.style.setProperty("overflow-x","hidden","important");
+      panel.style.setProperty("z-index","2147483647","important");
     }
-
-    /* Keep the two states synchronized. */
-    const observer = new MutationObserver(function(){
-      const isOpen = nav.classList.contains("mobile-nav-open");
-      panel.classList.toggle("open", isOpen);
-    });
-
-    observer.observe(nav, {
-      attributes:true,
-      attributeFilter:["class"]
-    });
-
-    /* Hide the old toggle again if another script tries to show it. */
-    setInterval(function(){
-      if(oldToggle.style.display !== "none"){
-        oldToggle.style.display = "none";
-      }
-    }, 500);
-  }
-
-  if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded",fixDuplicateMobileNav);
-  }else{
-    fixDuplicateMobileNav();
-  }
-})();
-
-/* Final mobile navigation styling */
-(function(){
-  const style = document.createElement("style");
-  style.textContent = `
-    @media(max-width:700px){
-
-      #nav .nav-dropdown{
-        display:block !important;
-        width:100% !important;
-        position:static !important;
-      }
-
-      #nav #menuToggle{
-        display:none !important;
-      }
-
-      #nav #menuPanel{
-        position:static !important;
-        width:100% !important;
-        max-height:min(58vh,520px) !important;
-        margin-top:8px !important;
-        overflow-y:auto !important;
-        border-radius:12px !important;
-        box-shadow:0 8px 22px rgba(15,23,42,.10) !important;
-      }
-
-      #nav:not(.mobile-nav-open) #menuPanel{
-        display:none !important;
-      }
-
-      #nav.mobile-nav-open #menuPanel{
-        display:flex !important;
-        flex-direction:column !important;
-      }
-
-      #nav.mobile-nav-open #menuPanel button[data-page]{
-        display:flex !important;
-        width:100% !important;
-        min-height:44px !important;
-        align-items:center !important;
-        justify-content:flex-start !important;
-        margin:3px 0 !important;
-        padding:10px 14px !important;
-        text-align:left !important;
-      }
-
-      #nav.mobile-nav-open > .mobile-nav-toggle{
-        display:flex !important;
-      }
-    }
-  `;
-  document.head.appendChild(style);
-})();
-
-/* =========================================================
-   DEFINITIVE MOBILE DASHBOARD MENU
-   One visible toggle + existing navigation panel
-   ========================================================= */
-(function(){
-  function installDefinitiveMobileNav(){
-    const nav = document.getElementById("nav");
-    const panel = document.getElementById("menuPanel");
-    const oldToggle = document.getElementById("menuToggle");
-
-    if(!nav || !panel) return;
-
-    let toggle = document.getElementById("mobileNavToggle");
-
-    if(!toggle){
-      toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.id = "mobileNavToggle";
-      toggle.className = "mobile-nav-toggle-final";
-      toggle.setAttribute("aria-expanded","false");
-      toggle.innerHTML =
-        '<span class="mobile-nav-left-final">' +
-          '<span class="mobile-nav-icon-final">☰</span>' +
-          '<span id="mobileNavTitleFinal">Dashboard</span>' +
-        '</span>' +
-        '<span id="mobileNavArrowFinal">▼</span>';
-
-      nav.insertBefore(toggle, nav.firstChild);
-    }
-
-    /* Hide the old duplicate button only. */
-    if(oldToggle){
-      oldToggle.style.setProperty("display","none","important");
-    }
-
-    function updateTitle(){
-      const active = panel.querySelector("button[data-page].active");
-      const title = document.getElementById("mobileNavTitleFinal");
-
-      if(active && title){
-        title.textContent = active.textContent.trim();
-      }
-    }
-
-    function closeMenu(){
-      nav.classList.remove("mobile-nav-open");
+    function closeDashboardMenu(){
       panel.classList.remove("open");
       toggle.setAttribute("aria-expanded","false");
-
-      const arrow = document.getElementById("mobileNavArrowFinal");
-      if(arrow) arrow.textContent = "▼";
     }
-
-    function openMenu(){
-      nav.classList.add("mobile-nav-open");
+    function openDashboardMenu(){
+      if(panel.parentElement !== document.body) document.body.appendChild(panel);
+      positionPanel();
       panel.classList.add("open");
       toggle.setAttribute("aria-expanded","true");
-
-      const arrow = document.getElementById("mobileNavArrowFinal");
-      if(arrow) arrow.textContent = "▲";
     }
+    toggle.addEventListener("click",function(event){
+      event.preventDefault();
+      event.stopPropagation();
+      if(panel.classList.contains("open")) closeDashboardMenu();
+      else openDashboardMenu();
+    });
+    panel.addEventListener("click",function(event){
+      const button = event.target.closest("button");
+      if(button) window.setTimeout(closeDashboardMenu,90);
+    });
+    document.addEventListener("click",function(event){
+      if(panel.classList.contains("open") && !panel.contains(event.target) && !toggle.contains(event.target)){
+        closeDashboardMenu();
+      }
+    });
+    document.addEventListener("keydown",function(event){
+      if(event.key === "Escape") closeDashboardMenu();
+    });
+    window.addEventListener("resize",function(){
+      if(panel.classList.contains("open")) positionPanel();
+    });
+    window.addEventListener("scroll",function(){
+      if(panel.classList.contains("open")) positionPanel();
+    },{passive:true});
 
-    if(toggle.dataset.ready !== "1"){
-      toggle.dataset.ready = "1";
-
-      toggle.addEventListener("click",function(e){
-        e.preventDefault();
-        e.stopPropagation();
-
-        if(nav.classList.contains("mobile-nav-open")){
-          closeMenu();
-        }else{
-          openMenu();
-        }
-      });
-
-      panel.querySelectorAll("button[data-page]").forEach(button=>{
-        button.addEventListener("click",function(){
-          setTimeout(function(){
-            updateTitle();
-            closeMenu();
-          },50);
-        });
-      });
-
-      document.addEventListener("click",function(e){
-        if(
-          window.innerWidth <= 700 &&
-          nav.classList.contains("mobile-nav-open") &&
-          !nav.contains(e.target)
-        ){
-          closeMenu();
-        }
-      });
-    }
-
-    updateTitle();
+    const style=document.createElement("style");
+    style.textContent = [
+      "#nav #menuToggle{display:flex!important;align-items:center!important;justify-content:space-between!important;width:100%!important;min-height:52px!important;font-size:18px!important;touch-action:manipulation!important}",
+      "body>#menuPanel{display:none!important;position:fixed!important;box-sizing:border-box!important;width:min(300px,calc(100vw - 24px))!important;max-height:min(52vh,480px)!important;overflow-y:auto!important;overflow-x:hidden!important;z-index:2147483647!important;background:#fff!important;border:1px solid #dce5df!important;border-radius:13px!important;padding:6px!important;box-shadow:0 12px 28px rgba(15,45,25,.20)!important}",
+      "body>#menuPanel.open{display:flex!important;flex-direction:column!important;gap:2px!important}",
+      "body>#menuPanel button{display:block!important;width:100%!important;min-height:38px!important;height:auto!important;padding:8px 11px!important;margin:0!important;border:0!important;border-radius:8px!important;background:#fff!important;color:#526057!important;font-size:14px!important;font-weight:600!important;line-height:1.3!important;text-align:left!important;white-space:normal!important;overflow-wrap:anywhere!important}",
+      "body>#menuPanel button.active{background:#ecfdf3!important;color:#14532d!important}",
+      "@media(max-width:700px){#nav{display:block!important;position:relative!important;z-index:1200!important;overflow:visible!important;padding:8px 12px!important}#nav .nav-dropdown{display:block!important;width:min(300px,calc(100vw - 24px))!important;position:relative!important}#nav #menuToggle{width:100%!important;min-height:50px!important;font-size:17px!important}}"
+    ].join("\n");
+    document.head.appendChild(style);
   }
-
-  if(document.readyState === "loading"){
-    document.addEventListener(
-      "DOMContentLoaded",
-      installDefinitiveMobileNav
-    );
-  }else{
-    installDefinitiveMobileNav();
-  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",installStableDashboardMenu);
+  else installStableDashboardMenu();
 })();
-
-/* Definitive mobile menu appearance */
-(function(){
-  const style=document.createElement("style");
-
-  style.textContent=`
-    @media(max-width:700px){
-
-      #nav{
-        display:block !important;
-        padding:8px 12px !important;
-        background:#fff !important;
-        position:sticky !important;
-        top:0 !important;
-        z-index:1000 !important;
-        overflow:visible !important;
-      }
-
-      #nav .mobile-nav-toggle-final{
-        display:flex !important;
-        width:100% !important;
-        min-height:58px !important;
-        align-items:center !important;
-        justify-content:space-between !important;
-        padding:0 18px !important;
-        margin:0 !important;
-        border:1px solid #e2e8e4 !important;
-        border-radius:16px !important;
-        background:#fff !important;
-        color:#14532d !important;
-        font-size:20px !important;
-        font-weight:800 !important;
-        box-shadow:0 4px 18px rgba(15,23,42,.08) !important;
-      }
-
-      #nav .mobile-nav-left-final{
-        display:flex !important;
-        align-items:center !important;
-        gap:14px !important;
-      }
-
-      #nav .mobile-nav-icon-final{
-        font-size:28px !important;
-        line-height:1 !important;
-      }
-
-      #nav #menuToggle{
-        display:none !important;
-      }
-
-      #nav .nav-dropdown{
-        display:block !important;
-        width:100% !important;
-        position:static !important;
-      }
-
-      #nav #menuPanel{
-        display:none !important;
-        position:static !important;
-        width:100% !important;
-        max-height:58vh !important;
-        overflow-y:auto !important;
-        margin-top:8px !important;
-        padding:7px !important;
-        background:#fff !important;
-        border:1px solid #e2e8e4 !important;
-        border-radius:14px !important;
-        box-shadow:0 10px 28px rgba(15,23,42,.12) !important;
-      }
-
-      #nav.mobile-nav-open #menuPanel{
-        display:flex !important;
-        flex-direction:column !important;
-      }
-
-      #nav.mobile-nav-open #menuPanel button[data-page]{
-        display:flex !important;
-        width:100% !important;
-        min-height:44px !important;
-        align-items:center !important;
-        justify-content:flex-start !important;
-        margin:3px 0 !important;
-        padding:10px 13px !important;
-        border-radius:10px !important;
-        white-space:normal !important;
-        text-align:left !important;
-      }
-
-      #nav.mobile-nav-open #menuPanel button[data-page].active{
-        background:#ecfdf3 !important;
-        color:#14532d !important;
-        font-weight:800 !important;
-      }
-    }
-
-    @media(min-width:701px){
-      #nav .mobile-nav-toggle-final{
-        display:none !important;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
-})();
-
-/* =========================================================
-   FINAL MOBILE MENU SIZE — COMPACT LEFT DROPDOWN
-   ========================================================= */
-(function(){
-  const style=document.createElement("style");
-
-  style.textContent=`
-    @media(max-width:700px){
-
-      #nav{
-        display:block !important;
-        padding:8px 12px !important;
-        position:sticky !important;
-        top:0 !important;
-        z-index:1000 !important;
-      }
-
-      #nav .mobile-nav-toggle-final{
-        width:300px !important;
-        max-width:calc(100vw - 24px) !important;
-        min-height:54px !important;
-        justify-content:space-between !important;
-        margin:0 !important;
-      }
-
-      #nav .nav-dropdown{
-        width:300px !important;
-        max-width:calc(100vw - 24px) !important;
-        position:relative !important;
-        display:block !important;
-      }
-
-      #nav #menuPanel{
-        position:absolute !important;
-        top:calc(100% + 8px) !important;
-        left:0 !important;
-        width:300px !important;
-        max-width:calc(100vw - 24px) !important;
-        max-height:60vh !important;
-        overflow-y:auto !important;
-        margin:0 !important;
-        padding:7px !important;
-        border-radius:14px !important;
-        background:#fff !important;
-        box-shadow:0 12px 30px rgba(15,23,42,.18) !important;
-        z-index:2000 !important;
-      }
-
-      #nav:not(.mobile-nav-open) #menuPanel{
-        display:none !important;
-      }
-
-      #nav.mobile-nav-open #menuPanel{
-        display:flex !important;
-        flex-direction:column !important;
-      }
-
-      #nav.mobile-nav-open #menuPanel button[data-page]{
-        min-height:42px !important;
-        padding:9px 12px !important;
-        margin:2px 0 !important;
-        border-radius:9px !important;
-        width:100% !important;
-        font-size:14px !important;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
-})();
-
-/* FINAL COMPACT MOBILE MENU */
-(function(){
-  const s=document.createElement("style");
-  s.textContent=`
-    @media(max-width:700px){
-      #nav .mobile-nav-toggle-final{
-        width:190px !important;
-        max-width:190px !important;
-        min-height:42px !important;
-        padding:0 11px !important;
-        border-radius:10px !important;
-        font-size:14px !important;
-        box-shadow:0 2px 8px rgba(15,23,42,.08) !important;
-      }
-
-      #nav .mobile-nav-left-final{
-        gap:8px !important;
-      }
-
-      #nav .mobile-nav-icon-final{
-        font-size:19px !important;
-      }
-
-      #nav .nav-dropdown{
-        width:190px !important;
-        max-width:190px !important;
-      }
-
-      #nav #menuPanel{
-        width:190px !important;
-        max-width:190px !important;
-        max-height:45vh !important;
-        padding:5px !important;
-        top:calc(100% + 5px) !important;
-        border-radius:10px !important;
-      }
-
-      #nav.mobile-nav-open #menuPanel button[data-page]{
-        min-height:34px !important;
-        padding:6px 9px !important;
-        margin:1px 0 !important;
-        border-radius:7px !important;
-        font-size:12px !important;
-      }
-    }
-  `;
-  document.head.appendChild(s);
-})();
-
 
 /* MCN DESKTOP MENU JAVASCRIPT FIX */
 (function () {

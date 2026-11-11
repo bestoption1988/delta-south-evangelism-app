@@ -1980,6 +1980,12 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     var link = event.target.closest('a[href]');
                                     if (!link) return;
                                     var href = link.getAttribute('href') || '';
+                                    if (href === 'mcn-app://home') {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      window.location.replace('file:///android_asset/offline-home/index.html');
+                                      return;
+                                    }
                                     if (/^https?:/i.test(href) && link.target && link.target.toLowerCase() !== '_self') {
                                       event.preventDefault();
                                       window.location.assign(link.href);
