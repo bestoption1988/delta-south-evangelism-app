@@ -103,10 +103,10 @@ private fun offlineDailyReadingScript(daily: JSONObject, hymnRows: JSONArray): S
           }
           const scriptureTicker = document.querySelector('.scripture-ticker .daily-ticker-text');
           const hymnTicker = document.querySelector('.hymn-ticker .daily-ticker-text');
-          if (scriptureTicker) scriptureTicker.textContent = reference + ' — ' + verseText.replace(/\\s+/g, ' ');
-          if (hymnTicker) hymnTicker.textContent = title + ' — ' + lyrics.replace(/\\s+/g, ' ');
-          setText('#dailyScriptureFull', reference + '\\n\\n' + verseText);
-          setText('#dailyHymnFull', title + '\\n\\n' + lyrics);
+          if (scriptureTicker) scriptureTicker.textContent = reference + ' — ' + verseText.replace(/\s+/g, ' ');
+          if (hymnTicker) hymnTicker.textContent = title + ' — ' + lyrics.replace(/\s+/g, ' ');
+          setText('#dailyScriptureFull', reference + '\n\n' + verseText);
+          setText('#dailyHymnFull', title + '\n\n' + lyrics);
           const date = daily.date || '';
           setText('.daily-reading-modal-footer span', date);
           if (date) {
