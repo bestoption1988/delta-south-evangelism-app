@@ -266,7 +266,7 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
         val name=Uri.decode(u.path!!.substringAfterLast('/'))
         if(name.isBlank()||name.contains("/")||name.contains(".."))return null
         val f=(sequenceOf(d(c),File(d(c),"Church_Media"),File(d(c),"Bible")) + (d(c).listFiles()?.filter{it.isDirectory}?.asSequence()?:emptySequence())).map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0} ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0} ?: return null
-        val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
+        val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"avif"->"image/avif";"svg"->"image/svg+xml";"pdf"->"application/pdf";else->"application/octet-stream"}
         WebResourceResponse(mime,null,f.inputStream())
     }.getOrNull()
 }
