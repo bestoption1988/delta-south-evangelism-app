@@ -220,6 +220,51 @@ object OfflineModuleManager {
         return root.toString()
     }
 
+    private fun cacheHomepageImages(context: Context, source: String): String {
+        val root = runCatching { JSONObject(source) }.getOrNull() ?: return source
+        val folder = File(context.filesDir, "offline_storage/homepage_media").apply { mkdirs() }
+        var saved = 0
+        fun fetch(url: String, stem: String): String {
+            if (url.isBlank()) return ""
+            return runCatching {
+                val fullUrl = if (url.startsWith("http://") || url.startsWith("https://")) url
+                    else BuildConfig.API_BASE_URL.trimEnd('/') + "/" + url.trimStart('/')
+                val request = Request.Builder().url(fullUrl).get().build()
+                Backend.client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use ""
+                    val body = response.body ?: return@use ""
+                    val mime = body.contentType()?.toString()?.substringBefore(';')?.lowercase(Locale.ROOT).orEmpty()
+                    if (!mime.startsWith("image/")) return@use ""
+                    val ext = when (mime) {
+                        "image/png" -> ".png"
+                        "image/webp" -> ".webp"
+                        "image/gif" -> ".gif"
+                        "image/svg+xml" -> ".svg"
+                        else -> ".jpg"
+                    }
+                    val target = File(folder, stem + ext)
+                    val part = File(folder, target.name + ".part")
+                    val bytes = body.bytes()
+                    if (bytes.isEmpty()) return@use ""
+                    part.writeBytes(bytes)
+                    if (target.exists()) target.delete()
+                    if (!part.renameTo(target)) { part.copyTo(target, overwrite = true); part.delete() }
+                    saved++
+                    target.name
+                }
+            }.getOrDefault("")
+        }
+        val gallery = root.optJSONArray("gallery")
+        if (gallery != null) for (index in 0 until gallery.length()) {
+            val item = gallery.optJSONObject(index) ?: continue
+            val id = item.optString("id", index.toString()).ifBlank { index.toString() }
+            val file = fetch(item.optString("signed_url"), "homepage-gallery-$id")
+            if (file.isNotBlank()) item.put("offline_file", file)
+        }
+        android.util.Log.i("MCNOffline", "Saved $saved homepage gallery image(s)")
+        return root.toString()
+    }
+
     fun downloadAll(context: Context, onProgress: (String, Int) -> Unit = { _, _ -> }): OfflineDownloadSummary {
         Backend.initialize(context.applicationContext)
         var downloaded = 0
@@ -250,7 +295,9 @@ object OfflineModuleManager {
                                 else -> ""
                             }
                             if (snapshotName.isNotBlank()) {
-                                if (path.startsWith("api/public/fellowships/") && bodyText.isNotBlank()) {
+                                if (path == "api/public/homepage" && bodyText.isNotBlank()) {
+                                    bodyText = cacheHomepageImages(context, bodyText)
+                                } else if (path.startsWith("api/public/fellowships/") && bodyText.isNotBlank()) {
                                     bodyText = cacheFellowshipImages(context, path, bodyText)
                                 }
                                 val target = File(snapshotDir, snapshotName)
