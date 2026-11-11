@@ -259,7 +259,7 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
         } finally { db.close() }
         WebResourceResponse("application/json","UTF-8",200,"OK",mapOf("Access-Control-Allow-Origin" to "*"),json.byteInputStream())
     }.getOrNull()
-    fun fileResponse(c:Context,url:String):WebResourceResponse?=runCatching{
+    fun fileResponse(c:Context,url:String,rangeHeader:String?=null):WebResourceResponse?=runCatching{
         val u=Uri.parse(url)
         bibleJsonResponse(c,u)?.let{return it}
         if(!u.path.orEmpty().startsWith("/__mcn_offline/file/"))return null
@@ -267,6 +267,27 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
         if(name.isBlank()||name.contains("/")||name.contains(".."))return null
         val f=(sequenceOf(d(c),File(d(c),"Church_Media"),File(d(c),"Bible")) + (d(c).listFiles()?.filter{it.isDirectory}?.asSequence()?:emptySequence())).map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0} ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0} ?: return null
         val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
-        WebResourceResponse(mime,null,f.inputStream())
+        val length=f.length()
+        val headers=linkedMapOf("Accept-Ranges" to "bytes","Content-Type" to mime,"Content-Length" to length.toString())
+        val range=Regex("^bytes=(\\d*)-(\\d*)$").matchEntire(rangeHeader.orEmpty().trim())
+        if(range!=null){
+            val start=range.groupValues[1].toLongOrNull() ?: 0L
+            val requestedEnd=range.groupValues[2].toLongOrNull()
+            val end=(requestedEnd ?: (length-1)).coerceAtMost(length-1)
+            if(start>=length||end<start)return WebResourceResponse("text/plain","UTF-8",416,"Range Not Satisfiable",mapOf("Content-Range" to "bytes */$length"),"".byteInputStream())
+            val count=end-start+1
+            val input=java.io.RandomAccessFile(f,"r")
+            input.seek(start)
+            val limited=object:java.io.InputStream(){
+                var remaining=count
+                override fun read():Int{if(remaining<=0)return -1;val value=input.read();if(value>=0)remaining--;return value}
+                override fun read(buffer:ByteArray,offset:Int,len:Int):Int{if(remaining<=0)return -1;val n=input.read(buffer,offset,minOf(len.toLong(),remaining).toInt());if(n>0)remaining-=n;return n}
+                override fun close(){input.close()}
+            }
+            headers["Content-Length"]=count.toString()
+            headers["Content-Range"]="bytes $start-$end/$length"
+            return WebResourceResponse(mime,null,206,"Partial Content",headers,limited)
+        }
+        WebResourceResponse(mime,null,200,"OK",headers,f.inputStream())
     }.getOrNull()
 }
