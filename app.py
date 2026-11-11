@@ -12636,7 +12636,7 @@ def devotional_centre_audio(resource_id):
         range_header = request.headers.get("Range", "").strip()
         start, end, status_code = 0, total_size - 1, 200
         if range_header:
-            match = re.fullmatch(r"bytes=(\\d*)-(\\d*)", range_header)
+            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header)
             if not match:
                 return Response(status=416, headers={"Content-Range": f"bytes */{total_size}"})
             start = int(match.group(1) or 0)
