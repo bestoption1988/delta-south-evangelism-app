@@ -5200,18 +5200,8 @@ document.addEventListener("DOMContentLoaded", function () {
       closeDashboardMenu();
     });
 
-    // A delegated capture handler guarantees that dashboard section choices still
-    // work after the panel is moved outside its original nav container.
-    panel.addEventListener("click",function(event){
-      const pageButton = event.target.closest("button[data-page]");
-      if(!pageButton) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      const page = pageButton.dataset.page;
-      if(typeof window.nav === "function") window.nav(page);
-      closeDashboardMenu();
-    },true);
-
+    // Dashboard items retain the original click handlers registered by app.js.
+    // Do not intercept or stop their events here: those handlers call nav(page).
     function positionPanel(){
       const rect = toggle.getBoundingClientRect();
       const width = Math.min(300, Math.max(220, window.innerWidth - 24));
