@@ -1975,14 +1975,17 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   if (location.protocol === 'file:') {
                                     var liveBase = ${JSONObject.quote(BuildConfig.API_BASE_URL.trimEnd('/'))};
                                     var online = ${onlineState};
+                                    var normalizeProtectedPath = function(path) {
+                                      return (path || '/').replace(/^\/android_asset\/offline-home(?=\/|$)/i, '') || '/';
+                                    };
                                     var protectedPath = function(path) {
-                                      return /^\/(login|logout|register|registration|member|member-portal|member_portal|portal|account|auth|password|reset-password|forgot-password|payment|payments|giving|donate|donation|checkout|flutterwave|new-member|membership\/register|apply|application)(\/|$)/i.test(path || '/');
+                                      return /^\/(login|logout|register|registration|member|member-portal|member_portal|portal|account|auth|password|reset-password|forgot-password|payment|payments|giving|donate|donation|checkout|flutterwave|new-member|membership\/register|apply|application)(\/|$)/i.test(normalizeProtectedPath(path));
                                     };
                                     document.querySelectorAll('form').forEach(function(form) {
                                       var action = new URL(form.getAttribute('action') || location.href, location.href);
                                       if (!protectedPath(action.pathname)) return;
                                       if (online) {
-                                        form.action = liveBase + action.pathname + action.search + action.hash;
+                                        form.action = liveBase + normalizeProtectedPath(action.pathname) + action.search + action.hash;
                                       } else {
                                         form.addEventListener('submit', function(event) {
                                           event.preventDefault();
