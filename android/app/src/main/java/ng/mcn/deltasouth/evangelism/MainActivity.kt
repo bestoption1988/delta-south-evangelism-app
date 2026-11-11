@@ -2227,9 +2227,12 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 (function() {
                                   // Apply this handler only to the public diocesan homepage.
                                   // Dashboard and member navigation are deliberately excluded.
-                                  if (window.location.pathname !== '/' ||
-                                      !document.querySelector('body .topbar') ||
+                                  // The offline homepage may be loaded from a file:// archive,
+                                  // so identify it by its own public-home DOM, not its URL path.
+                                  if (!document.querySelector('body .topbar') ||
                                       !document.getElementById('home') ||
+                                      !document.getElementById('dsMenuToggle') ||
+                                      !document.querySelector('.ds-site-nav') ||
                                       window.__mcnPublicHomeMenuBridge) return;
                                   var updateLink = document.getElementById('saveOfflineApp');
                                   if (updateLink) updateLink.textContent = 'Update Offline Content';
