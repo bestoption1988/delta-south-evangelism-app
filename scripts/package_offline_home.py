@@ -65,6 +65,16 @@ html = index.read_text(encoding="utf-8", errors="replace")
 if "METHODIST CHURCH NIGERIA" not in html or "DELTA SOUTH DIOCESE" not in html:
     raise SystemExit("Downloaded page is not the official Delta South Diocese homepage.")
 
+# The offline archive must contain images from every section, not only the
+# first viewport. Lazy-loaded leadership portraits and gallery images otherwise
+# remain blank when the MHTML is opened without a network connection.
+html = re.sub(
+    r"""\sloading\s*=\s*([\"'])lazy\\1""",
+    ' loading="eager"',
+    html,
+    flags=re.I,
+)
+
 # A file:// page resolves leading-slash resources to file:///static.
 # Rewrite root-relative URLs to the live same-origin host so MainActivity's
 # WebView interceptor can serve those requests from assets/offline-home.
