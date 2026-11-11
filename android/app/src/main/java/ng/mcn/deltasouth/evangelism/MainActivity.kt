@@ -126,18 +126,26 @@ private fun offlineHomepageImagesScript(snapshot: JSONObject): String {
         (function() {
           const data = $payload;
           const localFile = name => 'https://offline.mcn-app/__mcn_offline/file/' + encodeURIComponent(name);
+          const normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
           (data.leadership || []).forEach(profile => {
             if (!profile.offline_file) return;
-            const title = String(profile.title || '').toLowerCase();
-            document.querySelectorAll('[data-leadership-title]').forEach(img => {
-              if (String(img.getAttribute('data-leadership-title') || '').toLowerCase() === title) {
-                img.src = localFile(profile.offline_file);
-              }
-            });
+            const title = normalize(profile.title);
+            let images = Array.from(document.querySelectorAll('[data-leadership-title]')).filter(img =>
+              normalize(img.getAttribute('data-leadership-title')) === title
+            );
+            if (!images.length) {
+              const card = Array.from(document.querySelectorAll('.leader-card')).find(node =>
+                normalize(node.querySelector('.eyebrow')?.textContent) === title
+              );
+              const image = card && card.querySelector('img');
+              if (image) images = [image];
+            }
+            images.forEach(img => { img.src = localFile(profile.offline_file); });
           });
-          (data.gallery || []).forEach(photo => {
+          (data.gallery || []).forEach((photo, index) => {
             if (!photo.offline_file) return;
-            const image = document.querySelector('[data-gallery-media-id="' + String(photo.id) + '"]');
+            let image = document.querySelector('[data-gallery-media-id="' + String(photo.id) + '"]');
+            if (!image) image = document.querySelectorAll('[data-gallery-slide] img')[index];
             if (image) image.src = localFile(photo.offline_file);
           });
         })();
