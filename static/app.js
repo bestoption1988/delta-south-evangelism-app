@@ -5183,6 +5183,35 @@ document.addEventListener("DOMContentLoaded", function () {
     toggle.setAttribute("aria-controls","menuPanel");
     toggle.dataset.stableDashboardMenu = "1";
 
+    // Add a visible close control inside the menu; users should never need to tap
+    // a hidden toggle behind the open panel.
+    let closeButton = panel.querySelector("#dashboardMenuClose");
+    if(!closeButton){
+      closeButton = document.createElement("button");
+      closeButton.type = "button";
+      closeButton.id = "dashboardMenuClose";
+      closeButton.textContent = "Close menu  ×";
+      closeButton.setAttribute("aria-label","Close dashboard menu");
+      panel.insertBefore(closeButton,panel.firstChild);
+    }
+    closeButton.addEventListener("click",function(event){
+      event.preventDefault();
+      event.stopPropagation();
+      closeDashboardMenu();
+    });
+
+    // A delegated capture handler guarantees that dashboard section choices still
+    // work after the panel is moved outside its original nav container.
+    panel.addEventListener("click",function(event){
+      const pageButton = event.target.closest("button[data-page]");
+      if(!pageButton) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const page = pageButton.dataset.page;
+      if(typeof nav === "function") nav(page);
+      closeDashboardMenu();
+    },true);
+
     function positionPanel(){
       const rect = toggle.getBoundingClientRect();
       const width = Math.min(300, Math.max(220, window.innerWidth - 24));
@@ -5241,6 +5270,7 @@ document.addEventListener("DOMContentLoaded", function () {
       "body>#menuPanel.open{display:flex!important;flex-direction:column!important;gap:2px!important}",
       "body>#menuPanel button{display:block!important;width:100%!important;min-height:38px!important;height:auto!important;padding:8px 11px!important;margin:0!important;border:0!important;border-radius:8px!important;background:#fff!important;color:#526057!important;font-size:14px!important;font-weight:600!important;line-height:1.3!important;text-align:left!important;white-space:normal!important;overflow-wrap:anywhere!important}",
       "body>#menuPanel button.active{background:#ecfdf3!important;color:#14532d!important}",
+      "body>#menuPanel #dashboardMenuClose{position:sticky!important;top:0!important;z-index:2!important;background:#14532d!important;color:#fff!important;text-align:center!important;font-weight:800!important;min-height:44px!important;margin-bottom:5px!important}",
       "@media(max-width:700px){#nav{display:block!important;position:relative!important;z-index:1200!important;overflow:visible!important;padding:8px 12px!important}#nav .nav-dropdown{display:block!important;width:min(300px,calc(100vw - 24px))!important;position:relative!important}#nav #menuToggle{width:100%!important;min-height:50px!important;font-size:17px!important}}"
     ].join("\n");
     document.head.appendChild(style);
