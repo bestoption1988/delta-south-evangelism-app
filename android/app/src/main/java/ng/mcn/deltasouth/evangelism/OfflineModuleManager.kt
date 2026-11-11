@@ -242,8 +242,14 @@ object OfflineModuleManager {
                 val item = leaders.optJSONObject(index) ?: continue
                 val id = item.optString("id", index.toString()).ifBlank { index.toString() }
                 val title = item.optString("title", "leader").replace(Regex("[^A-Za-z0-9_-]"), "-")
-                val file = cacheRemoteImage(context, item.optString("photo_url"), "diocese-$title-$id", "homepage_media")
-                if (file.isNotBlank()) { item.put("offline_file", file); saved++ }
+                val photoUrl = item.optString("public_photo_url").ifBlank {
+                    item.optString("photo_url").ifBlank { item.optString("photo_path") }
+                }
+                val file = cacheRemoteImage(context, photoUrl, "diocese-$title-$id", "homepage_media")
+                if (file.isNotBlank()) {
+                    item.put("offline_file", file)
+                    saved++
+                }
             }
         }
         val gallery = root.optJSONArray("gallery")
@@ -349,7 +355,7 @@ object OfflineModuleManager {
                 val bible = downloadBibleModules(context) { stage, percent -> onProgress(stage, percent.coerceIn(0, 95)) }
                 val lectionary = downloadLectionary(context)
                 val audio = runCatching { downloadHymnAudio(context) { stage, percent -> onProgress(stage, percent.coerceIn(0, 95)) } }.getOrDefault(0)
-                saved = collections + bible + if (lectionary) 1 else 0 + audio
+                saved = collections + bible + (if (lectionary) 1 else 0) + audio
                 onProgress("Worship resources updated", 100)
             }
             "media" -> {
