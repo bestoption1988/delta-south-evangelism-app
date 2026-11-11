@@ -82,12 +82,14 @@ class MainActivity : ComponentActivity() {
         Thread {
             runCatching { OfflineModuleManager.removeLegacyBibleFiles(applicationContext) }
             runCatching { OfflineModuleManager.migrateToCardFolders(applicationContext) }
-            // Background refresh is disabled: users update only when they deliberately choose Update.
+            // Keep the full media package user-initiated, but refresh the tiny daily
+            // Scripture/hymn payload automatically whenever a connection is available.
             runCatching {
                 androidx.work.WorkManager.getInstance(applicationContext)
                     .cancelUniqueWork("mcn-delta-south-offline-refresh")
                 androidx.work.WorkManager.getInstance(applicationContext)
                     .cancelUniqueWork("mcn-delta-south-offline-refresh-now")
+                OfflineModuleManager.scheduleDailyReadingUpdates(applicationContext)
             }
         }.start()
     }
@@ -229,8 +231,8 @@ private fun NativeDioceseApp() {
             }
         }
     }
-    // First connected launch creates the on-device package once. Later launches never
-    // refresh from Naijacloud automatically; refresh is user-initiated from the homepage.
+    // The full offline media package is user-initiated; the small daily reading
+    // snapshot refreshes automatically when connectivity returns.
     LaunchedEffect(signedIn, online) {
         if (signedIn) {
             if (online) {
