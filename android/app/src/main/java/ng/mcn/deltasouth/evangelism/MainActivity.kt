@@ -2037,7 +2037,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             val isBundledOfflineHome = url?.startsWith("file:///android_asset/offline-home/") == true
                             val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                             val isLivePublicHome = finishedUri?.host == configuredHost &&
-                                (finishedUri.path.isNullOrBlank() || finishedUri.path == "/")
+                                (finishedUri?.path.isNullOrBlank() == true || finishedUri?.path == "/")
                             if (isBundledOfflineHome || isLivePublicHome) {
                                 view.evaluateJavascript(menuBridge, null)
                             }
