@@ -9,7 +9,7 @@ function close(){modal.hidden=true;document.body.classList.remove("daily-reading
 document.querySelectorAll("[data-reading-source]").forEach(function(trigger){
 trigger.addEventListener("click",function(){
 var source=document.getElementById(trigger.getAttribute("data-reading-source"));if(!source)return;
-lastTrigger=trigger;title.textContent=trigger.getAttribute("data-reading-title")||"Daily Reading";body.textContent=source.textContent.trim();body.scrollTop=0;modal.hidden=false;document.body.classList.add("daily-reading-modal-open");window.setTimeout(function(){body.focus();},30);
+lastTrigger=trigger;title.textContent=trigger.getAttribute("data-reading-title")||"Daily Reading";var content=source.cloneNode(true);content.removeAttribute("id");body.replaceChildren(content);body.scrollTop=0;modal.hidden=false;document.body.classList.add("daily-reading-modal-open");window.setTimeout(function(){body.focus();},30);
 });
 });
 modal.querySelectorAll("[data-daily-close]").forEach(function(el){el.addEventListener("click",close);});

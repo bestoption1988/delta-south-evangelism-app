@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#08245b">
 <meta name="description" content="Methodist Church Nigeria, Delta South Diocese — Worship, Witness, Service and Discipleship.">
 <title>Methodist Church Nigeria | Delta South Diocese</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261107-web-popup-android-inline2">
+<link rel="stylesheet" href="{{ url_for('static', filename='public_home.css') }}?v=20261112-online-reading-modal-fix1">
 
 <style>
 .pdf-book-preview {
@@ -117,7 +117,23 @@
   </div>
   <div class="daily-reading-accessible-content" aria-hidden="true">
     <div id="dailyScriptureFull">{{ daily_reading.get("verse", {}).get("reference") or "Scripture for Today" }}&#10;&#10;{{ daily_reading.get("verse", {}).get("text") or "Open the Bible and spend time in God’s Word today." }}</div>
-    <div id="dailyHymnFull">{{ daily_reading.get("hymn", {}).get("title") or "Methodist Hymn for Today" }}&#10;&#10;{{ daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection." }}</div>
+    <div id="dailyHymnFull">
+      <div class="daily-reading-hymn-text">{{ daily_reading.get("hymn", {}).get("title") or "Methodist Hymn for Today" }}&#10;&#10;{{ daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection." }}</div>
+      {% if daily_reading.get("hymn", {}).get("audio_url") %}
+      <div class="daily-reading-audio">
+        <p class="daily-reading-audio-title">♫ {{ daily_reading.get("hymn", {}).get("audio_tune_name") or "Main hymn tune" }}</p>
+        <audio controls preload="none" playsinline src="{{ daily_reading.get('hymn', {}).get('audio_url') }}">Your browser does not support audio playback.</audio>
+      </div>
+      {% endif %}
+      {% for tune in daily_reading.get("hymn", {}).get("other_tunes", []) %}
+        {% if tune.get("audio_url") %}
+        <div class="daily-reading-audio">
+          <p class="daily-reading-audio-title">♫ {{ tune.get("musicTitle") or tune.get("tuneName") or tune.get("musicName") or tune.get("tune") or ("Alternate tune " ~ loop.index) }}</p>
+          <audio controls preload="none" playsinline src="{{ tune.get('audio_url') }}">Your browser does not support audio playback.</audio>
+        </div>
+        {% endif %}
+      {% endfor %}
+    </div>
   </div>
   <div class="daily-reading-modal" id="dailyReadingModal" hidden role="dialog" aria-modal="true" aria-labelledby="dailyReadingModalTitle">
     <div class="daily-reading-modal-backdrop" data-daily-close></div>
@@ -1008,6 +1024,6 @@
 })();
 </script>
 <footer style="text-align:center;padding:24px 14px;font:14px Arial,sans-serif;background:#f4f6fa"><a href="/privacy-policy">Privacy Policy</a> · <a href="/account-deletion">Account and Data Deletion</a> · <a href="mailto:bestoption1988@gmail.com">Support</a></footer>
-<script src="{{ url_for('static', filename='daily-reading.js') }}?v=20261107-ticker-modal1" defer></script>
+<script src="{{ url_for('static', filename='daily-reading.js') }}?v=20261112-online-reading-modal-fix1" defer></script>
 </body>
 </html>

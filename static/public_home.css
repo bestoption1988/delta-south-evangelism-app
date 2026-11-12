@@ -1207,3 +1207,14 @@ html.mcn-android-app .daily-preview-audio-label {
 html.mcn-android-app .daily-preview-audio {
   display:block!important;width:100%!important;max-width:100%!important;min-height:46px!important;
 }
+
+
+/* Online daily-reading modal: sit above the sticky navigation and size to its content. */
+.daily-reading-modal{z-index:100200!important;padding:3vh 3vw!important}
+.daily-reading-modal-panel{height:auto!important;max-height:90vh!important;max-height:90dvh!important}
+.daily-reading-modal-body{flex:0 1 auto!important;max-height:70vh!important;max-height:70dvh!important;min-height:48px!important}
+.daily-reading-modal-body .daily-reading-hymn-text{white-space:pre-wrap}
+.daily-reading-audio{margin-top:18px;padding:14px;background:#f2f5fa;border:1px solid #dce3ef;border-radius:10px}
+.daily-reading-audio-title{margin:0 0 9px;color:#173568;font:700 14px/1.4 Arial,sans-serif}
+.daily-reading-audio audio{display:block;width:100%;max-width:100%;min-height:42px}
+@media(max-width:700px){.daily-reading-modal{padding:3vh 3vw!important}.daily-reading-modal-panel{width:94vw!important;max-height:90vh!important;max-height:90dvh!important}.daily-reading-modal-body{max-height:70vh!important;max-height:70dvh!important;padding:17px!important;font-size:18px!important;line-height:1.7!important}.daily-reading-audio{padding:11px}}
