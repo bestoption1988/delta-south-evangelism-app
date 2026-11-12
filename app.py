@@ -12594,90 +12594,6 @@ def devotional_centre_collection(collection_slug):
                            total=total, pages=max(1, (total + per_page - 1) // per_page))
 
 
-@app.get("/devotional-centre/audio/<path:resource_id>")
-def devotional_centre_audio(resource_id):
-    """Serve published hymn audio from object storage with byte-range support for Android WebView."""
-    import mimetypes as _mimetypes
-
-    row = db().execute(
-        "SELECT audio_path, content_json FROM devotional_resources WHERE resource_id=? AND "
-        "LOWER(CAST(published AS TEXT)) IN ('1','true','t') LIMIT 1",
-        (resource_id,),
-    ).fetchone()
-    if not row:
-        return "Hymn recording not found.", 404
-
-    try:
-        payload = json.loads(dict(row).get("content_json") or "{}")
-    except (TypeError, ValueError, json.JSONDecodeError):
-        payload = {}
-    tune = (request.args.get("tune") or "main").strip()
-    if tune == "main":
-        object_path = dict(row).get("audio_path") or payload.get("musicFilePath") or ""
-    else:
-        try:
-            tune_index = int(tune)
-            tunes = payload.get("otherTunes") or []
-            selected = tunes[tune_index] if 0 <= tune_index < len(tunes) else {}
-            object_path = (selected.get("musicFilePath") or selected.get("audio_path") or "") if isinstance(selected, dict) else ""
-        except (TypeError, ValueError):
-            object_path = ""
-    if not object_path:
-        return "Hymn recording not found.", 404
-
-    try:
-        size_result = _dc_s3_client().head_object(
-            Bucket=_dc_s3_bucket(), Key=str(object_path).lstrip("/")
-        )
-        total_size = int(size_result.get("ContentLength") or 0)
-        if total_size <= 0:
-            return "Hymn recording is empty.", 404
-
-        range_header = request.headers.get("Range", "").strip()
-        start, end, status_code = 0, total_size - 1, 200
-        if range_header:
-            match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header)
-            if not match:
-                return Response(status=416, headers={"Content-Range": f"bytes */{total_size}"})
-            start = int(match.group(1) or 0)
-            end = min(int(match.group(2)) if match.group(2) else total_size - 1, total_size - 1)
-            if start >= total_size or end < start:
-                return Response(status=416, headers={"Content-Range": f"bytes */{total_size}"})
-            status_code = 206
-
-        params = {"Bucket": _dc_s3_bucket(), "Key": str(object_path).lstrip("/")}
-        if status_code == 206:
-            params["Range"] = f"bytes={start}-{end}"
-        stored = _dc_s3_client().get_object(**params)
-        body = stored["Body"]
-        content_type = (
-            stored.get("ContentType")
-            or _mimetypes.guess_type(str(object_path))[0]
-            or "audio/mpeg"
-        )
-        headers = {
-            "Accept-Ranges": "bytes",
-            "Content-Length": str(end - start + 1),
-            "Cache-Control": "public, max-age=300",
-            "Content-Disposition": "inline",
-        }
-        if status_code == 206:
-            headers["Content-Range"] = f"bytes {start}-{end}/{total_size}"
-
-        def stream_audio():
-            try:
-                for chunk in body.iter_chunks(chunk_size=64 * 1024):
-                    if chunk:
-                        yield chunk
-            finally:
-                body.close()
-
-        return Response(stream_audio(), status=status_code, mimetype=content_type, headers=headers, direct_passthrough=True)
-    except Exception:
-        app.logger.exception("Could not stream published hymn audio for resource %s", resource_id)
-        return "Hymn recording is temporarily unavailable.", 503
-
-
 @app.get("/devotional-centre/item/<path:resource_id>")
 def devotional_centre_item(resource_id):
     row = db().execute(
@@ -13829,10 +13745,6 @@ def api_public_homepage():
                 except Exception:
                     item["signed_url"] = ""
                 item["original_name"] = str(item.get("storage_path") or "").rsplit("/", 1)[-1]
-                if image_only and item.get("id") is not None:
-                    item["offline_image_url"] = url_for(
-                        "media_document_view", media_id=item["id"], raw="1"
-                    )
                 destination.append(item)
         except Exception:
             app.logger.exception("Native homepage published media could not be loaded")

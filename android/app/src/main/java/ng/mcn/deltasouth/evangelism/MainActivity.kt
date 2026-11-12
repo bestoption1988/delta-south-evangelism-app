@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
                 android.webkit.ServiceWorkerController.getInstance().setServiceWorkerClient(
                     object : android.webkit.ServiceWorkerClient() {
                         override fun shouldInterceptRequest(request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                            OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString(), request.requestHeaders["Range"])?.let { return it }
+                            OfflineDevotionalPage.fileResponse(applicationContext, request.url.toString())?.let { return it }
                             if (!networkAvailable(applicationContext)) {
                                 val localBible = OfflineModuleManager.cachedBibleModuleResponse(applicationContext, request.url.toString())
                                 if (localBible != null) {
@@ -262,12 +262,12 @@ private fun NativeDioceseApp() {
             onOfflineDownload = { homepageView ->
                 if (online && !downloadBusy) {
                     downloadBusy = true
-                    downloadMessage = "Updating offline content without interrupting the current page…"
+                    downloadMessage = "Updating the saved homepage and offline content…"
                     downloadProgress = 0
                     downloadStage = "Checking for updated diocesan content…"
-                    // Do not navigate or reload this WebView during an update. It may be
-                    // displaying a hymn/audio player; navigation would stop playback and
-                    // replace the user's current page even though the download is separate.
+                    // Only this deliberate action contacts the live homepage for a fresh copy.
+                    homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+                    homepageView.loadUrl(BuildConfig.API_BASE_URL)
                     scope.launch {
                         val result = withContext(Dispatchers.IO) {
                             runCatching {
@@ -286,8 +286,18 @@ private fun NativeDioceseApp() {
                             downloadMessage = error.message ?: "The offline package could not be updated."
                             android.widget.Toast.makeText(appContext, downloadMessage, android.widget.Toast.LENGTH_LONG).show()
                         }
-                        // Keep the current page and any active hymn playback intact.
-                        // Downloaded resources are saved independently in app-private storage.
+                        // Return to the on-device homepage when the deliberate update is finished.
+                        // Return to the same real homepage, preferring the latest archive saved
+                        // during this explicit update and otherwise the APK-bundled first-install copy.
+                        homepageView.post {
+                            homepageView.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
+                            val savedHomepage = File(appContext.filesDir, "offline_homepage/diocesan-homepage.mht")
+                            if (savedHomepage.isFile && savedHomepage.length() > 0L) {
+                                homepageView.loadUrl(android.net.Uri.fromFile(savedHomepage).toString())
+                            } else {
+                                homepageView.loadUrl("file:///android_asset/offline-home/index.html")
+                            }
+                        }
                         downloadBusy = false
                     }
                 }
@@ -1483,27 +1493,18 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // other pages use a saved MHTML copy or a clear offline notice.
                             val diocesanHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                             if ((uri.scheme == "http" || uri.scheme == "https") && uri.host == diocesanHost) {
-                                // The diocesan backend is an online website. When connected,
-                                // let WebView handle every same-site page, form, dashboard link,
-                                // redirect and menu navigation exactly as it does in Chrome.
-                                // Offline routing is only used when the device has no connection.
-                                if (onlineState) return false
                                 val route = localPath.ifBlank { "/" }
                                 if (route == "/" || route == "/index.html") {
                                     openSavedDiocesanHome(view)
                                     return true
                                 }
                                 if (route in setOf("/login", "/register", "/registration", "/giving", "/payment", "/prayer-request")) {
-                                    if (onlineState) {
-                                        // Let WebView perform the original navigation itself.
-                                        // Calling loadUrl() here from shouldOverrideUrlLoading can
-                                        // re-enter navigation interception and fail on some WebView versions.
-                                        return false
-                                    } else {
+                                    if (onlineState) view.loadUrl(uri.toString())
+                                    else {
                                         val notice = "<!doctype html><meta name='viewport' content='width=device-width,initial-scale=1'><body style='font:16px system-ui;padding:24px'><h2>Internet connection required</h2><p>This service needs an internet connection. Your saved homepage and downloaded church resources remain available offline.</p><p><a href='mcn-app://home'>Return to homepage</a></p></body>"
                                         view.loadDataWithBaseURL("https://offline.mcn-app/", notice, "text/html", "UTF-8", null)
-                                        return true
                                     }
+                                    return true
                                 }
                                 val savedPage = offlinePageArchiveFile(view.context, uri.toString())
                                 if (savedPage.isFile && savedPage.length() > 0L) {
@@ -1580,8 +1581,6 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             }
                             if ((uri.scheme == "http" || uri.scheme == "https") &&
                                 uri.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host) {
-                                // Preserve the live website's native navigation while online.
-                                if (onlineState) return false
                                 if (legacyPath.isBlank() || legacyPath == "/" || legacyPath == "/index.html") {
                                     openSavedDiocesanHome(view)
                                 } else {
@@ -1622,11 +1621,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             return true
                         }
                         override fun shouldInterceptRequest(view: WebView, request: android.webkit.WebResourceRequest): android.webkit.WebResourceResponse? {
-                            OfflineDevotionalPage.fileResponse(
-                                view.context.applicationContext,
-                                request.url.toString(),
-                                request.requestHeaders["Range"]
-                            )?.let { return it }
+                            OfflineDevotionalPage.fileResponse(ctx, request.url.toString())?.let { return it }
                             // Serve same-origin homepage assets directly from the APK. This is
                             // what prevents absolute /static/... image, CSS and JS URLs from
                             // falling through to Naijacloud when the homepage is opened locally.
@@ -1651,7 +1646,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     val mime = when (safePath.substringAfterLast('.', "").lowercase()) {
                                         "css" -> "text/css"; "js" -> "application/javascript"; "mjs" -> "application/javascript"
                                         "png" -> "image/png"; "jpg", "jpeg" -> "image/jpeg"; "gif" -> "image/gif"
-                                        "webp" -> "image/webp"; "avif" -> "image/avif"; "svg" -> "image/svg+xml"; "ico" -> "image/x-icon"
+                                        "webp" -> "image/webp"; "svg" -> "image/svg+xml"; "ico" -> "image/x-icon"
                                         "woff" -> "font/woff"; "woff2" -> "font/woff2"; "ttf" -> "font/ttf"
                                         "json" -> "application/json"; "mp4" -> "video/mp4"; "webm" -> "video/webm"
                                         "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; "pdf" -> "application/pdf"
@@ -1744,41 +1739,11 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                         File(File(ctx.filesDir, "offline_storage/Church_Media"), "index.json").readText()
                                     )
                                 }.getOrDefault(org.json.JSONArray())
-                                val dailyContent = runCatching {
-                                    ctx.assets.open("offline-home/daily-content.json").bufferedReader().use {
-                                        org.json.JSONObject(it.readText())
-                                    }
-                                }.getOrNull()
-                                val dailyOrdinal = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")).toEpochDay() + 719163L
-                                val dailyVerses = dailyContent?.optJSONArray("verses")
-                                val dailyHymns = dailyContent?.optJSONArray("hymns")
-                                val selectedVerse = dailyVerses?.takeIf { it.length() > 0 }
-                                    ?.optJSONObject(Math.floorMod(dailyOrdinal, dailyVerses.length().toLong()).toInt())
-                                val selectedDailyHymn = dailyHymns?.takeIf { it.length() > 0 }
-                                    ?.optJSONObject(Math.floorMod(dailyOrdinal * 7L, dailyHymns.length().toLong()).toInt())
-                                val dailyVerseLiteral = org.json.JSONObject.quote(selectedVerse?.toString() ?: "{}")
-                                val dailyHymnLiteral = org.json.JSONObject.quote(selectedDailyHymn?.toString() ?: "{}")
                                 val localMediaScript = """
                                     (function() {
                                       const hymns = $hymnRows;
                                       const media = $mediaRows;
-                                      const dailyVerse = JSON.parse($dailyVerseLiteral);
-                                      const dailyHymn = JSON.parse($dailyHymnLiteral);
                                       const key = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
-                                      const scriptureCard = document.querySelector('.android-daily-card.scripture-preview');
-                                      if (scriptureCard && dailyVerse.reference) {
-                                        const heading = scriptureCard.querySelector('h3');
-                                        const fullText = scriptureCard.querySelector('.android-daily-full-text');
-                                        if (heading) heading.textContent = dailyVerse.reference;
-                                        if (fullText) fullText.textContent = dailyVerse.text || '';
-                                      }
-                                      const dailyHymnCard = document.querySelector('.android-daily-card.hymn-preview');
-                                      if (dailyHymnCard && dailyHymn.title) {
-                                        const heading = dailyHymnCard.querySelector('h3');
-                                        const fullText = dailyHymnCard.querySelector('.android-daily-full-text');
-                                        if (heading) heading.textContent = dailyHymn.title;
-                                        if (fullText) fullText.textContent = dailyHymn.lyrics || '';
-                                      }
                                       const card = document.querySelector('.android-daily-card.hymn-preview');
                                       if (card) {
                                         const heading = key(card.querySelector('h3')?.innerText);
@@ -2023,12 +1988,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   window.addEventListener('scroll',function(){if(panel.style.display!=='none')closeMenu();},{passive:true});
                                 })();
                             """.trimIndent()
-                            // The Android menu workaround is strictly for the bundled offline
-                            // homepage. Never alter the live website's dashboard/menu DOM: its own
-                            // JavaScript and CSS already work correctly in Chrome.
-                            if (url?.startsWith("file:///android_asset/offline-home/") == true) {
-                                view.evaluateJavascript(menuBridge, null)
-                            }
+                            view.evaluateJavascript(menuBridge, null)
                             // Daily Scripture and hymn use the same tested webpage implementation as Chrome.
                             pageLoading = false
                         }

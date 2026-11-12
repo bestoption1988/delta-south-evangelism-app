@@ -8,9 +8,9 @@
 {% if p.get('reference') %}<div class="meta">BIBLE SCRIPTURE</div><h2>{{ p.get('reference') }}</h2><div class="content">{{ p.get('verse','') }}</div>
 {% elif p.get('stanzas') %}<div class="meta">{% if p.get('firstline') %}{{ p.get('firstline') }}{% endif %}{% if p.get('meter') %} · Meter: {{ p.get('meter') }}{% endif %}</div>
 {% for stanza in p.get('stanzas',[]) %}<p class="stanza">{{ stanza }}</p>{% endfor %}
-{% if p.get('chorus') and p.get('chorus')|string|lower != 'null' %}<h3>Chorus</h3><p class="stanza">{{ p.get('chorus') }}</p>{% endif %}
-{% if item.audio_path or p.get('musicFilePath') %}<div class="tune"><strong>{{ p.get('musicTitle') or p.get('tuneName') or p.get('musicName') or p.get('tune') or 'Main tune' }}</strong><audio class="audio" controls preload="metadata" playsinline src="{{ url_for('devotional_centre_audio', resource_id=item.resource_id, tune='main') }}"></audio></div>{% endif %}
-{% for tune in p.get('otherTunes',[]) %}{% if tune.get('musicFilePath') or tune.get('audio_path') %}<div class="tune"><strong>{{ tune.get('title') or tune.get('tuneName') or tune.get('name') or ('Alternative tune ' ~ loop.index) }}</strong><audio class="audio" controls preload="metadata" playsinline src="{{ url_for('devotional_centre_audio', resource_id=item.resource_id, tune=loop.index0) }}"></audio></div>{% endif %}{% endfor %}
+{% if p.get('chorus') %}<h3>Chorus</h3><p class="stanza">{{ p.get('chorus') }}</p>{% endif %}
+{% if item.audio_url %}<div class="tune"><strong>{{ p.get('musicTitle') or p.get('tuneName') or p.get('musicName') or p.get('tune') or 'Main tune' }}</strong><audio class="audio" controls preload="none" playsinline src="{{ item.audio_url }}"></audio></div>{% endif %}
+{% for tune in p.get('otherTunes',[]) %}{% if tune.get('signed_url') %}<div class="tune"><strong>{{ tune.get('title') or tune.get('tuneName') or tune.get('name') or ('Additional tune ' ~ loop.index) }}</strong><audio class="audio" controls preload="none" playsinline src="{{ tune.signed_url }}"></audio></div>{% endif %}{% endfor %}
 {% if p.get('author') %}<div class="author">{% if item.author_url %}<img src="{{ item.author_url }}" alt="{{ p.author.get('name','Hymn author') }}">{% endif %}<div><strong>{{ p.author.get('name','Hymn author') }}</strong><div class="meta">{{ p.author.get('years','') }}</div><p>{{ p.author.get('biography','') }}</p></div></div>{% endif %}
 {% elif p.get('content') %}<div class="content">{{ p.get('content') }}</div>
 {% elif p.get('heading') %}<h2>{{ p.get('heading') }}</h2><div class="content">{{ p.get('content','') }}</div>

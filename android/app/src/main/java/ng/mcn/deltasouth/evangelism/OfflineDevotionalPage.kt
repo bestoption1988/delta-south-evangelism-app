@@ -23,7 +23,7 @@ object OfflineDevotionalPage {
         }
         return out.sortedWith(compareBy<JSONObject>{number(it)}.thenBy{it.optString("title").lowercase(Locale.ROOT)})
     }
-    private fun page(t:String,b:String)= """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(t)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:16px/1.55 system-ui}header{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:white;padding:26px 18px}header small{color:#f4d36e;font-weight:800}h1{font:800 30px Georgia;margin:8px 0}main{max-width:1000px;margin:auto;padding:16px 13px 45px}nav{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}a{color:#12664b;text-decoration:none;font-weight:700}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.card,.item,.paper{background:white;border:1px solid #dfe6ee;border-radius:15px;padding:15px;margin-bottom:12px}.icon{font-size:32px}.card h2,.item h2{font-size:18px;margin:7px 0}.muted{color:#69768b}.pill{display:inline-block;background:#edf4f0;color:#176247;border-radius:24px;padding:6px 11px;font-weight:800;font-size:12px;margin-top:8px}.btn,button{display:inline-block;background:#123363;color:white;padding:10px 14px;border:0;border-radius:9px;font-weight:800}input{font:inherit;padding:11px;border:1px solid #cbd5e1;border-radius:8px;width:70%}.paper{font:17px/1.8 Georgia;white-space:pre-wrap}audio,video{width:100%;margin-top:10px}.mcn-offline-menu{position:relative;z-index:20;background:#071b50;color:#fff}.mcn-offline-menu details>summary{list-style:none;cursor:pointer;min-height:58px;display:flex;align-items:center;padding:12px 20px;font-size:20px;font-weight:800}.mcn-offline-menu details>summary::-webkit-details-marker{display:none}.mcn-offline-menu details>summary:before{content:'☰';font-size:25px;margin-right:12px}.mcn-offline-menu-items{display:grid;background:#08245b}.mcn-offline-menu-items a{display:block;padding:12px 20px;color:#fff;border-top:1px solid #ffffff20}.mcn-offline-menu details[open]>summary{background:#0b2866}@media(max-width:520px){.card{padding:12px}.card h2{font-size:16px}}</style></head><body><header><small>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE · OFFLINE</small><h1>${e(t)}</h1><div>Downloaded resources saved on this phone. No internet required.</div></header><aside class="mcn-offline-menu"><details><summary>Menu</summary><div class="mcn-offline-menu-items"><a href="mcn-app://home">Main Home</a><a href="/fellowships">All Fellowships</a><a href="/fellowship/methodist-mens-fellowship">Men's Fellowship</a><a href="/fellowship/methodist-womens-fellowship">Women's Fellowship</a><a href="/fellowship/methodist-youth-fellowship">Youth Fellowship</a><a href="/fellowship/methodist-campus-fellowship">Campus Fellowship</a><a href="/devotional-centre">Devotional Centre</a><a href="/media-library">Church Media</a></div></details></aside><main><nav><a href="mcn-app://home">← Main home</a><a href="/devotional-centre">All library cards</a></nav>$b</main><div id="mcn-lightbox" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.94);align-items:center;justify-content:center;padding:18px" role="dialog" aria-modal="true"><button id="mcn-lightbox-close" style="position:absolute;right:18px;top:18px;font-size:28px;padding:8px 16px">×</button><img id="mcn-lightbox-image" alt="" style="max-width:100%;max-height:86vh;object-fit:contain"></div><script>(function(){var box=document.getElementById('mcn-lightbox'),photo=document.getElementById('mcn-lightbox-image');document.addEventListener('click',function(ev){var img=ev.target.closest('img[data-mcn-lightbox]');if(img){photo.src=img.src;photo.alt=img.alt||'';box.style.display='flex';}});function close(){box.style.display='none';photo.removeAttribute('src');}document.getElementById('mcn-lightbox-close').addEventListener('click',close);box.addEventListener('click',function(ev){if(ev.target===box)close();});document.addEventListener('keydown',function(ev){if(ev.key==='Escape')close();});})();</script></body></html>"""
+    private fun page(t:String,b:String)= """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(t)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:16px/1.55 system-ui}header{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:white;padding:26px 18px}header small{color:#f4d36e;font-weight:800}h1{font:800 30px Georgia;margin:8px 0}main{max-width:1000px;margin:auto;padding:16px 13px 45px}nav{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}a{color:#12664b;text-decoration:none;font-weight:700}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.card,.item,.paper{background:white;border:1px solid #dfe6ee;border-radius:15px;padding:15px;margin-bottom:12px}.icon{font-size:32px}.card h2,.item h2{font-size:18px;margin:7px 0}.muted{color:#69768b}.pill{display:inline-block;background:#edf4f0;color:#176247;border-radius:24px;padding:6px 11px;font-weight:800;font-size:12px;margin-top:8px}.btn,button{display:inline-block;background:#123363;color:white;padding:10px 14px;border:0;border-radius:9px;font-weight:800}input{font:inherit;padding:11px;border:1px solid #cbd5e1;border-radius:8px;width:70%}.paper{font:17px/1.8 Georgia;white-space:pre-wrap}audio,video{width:100%;margin-top:10px}.mcn-offline-menu{position:relative;z-index:20;background:#071b50;color:#fff}.mcn-offline-menu details>summary{list-style:none;cursor:pointer;min-height:58px;display:flex;align-items:center;padding:12px 20px;font-size:20px;font-weight:800}.mcn-offline-menu details>summary::-webkit-details-marker{display:none}.mcn-offline-menu details>summary:before{content:'☰';font-size:25px;margin-right:12px}.mcn-offline-menu-items{display:grid;background:#08245b}.mcn-offline-menu-items a{display:block;padding:12px 20px;color:#fff;border-top:1px solid #ffffff20}.mcn-offline-menu details[open]>summary{background:#0b2866}@media(max-width:520px){.card{padding:12px}.card h2{font-size:16px}}</style></head><body><header><small>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE · OFFLINE</small><h1>${e(t)}</h1><div>Downloaded resources saved on this phone. No internet required.</div></header><aside class="mcn-offline-menu"><details><summary>Menu</summary><div class="mcn-offline-menu-items"><a href="mcn-app://home">Main Home</a><a href="/fellowships">All Fellowships</a><a href="/fellowship/methodist-mens-fellowship">Men's Fellowship</a><a href="/fellowship/methodist-womens-fellowship">Women's Fellowship</a><a href="/fellowship/methodist-youth-fellowship">Youth Fellowship</a><a href="/fellowship/methodist-campus-fellowship">Campus Fellowship</a><a href="/devotional-centre">Devotional Centre</a><a href="/media-library">Church Media</a></div></details></aside><main><nav><a href="mcn-app://home">← Main home</a><a href="/devotional-centre">All library cards</a></nav>$b</main></body></html>"""
     fun render(c:Context,path:String,q:String="",translation:String=""):String {
         val p=if(path=="/") "/" else path.trimEnd('/').ifBlank{"/devotional-centre"}
         if(p=="/")return homepage(c)
@@ -40,29 +40,21 @@ object OfflineDevotionalPage {
         return home(c)
     }
     private fun homepage(c:Context):String {
-        // Select each day's readings from the exact collections already saved by the Devotional Centre.
-        // No bundled placeholder JSON or network call is used here, so the date rolls over offline.
-        val todayOrdinal=java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")).toEpochDay()+719163L
-        val verseRows=sortedRows(a(c,"bible_verses"))
-        val dailyVerseRow=verseRows.getOrNull(Math.floorMod(todayOrdinal,verseRows.size.coerceAtLeast(1).toLong()).toInt())
-        val versePayload=dailyVerseRow?.optJSONObject("payload")?:JSONObject()
-        val dailyVerseRef=versePayload.optString("reference").ifBlank {
-            dailyVerseRow?.optString("title").orEmpty()
-        }
-        val dailyVerseText=versePayload.optString("verse").ifBlank {
-            versePayload.optString("text",versePayload.optString("content",versePayload.optString("body")))
-        }
         val english=sortedRows(a(c,"english_hymns"))
-        val hymn=english.getOrNull(Math.floorMod(todayOrdinal*7L,english.size.coerceAtLeast(1).toLong()).toInt())
+        val today=java.util.Calendar.getInstance(java.util.Locale("en","NG")).get(java.util.Calendar.DAY_OF_YEAR)
+        val hymn=english.getOrNull(if(english.isEmpty()) 0 else (today-1)%english.size)
         val hymnPayload=hymn?.optJSONObject("payload")?:JSONObject()
         val hymnTitle=hymn?.optString("title").orEmpty().ifBlank{"Methodist Hymn for Today"}
         val hymnNumber=hymn?.optString("item_number").orEmpty()
         val stanzas=hymnPayload.optJSONArray("stanzas")
-        val lyrics=if(stanzas!=null) (0 until stanzas.length()).joinToString("\n\n"){stanzas.optString(it)}
-            else hymnPayload.optString("content",hymnPayload.optString("text",hymnPayload.optString("body","Open the saved English Methodist Hymn collection to read the hymns.")))
+        val lyrics=if(stanzas!=null) {
+            (0 until stanzas.length()).joinToString("\n\n"){stanzas.optString(it)}
+        } else {
+            hymnPayload.optString("content",hymnPayload.optString("text",hymnPayload.optString("body","Open the Methodist Hymn Library to read the saved hymns.")))
+        }
         val audio=hymn?.optString("audio_file").orEmpty()
         val b=StringBuilder()
-        b.append("""<section class="item"><div class="muted">✝ SCRIPTURE FOR TODAY · OFFLINE</div><h2>${e(dailyVerseRef.ifBlank{"Scripture for Today"})}</h2><p>${e(dailyVerseText.ifBlank{"Download the Bible Verses card in the Devotional Centre to enable daily offline Scripture."})}</p><a class="btn" href="/devotional-centre/holy-bible">Open Saved Bible →</a></section>""")
+        b.append("""<section class="item"><div class="muted">✝ SCRIPTURE FOR TODAY · OFFLINE</div><h2>Read your downloaded Bible</h2><p>The Scripture reader uses the Bible module saved on this phone.</p><a class="btn" href="/devotional-centre/holy-bible">Open Saved Bible →</a></section>""")
         b.append("""<section class="item"><div class="muted">♫ METHODIST HYMN FOR TODAY · OFFLINE</div><h2>${e(hymnNumber)} ${e(hymnTitle)}</h2><div class="paper">${e(lyrics)}</div>""")
         if(audio.isNotBlank())b.append("""<p><strong>Hymn tune</strong><audio controls preload="none" playsinline src="/__mcn_offline/file/${Uri.encode(audio)}"></audio></p>""")
         val tunes=hymnPayload.optJSONArray("otherTunes")
@@ -80,18 +72,6 @@ object OfflineDevotionalPage {
         val content=snapshot.optJSONObject("homepage_content")?:JSONObject()
         val prelate=snapshot.optJSONObject("prelate")?:JSONObject()
         b.append("""<section class="item"><h2>Our Diocese</h2><p>${e(content.optString("vision","Worship · Witness · Service · Discipleship"))}</p><p>${e(content.optString("mission_1","Winning souls for Christ"))}</p><p>${e(content.optString("mission_2","Building spiritually fulfilled members"))}</p><p>${e(content.optString("mission_3","Serving humanity"))}</p><p><strong>${e(prelate.optString("name","Methodist Church Nigeria"))}</strong><br>${e(prelate.optString("title",""))}</p></section>""")
-        val leaders=snapshot.optJSONArray("leadership")?:JSONArray()
-        if(leaders.length()>0) {
-            b.append("<h2>Diocesan Leadership</h2><div class='grid'>")
-            for(i in 0 until leaders.length()) {
-                val leader=leaders.optJSONObject(i)?:continue
-                val photo=leader.optString("offline_file")
-                b.append("<article class='item'>")
-                if(photo.isNotBlank()) b.append("""<img data-mcn-lightbox="1" src="/__mcn_offline/file/${Uri.encode(photo)}" alt="${e(leader.optString("title","Leadership portrait"))}" style="width:100%;height:210px;object-fit:cover;border-radius:10px;cursor:zoom-in">""")
-                b.append("<h3>${e(leader.optString("full_name"))}</h3><p>${e(leader.optString("title"))}</p><p>${e(leader.optString("biography"))}</p></article>")
-            }
-            b.append("</div>")
-        }
         val events=snapshot.optJSONArray("events")?:JSONArray()
         if(events.length()>0) {
             b.append("<h2>Saved Announcements & Events</h2>")
@@ -99,18 +79,6 @@ object OfflineDevotionalPage {
                 val event=events.optJSONObject(i)?:continue
                 b.append("""<article class="item"><h3>${e(event.optString("title"))}</h3><p>${e(event.optString("description"))}</p><p class="muted">${e(event.optString("event_date"))} · ${e(event.optString("venue"))}</p></article>""")
             }
-        }
-        val gallery=snapshot.optJSONArray("gallery")?:JSONArray()
-        if(gallery.length()>0) {
-            b.append("<h2>Our Church Gallery</h2><div class='grid'>")
-            for(i in 0 until gallery.length()) {
-                val item=gallery.optJSONObject(i)?:continue
-                val file=item.optString("offline_file")
-                if(file.isBlank()) continue
-                val imageUrl="/__mcn_offline/file/${Uri.encode(file)}"
-                b.append("""<article class="item" style="padding:10px"><img data-mcn-lightbox="1" src="$imageUrl" alt="${e(item.optString("title","Church gallery photo"))}" loading="lazy" style="display:block;width:100%;max-height:280px;object-fit:cover;border-radius:10px;cursor:zoom-in"><h3>${e(item.optString("title"))}</h3><p>${e(item.optString("description"))}</p></article>""")
-            }
-            b.append("</div>")
         }
         val churches=snapshot.optJSONArray("churches")?:JSONArray()
         if(churches.length()>0) {
@@ -150,7 +118,7 @@ object OfflineDevotionalPage {
         fun image(fileName:String,alt:String,style:String=""):String {
             if(fileName.isBlank())return ""
             val url="/__mcn_offline/file/${Uri.encode(fileName)}"
-            return """<img data-mcn-lightbox="1" src="$url" alt="${e(alt)}" loading="lazy" style="display:block;max-width:100%;cursor:zoom-in;$style">"""
+            return """<img src="$url" alt="${e(alt)}" loading="lazy" style="display:block;max-width:100%;$style">"""
         }
         val body=StringBuilder()
         val cover=f.optString("offline_cover_file")
@@ -291,41 +259,14 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
         } finally { db.close() }
         WebResourceResponse("application/json","UTF-8",200,"OK",mapOf("Access-Control-Allow-Origin" to "*"),json.byteInputStream())
     }.getOrNull()
-    fun fileResponse(c:Context,url:String,rangeHeader:String?=null):WebResourceResponse?=runCatching{
+    fun fileResponse(c:Context,url:String):WebResourceResponse?=runCatching{
         val u=Uri.parse(url)
         bibleJsonResponse(c,u)?.let{return it}
         if(!u.path.orEmpty().startsWith("/__mcn_offline/file/"))return null
         val name=Uri.decode(u.path!!.substringAfterLast('/'))
         if(name.isBlank()||name.contains("/")||name.contains(".."))return null
-        val mediaFolders = sequenceOf(
-            d(c), File(d(c),"Church_Media"), File(d(c),"Bible"),
-            File(d(c),"fellowship_media"), File(d(c),"homepage_media")
-        ) + (d(c).listFiles()?.filter{it.isDirectory}?.asSequence()?:emptySequence())
-        val f=(mediaFolders.map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0}
-            ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0}
-            ?: return null)
-        val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"svg"->"image/svg+xml";"avif"->"image/avif";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
-        val length=f.length()
-        val headers=linkedMapOf("Accept-Ranges" to "bytes","Content-Type" to mime,"Content-Length" to length.toString())
-        val range=Regex("^bytes=(\\d*)-(\\d*)$").matchEntire(rangeHeader.orEmpty().trim())
-        if(range!=null){
-            val start=range.groupValues[1].toLongOrNull() ?: 0L
-            val requestedEnd=range.groupValues[2].toLongOrNull()
-            val end=(requestedEnd ?: (length-1)).coerceAtMost(length-1)
-            if(start>=length||end<start)return WebResourceResponse("text/plain","UTF-8",416,"Range Not Satisfiable",mapOf("Content-Range" to "bytes */$length"),"".byteInputStream())
-            val count=end-start+1
-            val input=java.io.RandomAccessFile(f,"r")
-            input.seek(start)
-            val limited=object:java.io.InputStream(){
-                var remaining=count
-                override fun read():Int{if(remaining<=0)return -1;val value=input.read();if(value>=0)remaining--;return value}
-                override fun read(buffer:ByteArray,offset:Int,len:Int):Int{if(remaining<=0)return -1;val n=input.read(buffer,offset,minOf(len.toLong(),remaining).toInt());if(n>0)remaining-=n;return n}
-                override fun close(){input.close()}
-            }
-            headers["Content-Length"]=count.toString()
-            headers["Content-Range"]="bytes $start-$end/$length"
-            return WebResourceResponse(mime,null,206,"Partial Content",headers,limited)
-        }
-        WebResourceResponse(mime,null,200,"OK",headers,f.inputStream())
+        val f=(sequenceOf(d(c),File(d(c),"Church_Media"),File(d(c),"Bible")) + (d(c).listFiles()?.filter{it.isDirectory}?.asSequence()?:emptySequence())).map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0} ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0} ?: return null
+        val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
+        WebResourceResponse(mime,null,f.inputStream())
     }.getOrNull()
 }
