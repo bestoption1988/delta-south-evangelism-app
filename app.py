@@ -2789,29 +2789,41 @@ def _homepage_daily_reading():
         # hymn. The JSON collection supplies the daily hymn text; the catalogue
         # supplies its actual tune audio and signed Naijacloud media URL.
         if hymn:
-            hymn_number = str(
-                hymn.get("number") or hymn.get("hymn_number")
-                or hymn.get("item_number") or ""
-            ).strip()
+            # The imported JSON may identify a hymn as "EMHB 123" rather than
+            # providing a separate number field. Normalize either representation.
             hymn_title = str(hymn.get("title") or "").strip()
+            raw_number = str(
+                hymn.get("number") or hymn.get("hymn_number")
+                or hymn.get("item_number") or hymn_title
+            ).strip()
+            number_match = re.search(r"\\d+", raw_number)
+            hymn_number = number_match.group(0) if number_match else ""
             try:
-                hymn_row = db().execute(
-                    """SELECT * FROM devotional_resources
-                       WHERE collection='english_hymns' AND published=1
-                         AND (
-                           (? <> '' AND item_number=?)
-                           OR (? <> '' AND LOWER(title)=LOWER(?))
-                         )
-                       ORDER BY CASE
-                         WHEN ? <> '' AND item_number=? THEN 0 ELSE 1
-                       END, updated_at DESC
-                       LIMIT 1""",
-                    (hymn_number, hymn_number, hymn_title, hymn_title,
-                     hymn_number, hymn_number),
-                ).fetchone()
+                hymn_row = None
+                if hymn_number:
+                    hymn_row = db().execute(
+                        """SELECT * FROM devotional_resources
+                           WHERE collection='english_hymns' AND published=1
+                             AND CAST(item_number AS TEXT)=?
+                           ORDER BY updated_at DESC LIMIT 1""",
+                        (hymn_number,),
+                    ).fetchone()
+                if not hymn_row and hymn_title:
+                    hymn_row = db().execute(
+                        """SELECT * FROM devotional_resources
+                           WHERE collection='english_hymns' AND published=1
+                             AND LOWER(title)=LOWER(?)
+                           ORDER BY updated_at DESC LIMIT 1""",
+                        (hymn_title,),
+                    ).fetchone()
                 if hymn_row:
                     resource = dict(hymn_row)
                     payload = json.loads(resource.get("content_json") or "{}")
+                    hymn["number"] = resource.get("item_number") or hymn_number
+                    hymn["item_number"] = resource.get("item_number") or hymn_number
+                    hymn["devotional_url"] = url_for(
+                        "devotional_centre_item", resource_id=resource["resource_id"]
+                    )
                     main_audio = resource.get("audio_path") or payload.get("musicFilePath") or ""
                     hymn["audio_url"] = _dc_signed(main_audio)
                     hymn["audio_tune_name"] = (
@@ -2833,7 +2845,7 @@ def _homepage_daily_reading():
                                     "tune": tune.get("tune") or "",
                                 })
             except Exception:
-                app.logger.exception("Could not attach the daily hymn tune from the Devotional Centre catalogue")
+                app.logger.exception("Could not attach the published daily hymn resource and tune")
         return {
             "date": today.strftime("%A, %d %B %Y"),
             "verse": verse if isinstance(verse, dict) else {},
@@ -12533,11 +12545,30 @@ def devotional_centre_item(resource_id):
         return "Devotional resource not found.", 404
     item = dict(row)
     item["payload"] = json.loads(item.get("content_json") or "{}")
-    item["audio_url"] = _dc_signed(item.get("audio_path"))
+    item["audio_url"] = _dc_signed(
+        item.get("audio_path") or item["payload"].get("musicFilePath") or ""
+    )
     item["author_url"] = _dc_signed(item.get("author_path"))
     tunes = item["payload"].get("otherTunes") or []
     for tune in tunes:
-        tune["signed_url"] = _dc_signed(tune.get("musicFilePath"))
+        if isinstance(tune, dict):
+            tune["signed_url"] = _dc_signed(
+                tune.get("musicFilePath") or tune.get("audio_path") or ""
+            )
+    item["previous_resource"] = None
+    item["next_resource"] = None
+    if item.get("collection") == "english_hymns":
+        ordering = "CAST(item_number AS INTEGER), item_number, title"
+        neighbours = db().execute(
+            "SELECT resource_id,item_number,title FROM devotional_resources "
+            "WHERE collection='english_hymns' AND published=1 ORDER BY " + ordering
+        ).fetchall()
+        index = next((i for i, row in enumerate(neighbours)
+                      if str(row["resource_id"]) == str(resource_id)), -1)
+        if index > 0:
+            item["previous_resource"] = dict(neighbours[index - 1])
+        if 0 <= index < len(neighbours) - 1:
+            item["next_resource"] = dict(neighbours[index + 1])
     return render_template("devotional_item.html", item=item)
 
 
