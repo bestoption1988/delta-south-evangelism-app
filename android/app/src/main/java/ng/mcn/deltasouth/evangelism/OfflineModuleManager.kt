@@ -265,7 +265,7 @@ object OfflineModuleManager {
         if (leadership != null) for (index in 0 until leadership.length()) {
             val item = leadership.optJSONObject(index) ?: continue
             val id = item.optString("title", index.toString()).replace(Regex("[^A-Za-z0-9_-]"), "_")
-            val imageUrl = item.optString("offline_image_url").ifBlank { item.optString("photo_url") }
+            val imageUrl = item.optString("offline_image_url").ifBlank { item.optString("photo_url") }.ifBlank { item.optString("photo_path").let { if (it.isBlank()) "" else if (it.startsWith("http")) it else "/static/" + it.trimStart('/') } }
             val file = fetch(imageUrl, "homepage-leader-$id")
             if (file.isNotBlank()) item.put("offline_file", file)
         }
