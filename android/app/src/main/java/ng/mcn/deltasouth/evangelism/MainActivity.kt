@@ -497,8 +497,7 @@ private fun NativeDioceseApp() {
                                                     if (!online) {
                                                         OfflineAttendanceQueue.enqueueAttendance(appContext, mapOf("member_id" to id.toString(), "attendance_date" to attendanceRegisterDate.trim(), "meeting_type" to attendanceMeetingType.trim(), "status" to "Absent"))
                                                         pendingAttendanceCount = OfflineAttendanceQueue.pendingCount(appContext)
-                                                        message = "Attendance saved securely on this phone. It will synchronize when internet returns."
-                                                    } else message = it.message ?: "Could not record attendance."
+                                                        message = "Attendance saved securely on this phone. It will synchronize when internet returns."                                                    } else message = it.message ?: "Could not record attendance."
                                                 }
                                             busy = false
                                         }
@@ -997,8 +996,7 @@ private fun NativeDioceseApp() {
                                 val selectedId = conferenceSelectedId ?: return@Button
                                 scope.launch {
                                     busy = true
-                                    runCatching { withContext(Dispatchers.IO) { Backend.api.updateConferencePresence(selectedId, mapOf("participant_id" to presenceId, "participant_name" to presenceName, "audio_only" to true)) } }
-                                        .onSuccess { runCatching { withContext(Dispatchers.IO) { Backend.api.conferencePresence(selectedId) } }.onSuccess { conferencePresenceRows = it }; message = "Conference attendance checked in." }
+                                    runCatching { withContext(Dispatchers.IO) { Backend.api.updateConferencePresence(selectedId, mapOf("participant_id" to presenceId, "participant_name" to presenceName, "audio_only" to true)) } }                                        .onSuccess { runCatching { withContext(Dispatchers.IO) { Backend.api.conferencePresence(selectedId) } }.onSuccess { conferencePresenceRows = it }; message = "Conference attendance checked in." }
                                         .onFailure { message = it.message ?: "Could not check in." }
                                     busy = false
                                 }
@@ -1497,8 +1495,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 // redirect and menu navigation exactly as it does in Chrome.
                                 // Offline routing is only used when the device has no connection.
                                 if (onlineState) return false
-                                val route = localPath.ifBlank { "/" }
-                                if (route == "/" || route == "/index.html") {
+                                val route = localPath.ifBlank { "/" }                                if (route == "/" || route == "/index.html") {
                                     openSavedDiocesanHome(view)
                                     return true
                                 }
@@ -1997,8 +1994,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                       // The panel is detached from its original nav container.
                                       // Handle navigation explicitly: hiding a fixed WebView overlay
                                       // during the same click can cancel the anchor's default action.
-                                      event.preventDefault();
-                                      event.stopPropagation();
+                                      event.preventDefault();                                      event.stopPropagation();
                                       var href = link.getAttribute('href') || '';
                                       closeMenu();
                                       window.setTimeout(function() {
@@ -2119,7 +2115,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 val currentUri = runCatching { android.net.Uri.parse(currentUrl) }.getOrNull()
                 val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
                 val isLiveHome = currentUri?.host == configuredHost &&
-                    (currentUri.path.isNullOrBlank() || currentUri.path == "/")
+                    (currentUri?.path.isNullOrBlank() == true || currentUri?.path == "/")
                 val isLocalHome = currentUrl.startsWith("file:///android_asset/offline-home/") ||
                     currentUrl.endsWith("/offline_homepage/diocesan-homepage.mht")
                 if (online && isLocalHome) {
