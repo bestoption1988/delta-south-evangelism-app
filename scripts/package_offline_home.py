@@ -106,7 +106,15 @@ for attribute in re.finditer(r"""(?:src|poster|srcset)\s*=\s*(["'])(.*?)\1""", h
     for candidate in re.findall(r"https?://[^\s,]+", attribute.group(2)):
         candidate = html_lib.unescape(candidate).rstrip(")")
         parsed = urlparse(candidate)
-        if parsed.netloc and parsed.netloc != HOST:
+        # Package external portraits and same-origin media proxy responses as
+        # ordinary image files. Wget otherwise saves raw image routes with no
+        # extension, which the Android asset interceptor cannot MIME-type.
+        same_origin_image_proxy = parsed.path.startswith((
+            "/media-library/document/",
+            "/fellowship-media/",
+            "/public/leadership-photo/",
+        ))
+        if parsed.netloc and (parsed.netloc != HOST or same_origin_image_proxy):
             external_image_urls.add(candidate)
 
 packaged_external_images = 0
