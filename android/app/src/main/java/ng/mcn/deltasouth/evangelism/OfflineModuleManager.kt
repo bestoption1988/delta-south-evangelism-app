@@ -265,7 +265,8 @@ object OfflineModuleManager {
         if (gallery != null) for (index in 0 until gallery.length()) {
             val item = gallery.optJSONObject(index) ?: continue
             val id = item.optString("id", index.toString()).ifBlank { index.toString() }
-            val file = fetch(item.optString("signed_url"), "homepage-gallery-$id")
+            val imageUrl = item.optString("offline_image_url").ifBlank { item.optString("signed_url") }
+            val file = fetch(imageUrl, "homepage-gallery-$id")
             if (file.isNotBlank()) item.put("offline_file", file)
         }
         android.util.Log.i("MCNOffline", "Saved $saved homepage gallery image(s)")
