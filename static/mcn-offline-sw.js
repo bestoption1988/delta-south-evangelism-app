@@ -2,7 +2,7 @@
  * Public pages and assets are cached for offline reading. Protected API writes,
  * payment routes and authenticated private responses are never cached here.
  */
-const CACHE_VERSION = "mcn-delta-south-shell-v9";
+const CACHE_VERSION = "mcn-delta-south-shell-v8";
 const PAGE_CACHE = CACHE_VERSION + "-pages";
 const ASSET_CACHE = CACHE_VERSION + "-assets";
 const PUBLIC_ROUTES = [
@@ -13,7 +13,7 @@ const PUBLIC_ROUTES = [
   "/devotional-centre/creeds", "/devotional-centre/holy-bible",
   "/devotional-centre/lectionary", "/media-library"
 ];
-const BLOCKED = /(^|\/)(admin|login|logout|register|registration|member-registration|payment|checkout|dashboard|staff|member|profile|account|finance|giving|give|donate|donation|flutterwave|paystack|security|customer-care|settings|reports)(\/|$)/i;
+const BLOCKED = /(^|\/)(admin|login|logout|register|registration|member-registration|payment|checkout|dashboard|staff|member|profile|account|finance|giving|security|customer-care|settings|reports)(\/|$)/i;
 
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
@@ -128,7 +128,7 @@ self.addEventListener("fetch", event => {
   const url = new URL(request.url);
 
   if (url.origin !== self.location.origin) {
-    if (url.protocol === "https:" && (/\.supabase\.(co|in)$/i.test(url.hostname))) {
+    if (url.protocol === "https:" && (/\.supabase\.co$/i.test(url.hostname))) {
       event.respondWith((async () => {
         const cache = await caches.open(ASSET_CACHE);
         const cached = await cache.match(request);

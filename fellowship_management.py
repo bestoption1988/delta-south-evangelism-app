@@ -132,58 +132,6 @@ def register_fellowship_routes(app, db_getter, user_getter):
         ).fetchall()
         return jsonify([row_dict(row) for row in rows])
 
-    @app.get("/api/public/fellowships/<slug>")
-    def public_fellowship_detail_api(slug):
-        """Read-only fellowship content package for the native offline app."""
-        row = query("SELECT * FROM fellowships WHERE slug=? AND active=1", (slug,)).fetchone()
-        if not row:
-            abort(404)
-        fellowship = row_dict(row)
-        fid = fellowship["id"]
-        def rows(sql, params, kind, image_field):
-            output = []
-            for item in query(sql, params).fetchall():
-                record = row_dict(item)
-                if record.get(image_field):
-                    record["offline_image_url"] = url_for(
-                        "fellowship_public_image", slug=slug, kind=kind,
-                        item_id=record["id"],
-                    )
-                output.append(record)
-            return output
-        if fellowship.get("logo_path"):
-            fellowship["offline_logo_url"] = url_for(
-                "fellowship_public_image", slug=slug, kind="logo", item_id=fid
-            )
-        if fellowship.get("cover_path"):
-            fellowship["offline_cover_url"] = url_for(
-                "fellowship_public_image", slug=slug, kind="cover", item_id=fid
-            )
-        return jsonify({
-            "ok": True,
-            "fellowship": fellowship,
-            "leaders": rows(
-                "SELECT id, full_name, position_title, biography, photo_path, display_order FROM fellowship_leaders WHERE fellowship_id=? AND active=1 ORDER BY display_order, full_name",
-                (fid,), "leader", "photo_path",
-            ),
-            "announcements": rows(
-                "SELECT id, title, body, image_path, created_at, published_at FROM fellowship_announcements WHERE fellowship_id=? AND status='published' ORDER BY COALESCE(published_at, created_at) DESC LIMIT 12",
-                (fid,), "announcement", "image_path",
-            ),
-            "events": rows(
-                "SELECT id, title, description, poster_path, starts_at, venue FROM fellowship_events WHERE fellowship_id=? AND status='published' ORDER BY starts_at DESC LIMIT 12",
-                (fid,), "event", "poster_path",
-            ),
-            "studies": rows(
-                "SELECT id, title, scripture_reference, preacher_or_teacher, summary, content, media_path, event_date FROM fellowship_studies WHERE fellowship_id=? AND status='published' ORDER BY event_date DESC LIMIT 12",
-                (fid,), "study", "media_path",
-            ),
-            "gallery": rows(
-                "SELECT id, title, description, media_type, media_path, created_at FROM fellowship_gallery WHERE fellowship_id=? AND status='published' ORDER BY created_at DESC LIMIT 18",
-                (fid,), "gallery", "media_path",
-            ),
-        })
-
     @app.post("/admin/fellowships/new")
     @login_required
     @admin_required
@@ -261,105 +209,46 @@ def register_fellowship_routes(app, db_getter, user_getter):
         flash("Fellowship approved and published.", "success")
         return redirect(url_for("fellowship_admin_directory"))
 
-    @app.get("/fellowship-media/<slug>/<kind>/<int:item_id>")
-    def fellowship_public_image(slug, kind, item_id):
-        """Stream only published fellowship images through a stable same-origin URL."""
-        from flask import send_file
-        from io import BytesIO
-        from urllib.parse import quote, unquote, urlparse
-        import requests
-
-        fellowship = query(
-            "SELECT id FROM fellowships WHERE slug=? AND active=1", (slug,)
-        ).fetchone()
-        if not fellowship:
-            abort(404)
-        fid = fellowship["id"]
-        sources = {
-            "logo": ("fellowships", "logo_path", "id=?"),
-            "cover": ("fellowships", "cover_path", "id=?"),
-            "leader": ("fellowship_leaders", "photo_path", "id=? AND fellowship_id=? AND active=1"),
-            "announcement": ("fellowship_announcements", "image_path", "id=? AND fellowship_id=? AND status='published'"),
-            "event": ("fellowship_events", "poster_path", "id=? AND fellowship_id=? AND status='published'"),
-            "study": ("fellowship_studies", "media_path", "id=? AND fellowship_id=? AND status='published'"),
-            "gallery": ("fellowship_gallery", "media_path", "id=? AND fellowship_id=? AND status='published'"),
-        }
-        source = sources.get(kind)
-        if not source:
-            abort(404)
-        table, column, where = source
-        params = (item_id,) if table == "fellowships" else (item_id, fid)
-        row = query(
-            f"SELECT {column} AS image_path FROM {table} WHERE {where}",
-            params,
-        ).fetchone()
-        if not row or not row["image_path"]:
-            abort(404)
-        stored = str(row["image_path"]).strip()
-
-        base = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
-        key = (os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
-        if not base or not key:
-            abort(404)
-        allowed_buckets = ("church-media", "leadership-photos")
-        parsed = urlparse(stored)
-        object_path = stored
-        bucket_candidates = list(allowed_buckets)
-        if parsed.scheme in ("http", "https"):
-            base_host = urlparse(base).netloc
-            if parsed.netloc != base_host:
-                abort(404)
-            marker = "/storage/v1/object/"
-            at = parsed.path.find(marker)
-            if at < 0:
-                abort(404)
-            part = parsed.path[at + len(marker):]
-            for prefix in ("public/", "sign/"):
-                if part.startswith(prefix):
-                    part = part[len(prefix):]
-            bucket, sep, object_path = part.partition("/")
-            if not sep or bucket not in allowed_buckets or not object_path:
-                abort(404)
-            bucket_candidates = [bucket]
-        elif stored.startswith("/"):
-            abort(404)
-
-        last_status = 404
-        for bucket in bucket_candidates:
-            response = requests.get(
-                f"{base}/storage/v1/object/{bucket}/{quote(unquote(object_path), safe='/')}",
-                headers={"Authorization": f"Bearer {key}", "apikey": key},
-                timeout=25,
-            )
-            if response.status_code == 200:
-                mime = response.headers.get("Content-Type", "application/octet-stream").split(";", 1)[0]
-                if not mime.startswith("image/"):
-                    abort(415)
-                result = send_file(BytesIO(response.content), mimetype=mime, max_age=3600)
-                result.headers["X-Content-Type-Options"] = "nosniff"
-                return result
-            last_status = response.status_code
-        app.logger.warning("Fellowship image proxy failed: HTTP %s (%s/%s)", last_status, slug, kind)
-        abort(404)
-
-
     @app.get("/fellowship/<slug>")
     def fellowship_public_home(slug):
         row = query("SELECT * FROM fellowships WHERE slug=? AND active=1", (slug,)).fetchone()
         if not row:
             abort(404)
         f = row_dict(row)
-        # Public image URLs are stable diocesan proxy routes, not expiring Supabase signatures.
-        def fellowship_image_url(path, kind, item_id):
+        # Create short-lived signed URLs for images stored in the private bucket.
+        def fellowship_image_url(path):
             if not path:
                 return ""
-            return url_for(
-                "fellowship_public_image",
-                slug=slug,
-                kind=kind,
-                item_id=item_id,
-            )
+            if str(path).startswith(("https://", "http://", "data:")):
+                return path
+            base = (os.environ.get("SUPABASE_URL") or "").strip().rstrip("/")
+            key = (os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
+            if not base or not key:
+                return ""
+            import requests
+            from urllib.parse import quote
+            from urllib.parse import quote
+            # Existing records may reference either storage bucket.
+            for bucket in ("church-media", "leadership-photos"):
+                response = requests.post(
+                    f"{base}/storage/v1/object/sign/{bucket}/{quote(str(path), safe='/')}",
+                    headers={"Authorization": f"Bearer {key}", "apikey": key,
+                             "Content-Type": "application/json"},
+                    json={"expiresIn": 3600},
+                    timeout=20,
+                )
+                if response.ok:
+                    signed = response.json().get("signedURL") or response.json().get("signedUrl") or ""
+                    if signed:
+                        if signed.startswith(("https://", "http://")):
+                            return signed
+                        storage_base = base + "/storage/v1"
+                        return storage_base + (signed if signed.startswith("/") else "/" + signed)
+            app.logger.warning("Could not sign fellowship image from either storage bucket")
+            return ""
 
+        f["logo_display_url"] = fellowship_image_url(f.get("logo_path"))
+        f["cover_display_url"] = fellowship_image_url(f.get("cover_path"))
         fid = f["id"]
         leaders = query("""SELECT * FROM fellowship_leaders
             WHERE fellowship_id=? AND active=1 ORDER BY display_order, full_name""", (fid,)).fetchall()
@@ -377,17 +266,17 @@ def register_fellowship_routes(app, db_getter, user_getter):
             ORDER BY created_at DESC LIMIT 18""", (fid,)).fetchall()
         return render_template(
             "fellowship_public.html", fellowship=f,
-            leaders=[dict(row_dict(x), photo_display_url=fellowship_image_url(row_dict(x).get("photo_path"), "leader", row_dict(x)["id"])) for x in leaders],
+            leaders=[dict(row_dict(x), photo_display_url=fellowship_image_url(row_dict(x).get("photo_path"))) for x in leaders],
             announcements=[dict(row_dict(x), image_display_url=fellowship_image_url(
-                row_dict(x).get("image_path"), "announcement", row_dict(x)["id"]
+                row_dict(x).get("image_path")
             )) for x in announcements],
             events=[dict(row_dict(x), poster_display_url=fellowship_image_url(
-                row_dict(x).get("poster_path"), "event", row_dict(x)["id"]
+                row_dict(x).get("poster_path")
             )) for x in events],
             studies=[dict(row_dict(x), media_display_url=fellowship_image_url(
-                row_dict(x).get("media_path"), "study", row_dict(x)["id"]
+                row_dict(x).get("media_path")
             )) for x in studies],
-            gallery=[dict(row_dict(x), media_display_url=fellowship_image_url(row_dict(x).get("media_path"), "gallery", row_dict(x)["id"])) for x in gallery],
+            gallery=[dict(row_dict(x), media_display_url=fellowship_image_url(row_dict(x).get("media_path"))) for x in gallery],
         )
 
     @app.get("/admin/fellowships")

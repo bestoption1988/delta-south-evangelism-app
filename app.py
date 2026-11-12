@@ -1909,7 +1909,7 @@ def page_login_required(fn):
 
 @app.before_request
 def protect_app():
-    public = {"public_home", "privacy_policy", "account_deletion", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "media_document_view", "media_document_download", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai", "fellowship_directory", "fellowship_public_home", "devotional_centre_home", "devotional_yearly_lectionary", "devotional_centre_collection", "devotional_centre_item", "devotional_holy_bible", "devotional_holy_bible_books", "devotional_holy_bible_chapter"}
+    public = {"public_home", "privacy_policy", "account_deletion", "public_giving_page", "public_prayer_request", "live_worship_page", "login", "setup", "logout", "static", "manifest", "public_member_registration_page", "account_registration", "forgot_password", "reset_password", "media_library_public", "media_document_view", "media_document_download", "public_member_care_options", "public_member_care_create", "public_member_care_detail", "public_member_care_message", "public_member_care_ai", "fellowship_directory", "fellowship_public_home", "devotional_centre_home", "devotional_yearly_lectionary", "devotional_centre_collection", "devotional_centre_item", "devotional_holy_bible", "devotional_holy_bible_books", "devotional_holy_bible_chapter", "devotional_bible_reader"}
     if request.endpoint in public or request.endpoint is None:
         return None
     if is_setup_needed():
@@ -2842,77 +2842,6 @@ def _homepage_daily_reading():
     except (OSError, ValueError, TypeError, json.JSONDecodeError):
         app.logger.exception("Homepage daily Scripture and hymn could not be loaded")
         return {"date": "", "verse": {}, "hymn": {}}
-
-
-@app.get("/mcn-offline-sw.js")
-def mcn_offline_service_worker():
-    """Serve the public offline cache worker with permission to control the whole site."""
-    worker_path = os.path.join(ROOT, "static", "mcn-offline-sw.js")
-    try:
-        with open(worker_path, "r", encoding="utf-8") as worker_file:
-            worker_source = worker_file.read()
-    except OSError:
-        return Response("Offline worker unavailable", status=404, mimetype="text/plain")
-    response = Response(worker_source, mimetype="application/javascript")
-    response.headers["Service-Worker-Allowed"] = "/"
-    response.headers["Cache-Control"] = "no-cache"
-    return response
-
-
-@app.get("/public/leadership-photo/<int:profile_id>")
-def public_leadership_photo(profile_id):
-    """Serve a published diocesan leadership portrait through the app, not a temporary storage URL."""
-    from flask import abort, send_file
-    from io import BytesIO
-    from urllib.parse import quote, unquote, urlparse
-    import requests
-
-    row = db().execute(
-        "SELECT photo_path FROM leadership_profiles "
-        "WHERE id=? AND LOWER(CAST(active AS TEXT)) IN ('1','true','t')",
-        (profile_id,),
-    ).fetchone()
-    if not row or not row["photo_path"]:
-        abort(404)
-    photo_path = str(row["photo_path"]).strip()
-    if not photo_path:
-        abort(404)
-
-    # Existing static uploads remain supported.
-    if photo_path.startswith("/static/"):
-        return redirect(photo_path)
-    if not photo_path.startswith(("https://", "http://")):
-        return redirect(url_for("static", filename=photo_path.lstrip("/")))
-
-    base, key = _leadership_storage_credentials()
-    parsed = urlparse(photo_path)
-    marker = "/storage/v1/object/"
-    marker_at = parsed.path.find(marker)
-    if marker_at < 0:
-        abort(404)
-    object_part = parsed.path[marker_at + len(marker):]
-    if object_part.startswith("public/"):
-        object_part = object_part[len("public/"):]
-    if object_part.startswith("sign/"):
-        object_part = object_part[len("sign/"):]
-    bucket, separator, object_path = object_part.partition("/")
-    if not separator or bucket != _LEADERSHIP_BUCKET or not object_path:
-        abort(404)
-
-    response = requests.get(
-        f"{base}/storage/v1/object/{bucket}/{quote(unquote(object_path), safe='/')}",
-        headers={"Authorization": f"Bearer {key}", "apikey": key},
-        timeout=25,
-    )
-    if response.status_code != 200:
-        app.logger.warning("Leadership photo proxy returned HTTP %s for profile %s", response.status_code, profile_id)
-        abort(404)
-    mime = response.headers.get("Content-Type", "image/jpeg").split(";", 1)[0]
-    if not mime.startswith("image/"):
-        abort(415)
-    result = send_file(BytesIO(response.content), mimetype=mime, max_age=3600)
-    result.headers["X-Content-Type-Options"] = "nosniff"
-    return result
 
 
 @app.get("/")
@@ -12614,7 +12543,190 @@ def devotional_centre_item(resource_id):
 
 
 
-# Bible reader uses only the MyBible modules supplied in bibles.zip.
+# CSB-only Bible reader. The licensed PDF is stored privately in Naijacloud Object Storage.
+_CSB_BIBLE_OBJECT_KEY = "devotional/bibles/csb-pew-bible-2017.pdf"
+_WEB_BIBLE_OBJECT_KEY = "devotional/bibles/web.bbl.mybible"
+
+def _web_bible_db_path():
+    """Download the installed WEB MyBible database from private object storage on demand."""
+    path = os.path.join(DATA_DIR, "web.bbl.mybible")
+    if not os.path.isfile(path) or os.path.getsize(path) < 1024:
+        payload = _dc_s3_get(_WEB_BIBLE_OBJECT_KEY)
+        if not payload.startswith(b"SQLite format 3\\x00"):
+            raise ValueError("Stored WEB Bible database is invalid.")
+        os.makedirs(DATA_DIR, exist_ok=True)
+        temp_path = path + ".tmp"
+        with open(temp_path, "wb") as handle:
+            handle.write(payload)
+        os.replace(temp_path, path)
+    return path
+
+def _web_bible_connect():
+    path = _web_bible_db_path()
+    conn = sqlite3.connect("file:" + path + "?mode=ro", uri=True, timeout=20)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+@app.get("/devotional-centre/bible")
+def devotional_bible_reader():
+    is_admin = _dc_admin_required()
+    available = False
+    try:
+        _dc_s3_client().head_object(Bucket=_dc_s3_bucket(), Key=_CSB_BIBLE_OBJECT_KEY)
+        available = True
+    except Exception:
+        app.logger.info("CSB Bible PDF has not yet been uploaded to Object Storage")
+    return render_template("devotional_bible.html",
+                           is_admin=is_admin, bible_available=available)
+
+
+@app.post("/admin/devotional-centre/bible/upload")
+@page_login_required
+def admin_upload_csb_bible():
+    request.max_content_length = 30 * 1024 * 1024
+    if not _dc_admin_required():
+        return "Administrator access required.", 403
+    upload = request.files.get("bible_pdf")
+    if not upload or not upload.filename:
+        flash("Select the uploaded CSB Pew Bible PDF first.", "error")
+        return redirect(url_for("devotional_bible_reader"))
+    if not upload.filename.lower().endswith(".pdf"):
+        flash("Only a PDF Bible file is accepted.", "error")
+        return redirect(url_for("devotional_bible_reader"))
+    try:
+        payload = upload.read(30 * 1024 * 1024 + 1)
+        if len(payload) > 30 * 1024 * 1024:
+            raise ValueError("The PDF is larger than the 30 MB upload limit.")
+        if not payload.startswith(b"%PDF"):
+            raise ValueError("The selected file is not a valid PDF.")
+        _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, payload, "application/pdf")
+        flash("Christian Standard Bible (CSB) uploaded successfully.", "success")
+    except Exception as exc:
+        app.logger.exception("CSB Bible upload failed")
+        flash("CSB upload failed: " + str(exc)[:220], "error")
+    return redirect(url_for("devotional_bible_reader"))
+
+
+
+@app.post("/admin/devotional-centre/bible/upload/init")
+@page_login_required
+def admin_csb_upload_init():
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    try:
+        data = request.get_json(silent=True) or {}
+        filename = secure_filename(str(data.get("filename") or "csb-bible.pdf"))
+        size = int(data.get("size") or 0)
+        if not filename.lower().endswith(".pdf"):
+            return jsonify({"error": "Please select a PDF file."}), 400
+        if size <= 0 or size > 30 * 1024 * 1024:
+            return jsonify({"error": "PDF size must be between 1 byte and 30 MB."}), 400
+        upload_id = secrets.token_hex(20)
+        upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+        os.makedirs(upload_dir, exist_ok=True)
+        path = os.path.join(upload_dir, upload_id + ".csb.part")
+        meta = os.path.join(upload_dir, upload_id + ".csb.json")
+        with open(path, "wb"):
+            pass
+        with open(meta, "w", encoding="utf-8") as f:
+            json.dump({"size": size, "received": 0}, f)
+        return jsonify({"upload_id": upload_id, "chunk_size": 2 * 1024 * 1024})
+    except Exception as exc:
+        app.logger.exception("Could not initialise CSB PDF upload")
+        return jsonify({"error": "Could not initialise PDF upload: " + str(exc)[:180]}), 500
+
+
+@app.post("/admin/devotional-centre/bible/upload/<upload_id>/chunk")
+@page_login_required
+def admin_csb_upload_chunk(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    request.max_content_length = 3 * 1024 * 1024
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    path = os.path.join(upload_dir, upload_id + ".csb.part")
+    meta = os.path.join(upload_dir, upload_id + ".csb.json")
+    try:
+        os.makedirs(upload_dir, exist_ok=True)
+        if not os.path.isfile(path) or not os.path.isfile(meta):
+            return jsonify({"error": "PDF upload session not found. Start the upload again."}), 404
+        with open(meta, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        offset = int(request.headers.get("X-Chunk-Offset", "-1"))
+        chunk = request.get_data(cache=False)
+        if not chunk or len(chunk) > 2 * 1024 * 1024:
+            return jsonify({"error": "PDF part must be between 1 byte and 2 MB."}), 400
+        if offset != int(state.get("received", 0)) or os.path.getsize(path) != offset:
+            return jsonify({"error": "Upload position mismatch. Please restart the PDF upload."}), 409
+        if offset + len(chunk) > int(state["size"]):
+            return jsonify({"error": "PDF part exceeds the declared file size."}), 400
+        with open(path, "ab") as output:
+            output.write(chunk)
+        state["received"] = offset + len(chunk)
+        with open(meta, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+        return jsonify({"received": state["received"], "size": state["size"]})
+    except FileNotFoundError:
+        return jsonify({"error": "PDF upload session expired. Please start again."}), 404
+    except Exception as exc:
+        app.logger.exception("CSB PDF chunk upload failed")
+        return jsonify({"error": "PDF part upload failed: " + str(exc)[:180]}), 500
+
+
+@app.post("/admin/devotional-centre/bible/upload/<upload_id>/complete")
+@page_login_required
+def admin_csb_upload_complete(upload_id):
+    if not _dc_admin_required():
+        return jsonify({"error": "Administrator access required."}), 403
+    if not re.fullmatch(r"[a-f0-9]{40}", upload_id or ""):
+        return jsonify({"error": "Invalid upload identifier."}), 400
+    upload_dir = os.path.join(DATA_DIR, "devotional_uploads")
+    path = os.path.join(upload_dir, upload_id + ".csb.part")
+    meta = os.path.join(upload_dir, upload_id + ".csb.json")
+    try:
+        with open(meta, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        if int(state.get("received", 0)) != int(state.get("size", -1)):
+            return jsonify({"error": "PDF upload is incomplete."}), 400
+        if not os.path.isfile(path) or os.path.getsize(path) != int(state.get("size", -1)):
+            return jsonify({"error": "The uploaded PDF file is missing or its size does not match. Please restart the upload."}), 400
+        with open(path, "rb") as f:
+            header = f.read(5)
+            if header != b"%PDF-":
+                return jsonify({"error": "The uploaded file is not a valid PDF. Please select the original CSB PDF, not a renamed ZIP."}), 400
+            f.seek(0)
+            payload = f.read()
+        if len(payload) != int(state["size"]):
+            return jsonify({"error": "The PDF could not be read completely. Please retry the upload."}), 400
+        _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, payload, "application/pdf")
+        # Verify the object exists and has the expected size before reporting success.
+        stored = _dc_s3_client().head_object(Bucket=_dc_s3_bucket(), Key=_CSB_BIBLE_OBJECT_KEY)
+        if int(stored.get("ContentLength", -1)) != len(payload):
+            raise RuntimeError("Object Storage did not confirm the complete PDF size.")
+        for item in (path, meta):
+            try:
+                os.remove(item)
+            except OSError:
+                app.logger.warning("Could not remove temporary CSB upload file: %s", item)
+        return jsonify({"success": True, "message": "CSB Bible uploaded and verified successfully.", "redirect": url_for("devotional_bible_reader")})
+    except Exception as exc:
+        app.logger.exception("Could not save completed CSB Bible PDF")
+        return jsonify({"error": "Could not save CSB PDF to Object Storage: " + str(exc)[:200]}), 503
+
+
+@app.get("/devotional-centre/bible/file")
+def devotional_bible_file():
+    try:
+        url = _dc_signed(_CSB_BIBLE_OBJECT_KEY)
+        if not url:
+            return "The CSB Bible PDF is not available yet. An administrator must upload it.", 404
+        return redirect(url)
+    except Exception:
+        app.logger.exception("Could not open CSB Bible PDF")
+        return "The CSB Bible PDF is not available yet. Please contact the diocesan administrator.", 404
+
 
 @app.post("/admin/devotional-centre/upload/init")
 @page_login_required
@@ -12719,6 +12831,66 @@ def admin_devotional_upload_complete(upload_id):
             bad_member = archive.testzip()
             if bad_member:
                 raise ValueError("ZIP integrity check failed at " + str(bad_member)[:120])
+
+            # Convenience: install the uploaded World English Bible MyBible
+            # database directly, without an online Bible API or web-rendered text.
+            if not any(n.endswith("/hymns.json") for n in names):
+                web_files = [item for item in members
+                             if not item.is_dir() and os.path.basename(item.filename).lower() == "web.bbl.mybible"]
+                if web_files:
+                    if len(web_files) != 1 or int(web_files[0].file_size or 0) > 40 * 1024 * 1024:
+                        raise ValueError("The ZIP must contain exactly one WEB Bible database under 40 MB.")
+                    bible_payload = archive.read(web_files[0])
+                    if not bible_payload.startswith(b"SQLite format 3\\x00"):
+                        raise ValueError("The WEB Bible file is not a valid SQLite MyBible database.")
+                    import tempfile as _tempfile
+                    with _tempfile.NamedTemporaryFile(suffix=".bbl.mybible", delete=False) as check_file:
+                        check_file.write(bible_payload)
+                        check_path = check_file.name
+                    try:
+                        check_db = sqlite3.connect(check_path)
+                        details = check_db.execute("SELECT Abbreviation FROM Details LIMIT 1").fetchone()
+                        verse_count = check_db.execute("SELECT COUNT(*) FROM Bible").fetchone()[0]
+                        check_db.close()
+                        if not details or str(details[0]).upper() != "WEB" or verse_count < 30000:
+                            raise ValueError("The selected database is not a complete World English Bible.")
+                    finally:
+                        try: os.remove(check_path)
+                        except OSError: pass
+                    _dc_s3_put(_WEB_BIBLE_OBJECT_KEY, bible_payload, "application/vnd.sqlite3")
+                    for item in (upload_path, meta_path):
+                        try: os.remove(item)
+                        except OSError: pass
+                    return jsonify({
+                        "bible_uploaded": True,
+                        "message": "World English Bible installed for offline reading.",
+                        "redirect": url_for("devotional_holy_bible")
+                    })
+
+                pdfs = [item for item in members
+                        if not item.is_dir() and item.filename.lower().endswith(".pdf")]
+                preferred = [item for item in pdfs
+                             if "csb_pew_bible_2nd_printing" in os.path.basename(item.filename).lower()
+                             or "csb" in os.path.basename(item.filename).lower()]
+                selected = preferred[0] if len(preferred) == 1 else (pdfs[0] if len(pdfs) == 1 else None)
+                if selected is None:
+                    raise ValueError("This ZIP is not a Devotional Kits package and does not contain one identifiable CSB Bible PDF.")
+                if int(selected.file_size or 0) > 30 * 1024 * 1024:
+                    raise ValueError("The Bible PDF inside this ZIP is larger than the 30 MB limit.")
+                bible_payload = archive.read(selected)
+                if not bible_payload.startswith(b"%PDF-"):
+                    raise ValueError("The PDF inside this ZIP is not valid.")
+                _dc_s3_put(_CSB_BIBLE_OBJECT_KEY, bible_payload, "application/pdf")
+                for item in (upload_path, meta_path):
+                    try:
+                        os.remove(item)
+                    except OSError:
+                        pass
+                return jsonify({
+                    "bible_uploaded": True,
+                    "message": "CSB Bible PDF extracted from the ZIP and uploaded successfully.",
+                    "redirect": url_for("devotional_bible_reader")
+                })
 
         job_id = secrets.token_hex(12)
         storage_path = "devotional-imports/uploads/" + upload_id
@@ -13199,12 +13371,9 @@ def register_mcn_offline_worker(response):
             if "/service-worker.js" not in html and "</body>" in html:
                 registration = (
                     '<script>(function(){if("serviceWorker" in navigator){'
-                    'window.mcnCacheEntireApp=function(){return navigator.serviceWorker.ready.then(function(reg){'
-                    'var worker=reg.active||reg.waiting||reg.installing;if(!worker)return;'
-                    'worker.postMessage({type:"CACHE_MCN_APP"});});};'
+                    'window.mcnCacheEntireApp=function(){navigator.serviceWorker.ready.then(function(reg){'
+                    'var worker=reg.active||reg.waiting||reg.installing;if(worker){worker.postMessage({type:"CACHE_MCN_APP"});}});};'
                     'navigator.serviceWorker.register("/service-worker.js",{scope:"/"})'
-                    '.then(function(){return navigator.serviceWorker.ready;})'
-                    '.then(function(){if(navigator.onLine){window.mcnCacheEntireApp();}})'
                     '.catch(function(error){console.warn("Offline support unavailable",error);});'
                     '}})();</script>'
                 )
@@ -13232,6 +13401,7 @@ _BIBLE_MODULES = {
     "logos": ("logos.bbl.mybible", "Logos Bible"),
     "net": ("net.bbl.mybible", "New English Translation"),
     "nheb": ("nheb.bbl.mybible", "New Heart English Bible"),
+    "web": ("web.bbl.mybible", "World English Bible"),
     "wesley": ("wesley.bbl.mybible", "Wesley's New Testament"),
 }
 _BIBLE_OBJECT_PREFIX = "devotional/bibles/translations/"
@@ -13281,30 +13451,9 @@ def devotional_holy_bible():
         is_admin=_dc_admin_required(),
     )
 
-@app.get("/api/offline/bible-modules")
-def api_offline_bible_modules():
-    """List only the supported MyBible modules imported from the supplied bibles.zip."""
-    return jsonify({"modules": _installed_bible_modules()})
-
-
-@app.get("/api/offline/bible-module/<code>")
-def api_offline_bible_module(code):
-    """Deliver one installed MyBible SQLite module for local, in-app offline storage."""
-    code = (code or "").strip().lower()
-    if code not in _BIBLE_MODULES:
-        return jsonify({"error": "This Bible module is not part of the supplied package."}), 404
-    try:
-        return send_file(_bible_db_path(code), mimetype="application/vnd.sqlite3",
-                         as_attachment=True, download_name=_BIBLE_MODULES[code][0],
-                         conditional=True)
-    except Exception:
-        app.logger.exception("Could not provide offline Bible module %s", code)
-        return jsonify({"error": "This uploaded Bible module is temporarily unavailable."}), 503
-
-
 @app.get("/devotional-centre/holy-bible/books")
 def devotional_holy_bible_books():
-    code = (request.args.get("translation") or "bbe").strip().lower()
+    code = (request.args.get("translation") or "web").strip().lower()
     if code not in _BIBLE_MODULES:
         return jsonify({"error": "Choose a supported Bible translation."}), 400
     try:
@@ -13334,7 +13483,7 @@ def devotional_holy_bible_books():
 
 @app.get("/devotional-centre/holy-bible/chapter")
 def devotional_holy_bible_chapter():
-    code = (request.args.get("translation") or "bbe").strip().lower()
+    code = (request.args.get("translation") or "web").strip().lower()
     book = request.args.get("book", type=int)
     chapter = request.args.get("chapter", type=int)
     if code not in _BIBLE_MODULES:
@@ -13540,6 +13689,18 @@ def api_offline_devotional_resources():
         "pages": max(1, (total + per_page - 1) // per_page),
         "items": items
     })
+
+
+@app.get("/api/offline/csb-bible")
+def api_offline_csb_bible():
+    try:
+        signed_url = _dc_signed(_CSB_BIBLE_OBJECT_KEY)
+        if not signed_url:
+            return jsonify({"available": False, "error": "The uploaded CSB Bible is not available."}), 404
+        return jsonify({"available": True, "download_url": signed_url, "title": "Christian Standard Bible — 2017 Pew Bible"})
+    except Exception:
+        app.logger.exception("Offline CSB Bible link could not be created")
+        return jsonify({"available": False, "error": "The CSB Bible is temporarily unavailable."}), 503
 
 
 @app.get("/api/offline/lectionary")
