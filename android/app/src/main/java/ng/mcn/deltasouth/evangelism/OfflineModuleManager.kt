@@ -169,11 +169,16 @@ object OfflineModuleManager {
                     if (!response.isSuccessful) return@use ""
                     val body = response.body ?: return@use ""
                     val mime = body.contentType()?.toString()?.substringBefore(';')?.lowercase(Locale.ROOT).orEmpty()
+                    if (!mime.startsWith("image/")) {
+                        android.util.Log.w("MCNOffline", "Fellowship image endpoint returned non-image content ($mime) for $stem")
+                        return@use ""
+                    }
                     val ext = when (mime) {
                         "image/png" -> ".png"
                         "image/webp" -> ".webp"
                         "image/gif" -> ".gif"
                         "image/svg+xml" -> ".svg"
+                        "image/avif" -> ".avif"
                         else -> ".jpg"
                     }
                     val fileName = stem + ext
@@ -190,6 +195,8 @@ object OfflineModuleManager {
                     saved++
                     fileName
                 }
+            }.onFailure { error ->
+                android.util.Log.w("MCNOffline", "Could not save fellowship image $stem: ${error.javaClass.simpleName}")
             }.getOrDefault("")
         }
 
