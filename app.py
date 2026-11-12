@@ -2796,7 +2796,7 @@ def _homepage_daily_reading():
                 hymn.get("number") or hymn.get("hymn_number")
                 or hymn.get("item_number") or hymn_title
             ).strip()
-            number_match = re.search(r"\\d+", raw_number)
+            number_match = re.search(r"\d+", raw_number)
             hymn_number = number_match.group(0) if number_match else ""
             try:
                 hymn_row = None
