@@ -1391,15 +1391,24 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
     fun openSavedDiocesanHome(target: WebView?) {
         if (target == null) return
         target.post {
-            // Always open the homepage shipped inside this APK. Older app installs may
-            // contain a stale MHTML snapshot from a previous broken release; preferring
-            // that file makes every newer APK appear unchanged even after its assets are fixed.
             target.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-            val staleArchive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
-            if (staleArchive.exists()) {
-                runCatching { staleArchive.delete() }
+            val savedArchive = File(context.filesDir, "offline_homepage/diocesan-homepage.mht")
+            if (savedArchive.isFile && savedArchive.length() > 0L) {
+                Log.i("DeltaSouthOffline", "Opening the latest saved live homepage archive")
+                target.loadUrl(android.net.Uri.fromFile(savedArchive).toString())
+            } else {
+                // First-ever offline launch: use the bundled fallback until a live copy
+                // has been successfully captured from the real website.
+                Log.w("DeltaSouthOffline", "No live homepage snapshot exists; opening bundled fallback")
+                target.loadUrl("file:///android_asset/offline-home/index.html")
             }
-            target.loadUrl("file:///android_asset/offline-home/index.html")
+        }
+    }
+    fun openLiveDiocesanHome(target: WebView?) {
+        if (target == null) return
+        target.post {
+            target.settings.cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+            target.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/")
         }
     }
     BackHandler(enabled = webView?.canGoBack() == true) { webView?.goBack() }
@@ -1636,7 +1645,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             // Do not gate this on onPageStarted: WebView may request CSS/images
                             // before that callback flips localArchiveActive, causing a blank page
                             // when the phone is in Airplane Mode.
-                            if (requestedUri.host == configuredHost && !request.isForMainFrame) {
+                            if (requestedUri.host == configuredHost && !request.isForMainFrame &&
+                                localArchiveActive.get() && !onlineState) {
                                 val requestPath = android.net.Uri.decode(requestedUri.encodedPath.orEmpty()).trimStart('/')
                                 if (requestPath.startsWith("api/") || requestPath.startsWith("socket.io/")) {
                                     return android.webkit.WebResourceResponse(
@@ -2043,10 +2053,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     pageError = false
                                     pageErrorDetails = ""
                                     view.post {
-                                        view.settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                                        // Recover to the homepage packaged in this APK, never an
-                                        // old MHTML archive left behind by an earlier installation.
-                                        view.loadUrl("file:///android_asset/offline-home/index.html")
+                                        // If a live request fails, prefer the most recent complete
+                                        // website snapshot; use the APK homepage only before the
+                                        // first successful live snapshot has been saved.
+                                        openSavedDiocesanHome(view)
                                     }
                                     return
                                 }
@@ -2072,8 +2082,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                             if (request.isForMainFrame && response.statusCode == 404 &&
                                 (request.url.path.isNullOrBlank() || request.url.path == "/")) {
                                 pageLoading = false
-                                pageErrorDetails = "The main diocesan homepage returned HTTP 404. A different page will not be substituted."
-                                pageError = true
+                                pageError = false
+                                pageErrorDetails = "The live homepage returned HTTP 404; opening the last saved homepage copy."
+                                openSavedDiocesanHome(view)
                                 return
                             }
                             if (request.isForMainFrame && response.statusCode >= 400) {
@@ -2084,16 +2095,34 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                         }
                     }
                     webChromeClient = WebChromeClient()
-                    settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                    // Always start with the current homepage bundled in this APK.
-                    // Do not prefer an MHTML archive from a previous app version.
-                    loadUrl("file:///android_asset/offline-home/index.html")
+                    // Connected launches show the complete live Naijacloud website.
+                    // Offline launches use the most recently saved complete live homepage.
+                    settings.cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_NO_CACHE
+                    if (online) {
+                        loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/")
+                    } else {
+                        openSavedDiocesanHome(this)
+                    }
                     webView = this
                 }
             },
             update = { view ->
-                // Connectivity changes must not silently replace the saved homepage.
-                if (view.url.isNullOrBlank()) openSavedDiocesanHome(view)
+                // Switch only when the user is on the homepage itself. Never interrupt
+                // login, registration, payment, or another page during connectivity changes.
+                val currentUrl = view.url.orEmpty()
+                val currentUri = runCatching { android.net.Uri.parse(currentUrl) }.getOrNull()
+                val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                val isLiveHome = currentUri?.host == configuredHost &&
+                    (currentUri.path.isNullOrBlank() || currentUri.path == "/")
+                val isLocalHome = currentUrl.startsWith("file:///android_asset/offline-home/") ||
+                    currentUrl.endsWith("/offline_homepage/diocesan-homepage.mht")
+                if (online && isLocalHome) {
+                    openLiveDiocesanHome(view)
+                } else if (!online && isLiveHome) {
+                    openSavedDiocesanHome(view)
+                } else if (currentUrl.isBlank()) {
+                    if (online) openLiveDiocesanHome(view) else openSavedDiocesanHome(view)
+                }
             }
         )
         // Use the single menu rendered by the official diocesan website.
