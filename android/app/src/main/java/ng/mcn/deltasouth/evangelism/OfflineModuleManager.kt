@@ -261,6 +261,14 @@ object OfflineModuleManager {
                 }
             }.getOrDefault("")
         }
+        val leadership = root.optJSONArray("leadership")
+        if (leadership != null) for (index in 0 until leadership.length()) {
+            val item = leadership.optJSONObject(index) ?: continue
+            val id = item.optString("title", index.toString()).replace(Regex("[^A-Za-z0-9_-]"), "_")
+            val imageUrl = item.optString("offline_image_url").ifBlank { item.optString("photo_url") }
+            val file = fetch(imageUrl, "homepage-leader-$id")
+            if (file.isNotBlank()) item.put("offline_file", file)
+        }
         val gallery = root.optJSONArray("gallery")
         if (gallery != null) for (index in 0 until gallery.length()) {
             val item = gallery.optJSONObject(index) ?: continue
@@ -269,7 +277,7 @@ object OfflineModuleManager {
             val file = fetch(imageUrl, "homepage-gallery-$id")
             if (file.isNotBlank()) item.put("offline_file", file)
         }
-        android.util.Log.i("MCNOffline", "Saved $saved homepage gallery image(s)")
+        android.util.Log.i("MCNOffline", "Saved $saved homepage leadership/gallery image(s)")
         return root.toString()
     }
 
