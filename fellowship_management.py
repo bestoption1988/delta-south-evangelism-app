@@ -301,27 +301,47 @@ def register_fellowship_routes(app, db_getter, user_getter):
         key = (os.environ.get("SUPABASE_SECRET_KEY") or "").strip()
         if not base or not key:
             abort(404)
-        allowed_buckets = ("church-media", "leadership-photos")
+        allowed_buckets = ("leadership-photos", "church-media")
         parsed = urlparse(stored)
-        object_path = stored
+        object_path = unquote(parsed.path if parsed.scheme in ("http", "https") else stored).lstrip("/")
         bucket_candidates = list(allowed_buckets)
+
+        # Accept every format already used by fellowship uploads and older records:
+        # full Supabase public/signed URLs, "bucket/object/path", or a bare object path.
         if parsed.scheme in ("http", "https"):
-            base_host = urlparse(base).netloc
-            if parsed.netloc != base_host:
+            if parsed.netloc != urlparse(base).netloc:
                 abort(404)
             marker = "/storage/v1/object/"
             at = parsed.path.find(marker)
             if at < 0:
                 abort(404)
             part = parsed.path[at + len(marker):]
-            for prefix in ("public/", "sign/"):
+            for prefix in ("public/", "sign/", "authenticated/"):
                 if part.startswith(prefix):
                     part = part[len(prefix):]
-            bucket, sep, object_path = part.partition("/")
-            if not sep or bucket not in allowed_buckets or not object_path:
+                    break
+            bucket, separator, object_path = part.partition("/")
+            if not separator or bucket not in allowed_buckets or not object_path:
                 abort(404)
             bucket_candidates = [bucket]
-        elif stored.startswith("/"):
+        else:
+            first, separator, remainder = object_path.partition("/")
+            if separator and first in allowed_buckets:
+                bucket_candidates = [first]
+                object_path = remainder
+            elif object_path.startswith("storage/v1/object/"):
+                part = object_path.split("/storage/v1/object/", 1)[1]
+                for prefix in ("public/", "sign/", "authenticated/"):
+                    if part.startswith(prefix):
+                        part = part[len(prefix):]
+                        break
+                bucket, separator, remainder = part.partition("/")
+                if not separator or bucket not in allowed_buckets or not remainder:
+                    abort(404)
+                bucket_candidates = [bucket]
+                object_path = remainder
+
+        if not object_path or ".." in object_path.split("/"):
             abort(404)
 
         last_status = 404
