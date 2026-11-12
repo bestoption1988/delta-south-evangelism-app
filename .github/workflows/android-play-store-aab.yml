@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - postgres-migration-integration
+      - android-online-offline-recovery
     paths:
       - 'android/**'
       - 'app.py'
@@ -25,7 +26,7 @@ jobs:
         # Rebuild after the offline homepage image-proxy and asset-path corrections.
         uses: actions/checkout@v4
         with:
-          ref: postgres-migration-integration
+          ref: ${{ github.ref_name }}
 
       - name: Package the official web homepage, with verified APK fallback
         env:
