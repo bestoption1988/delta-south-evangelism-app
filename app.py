@@ -13829,6 +13829,10 @@ def api_public_homepage():
                 except Exception:
                     item["signed_url"] = ""
                 item["original_name"] = str(item.get("storage_path") or "").rsplit("/", 1)[-1]
+                if image_only and item.get("id") is not None:
+                    item["offline_image_url"] = url_for(
+                        "media_document_view", media_id=item["id"], raw="1"
+                    )
                 destination.append(item)
         except Exception:
             app.logger.exception("Native homepage published media could not be loaded")
