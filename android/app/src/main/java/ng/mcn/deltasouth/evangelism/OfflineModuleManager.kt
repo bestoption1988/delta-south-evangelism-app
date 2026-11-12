@@ -154,6 +154,7 @@ object OfflineModuleManager {
         val slug = apiPath.substringAfterLast('/').replace(Regex("[^A-Za-z0-9_-]"), "")
         if (slug.isBlank()) return source
         val folder = File(context.filesDir, "offline_storage/fellowship_media").apply { mkdirs() }
+        val previous = runCatching { JSONObject(File(context.filesDir, "offline_storage/fellowship_" + slug + ".json").readText()) }.getOrNull()
         var saved = 0
 
         fun fetch(url: String, stem: String): String {
@@ -169,11 +170,16 @@ object OfflineModuleManager {
                     if (!response.isSuccessful) return@use ""
                     val body = response.body ?: return@use ""
                     val mime = body.contentType()?.toString()?.substringBefore(';')?.lowercase(Locale.ROOT).orEmpty()
+                    if (!mime.startsWith("image/")) {
+                        android.util.Log.w("MCNOffline", "Fellowship image endpoint returned non-image content ($mime) for $stem")
+                        return@use ""
+                    }
                     val ext = when (mime) {
                         "image/png" -> ".png"
                         "image/webp" -> ".webp"
                         "image/gif" -> ".gif"
                         "image/svg+xml" -> ".svg"
+                        "image/avif" -> ".avif"
                         else -> ".jpg"
                     }
                     val fileName = stem + ext
@@ -190,14 +196,19 @@ object OfflineModuleManager {
                     saved++
                     fileName
                 }
+            }.onFailure { error ->
+                android.util.Log.w("MCNOffline", "Could not save fellowship image $stem: ${error.javaClass.simpleName}")
             }.getOrDefault("")
         }
 
         val fellowship = root.optJSONObject("fellowship")
         if (fellowship != null) {
+            val oldFellowship = previous?.optJSONObject("fellowship")
             val logo = fetch(fellowship.optString("offline_logo_url"), slug + "-logo")
+                .ifBlank { oldFellowship?.optString("offline_logo_file").orEmpty().takeIf { it.isNotBlank() && File(folder, it).isFile }.orEmpty() }
             if (logo.isNotBlank()) fellowship.put("offline_logo_file", logo)
             val cover = fetch(fellowship.optString("offline_cover_url"), slug + "-cover")
+                .ifBlank { oldFellowship?.optString("offline_cover_file").orEmpty().takeIf { it.isNotBlank() && File(folder, it).isFile }.orEmpty() }
             if (cover.isNotBlank()) fellowship.put("offline_cover_file", cover)
         }
         val groups = listOf(
@@ -212,11 +223,75 @@ object OfflineModuleManager {
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
                 val id = item.optString("id", index.toString()).ifBlank { index.toString() }
+                val oldItems = previous?.optJSONArray(key)
+                val oldItem = (0 until (oldItems?.length() ?: 0)).mapNotNull { oldItems?.optJSONObject(it) }.firstOrNull { it.optString("id") == id }
                 val file = fetch(item.optString("offline_image_url"), "$slug-$prefix-$id")
+                    .ifBlank { oldItem?.optString("offline_file").orEmpty().takeIf { it.isNotBlank() && File(folder, it).isFile }.orEmpty() }
                 if (file.isNotBlank()) item.put("offline_file", file)
             }
         }
         android.util.Log.i("MCNOffline", "Saved $saved fellowship image(s) for $slug")
+        return root.toString()
+    }
+
+    private fun cacheHomepageImages(context: Context, source: String): String {
+        val root = runCatching { JSONObject(source) }.getOrNull() ?: return source
+        val folder = File(context.filesDir, "offline_storage/homepage_media").apply { mkdirs() }
+        val previous = runCatching { JSONObject(File(context.filesDir, "offline_storage/homepage.json").readText()) }.getOrNull()
+        var saved = 0
+        fun fetch(url: String, stem: String): String {
+            if (url.isBlank()) return ""
+            return runCatching {
+                val fullUrl = if (url.startsWith("http://") || url.startsWith("https://")) url
+                    else BuildConfig.API_BASE_URL.trimEnd('/') + "/" + url.trimStart('/')
+                val request = Request.Builder().url(fullUrl).get().build()
+                Backend.client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) return@use ""
+                    val body = response.body ?: return@use ""
+                    val mime = body.contentType()?.toString()?.substringBefore(';')?.lowercase(Locale.ROOT).orEmpty()
+                    if (!mime.startsWith("image/")) return@use ""
+                    val ext = when (mime) {
+                        "image/png" -> ".png"
+                        "image/webp" -> ".webp"
+                        "image/gif" -> ".gif"
+                        "image/svg+xml" -> ".svg"
+                        else -> ".jpg"
+                    }
+                    val target = File(folder, stem + ext)
+                    val part = File(folder, target.name + ".part")
+                    val bytes = body.bytes()
+                    if (bytes.isEmpty()) return@use ""
+                    part.writeBytes(bytes)
+                    if (target.exists()) target.delete()
+                    if (!part.renameTo(target)) { part.copyTo(target, overwrite = true); part.delete() }
+                    saved++
+                    target.name
+                }
+            }.getOrDefault("")
+        }
+        val leadership = root.optJSONArray("leadership")
+        if (leadership != null) for (index in 0 until leadership.length()) {
+            val item = leadership.optJSONObject(index) ?: continue
+            val id = item.optString("title", index.toString()).replace(Regex("[^A-Za-z0-9_-]"), "_")
+            val imageUrl = item.optString("offline_image_url").ifBlank { item.optString("photo_url") }.ifBlank { item.optString("photo_path").let { if (it.isBlank()) "" else if (it.startsWith("http")) it else "/static/" + it.trimStart('/') } }
+            val oldItems = previous?.optJSONArray("leadership")
+            val oldItem = (0 until (oldItems?.length() ?: 0)).mapNotNull { oldItems?.optJSONObject(it) }.firstOrNull { it.optString("title") == item.optString("title") }
+            val file = fetch(imageUrl, "homepage-leader-$id")
+                .ifBlank { oldItem?.optString("offline_file").orEmpty().takeIf { it.isNotBlank() && File(folder, it).isFile }.orEmpty() }
+            if (file.isNotBlank()) item.put("offline_file", file)
+        }
+        val gallery = root.optJSONArray("gallery")
+        if (gallery != null) for (index in 0 until gallery.length()) {
+            val item = gallery.optJSONObject(index) ?: continue
+            val id = item.optString("id", index.toString()).ifBlank { index.toString() }
+            val imageUrl = item.optString("offline_image_url").ifBlank { item.optString("signed_url") }
+            val oldItems = previous?.optJSONArray("gallery")
+            val oldItem = (0 until (oldItems?.length() ?: 0)).mapNotNull { oldItems?.optJSONObject(it) }.firstOrNull { it.optString("id") == id }
+            val file = fetch(imageUrl, "homepage-gallery-$id")
+                .ifBlank { oldItem?.optString("offline_file").orEmpty().takeIf { it.isNotBlank() && File(folder, it).isFile }.orEmpty() }
+            if (file.isNotBlank()) item.put("offline_file", file)
+        }
+        android.util.Log.i("MCNOffline", "Saved $saved homepage leadership/gallery image(s)")
         return root.toString()
     }
 
@@ -250,7 +325,9 @@ object OfflineModuleManager {
                                 else -> ""
                             }
                             if (snapshotName.isNotBlank()) {
-                                if (path.startsWith("api/public/fellowships/") && bodyText.isNotBlank()) {
+                                if (path == "api/public/homepage" && bodyText.isNotBlank()) {
+                                    bodyText = cacheHomepageImages(context, bodyText)
+                                } else if (path.startsWith("api/public/fellowships/") && bodyText.isNotBlank()) {
                                     bodyText = cacheFellowshipImages(context, path, bodyText)
                                 }
                                 val target = File(snapshotDir, snapshotName)
@@ -402,6 +479,13 @@ object OfflineModuleManager {
         Backend.initialize(context.applicationContext)
         // Every library card owns one folder. Its index and hymn recordings stay together.
         val directory = devotionalCardFolder(context, collection)
+        // Keep the last known-good audio index while refreshing lyrics/metadata. A failed
+        // signed-URL request must never erase a recording that was already saved offline.
+        val previousItems = runCatching {
+            val previous = JSONArray(File(directory, "resources.json").readText())
+            (0 until previous.length()).mapNotNull { previous.optJSONObject(it) }
+                .associateBy { it.optString("resource_id") }
+        }.getOrDefault(emptyMap())
         val longClient = Backend.client.newBuilder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(300, TimeUnit.SECONDS)
@@ -425,6 +509,25 @@ object OfflineModuleManager {
             val items = result.optJSONArray("items") ?: JSONArray()
             for (index in 0 until items.length()) {
                 val item = items.optJSONObject(index) ?: continue
+                val previousItem = previousItems[item.optString("resource_id")]
+                val previousAudio = previousItem?.optString("audio_file").orEmpty()
+                if (previousAudio.isNotBlank() && File(directory, previousAudio).isFile) {
+                    item.put("audio_file", previousAudio)
+                }
+                val payload = item.optJSONObject("payload") ?: JSONObject()
+                val previousPayload = previousItem?.optJSONObject("payload")
+                val previousTunes = previousPayload?.optJSONArray("otherTunes")
+                val tunes = payload.optJSONArray("otherTunes")
+                if (tunes != null && previousTunes != null) {
+                    for (tuneIndex in 0 until minOf(tunes.length(), previousTunes.length())) {
+                        val tune = tunes.optJSONObject(tuneIndex) ?: continue
+                        val oldTune = previousTunes.optJSONObject(tuneIndex) ?: continue
+                        val oldFile = oldTune.optString("offline_file")
+                        if (oldFile.isNotBlank() && File(directory, oldFile).isFile) {
+                            tune.put("offline_file", oldFile)
+                        }
+                    }
+                }
                 if (includeAudio) {
                     val id = item.optString("resource_id").replace(Regex("[^A-Za-z0-9_-]"), "_")
                     val audioUrl = item.optString("audio_url")
@@ -436,8 +539,6 @@ object OfflineModuleManager {
                             audioDownloaded++
                         }
                     }
-                    val payload = item.optJSONObject("payload") ?: JSONObject()
-                    val tunes = payload.optJSONArray("otherTunes")
                     if (tunes != null) {
                         for (tuneIndex in 0 until tunes.length()) {
                             val tune = tunes.optJSONObject(tuneIndex) ?: continue
@@ -453,6 +554,7 @@ object OfflineModuleManager {
                     }
                     item.put("payload", payload)
                 }
+                item.put("payload", payload)
                 item.remove("offline_file")
                 allItems.put(item)
             }
