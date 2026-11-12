@@ -21,6 +21,15 @@ ARGS = [arg for arg in sys.argv[1:] if arg != "--verify-only"]
 DEST = Path(ARGS[0] if ARGS else "android/app/src/main/assets/offline-home")
 DEST.mkdir(parents=True, exist_ok=True)
 
+# Bundle the complete date-indexed Scripture and Methodist hymn collection.
+# The Android app selects today's entries locally using the Africa/Lagos date,
+# so daily cards continue changing even when the phone is offline.
+DAILY_CONTENT_SOURCE = Path(__file__).resolve().parents[1] / "data" / "scripture_hymns.json"
+DAILY_CONTENT_TARGET = DEST / "daily-content.json"
+if not DAILY_CONTENT_SOURCE.is_file() or DAILY_CONTENT_SOURCE.stat().st_size < 1000:
+    raise SystemExit("The daily Scripture and hymn collection is missing or incomplete.")
+DAILY_CONTENT_TARGET.write_bytes(DAILY_CONTENT_SOURCE.read_bytes())
+
 # Keep original absolute URLs in the HTML. Android's WebView interceptor maps
 # same-origin requests to offline-home/<URL path>. Do not use --convert-links:
 # it rewrites URLs to query-string filenames that do not match WebView request paths.
@@ -173,6 +182,7 @@ class HTMLAssets(HTMLParser):
 parser = HTMLAssets()
 parser.feed(html)
 required = set(parser.paths)
+required.add("daily-content.json")
 # CSS url(...) and @import assets are also part of the homepage render tree.
 css_pattern = re.compile(r"""url\(\s*['"]?([^)'"]+)['"]?\s*\)|@import\s+['"]([^'"]+)['"]""", re.I)
 pending = [p for p in required if p.lower().endswith(".css")]
