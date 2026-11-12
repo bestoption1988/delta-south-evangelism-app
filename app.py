@@ -2804,9 +2804,9 @@ def _homepage_daily_reading():
                     hymn_row = db().execute(
                         """SELECT * FROM devotional_resources
                            WHERE collection='english_hymns' AND published=1
-                             AND CAST(item_number AS TEXT)=?
+                             AND CAST(item_number AS INTEGER)=?
                            ORDER BY updated_at DESC LIMIT 1""",
-                        (hymn_number,),
+                        (int(hymn_number),),
                     ).fetchone()
                 if not hymn_row and hymn_title:
                     hymn_row = db().execute(
