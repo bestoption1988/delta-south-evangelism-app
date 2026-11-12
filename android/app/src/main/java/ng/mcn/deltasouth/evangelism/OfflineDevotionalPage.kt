@@ -80,6 +80,18 @@ object OfflineDevotionalPage {
         val content=snapshot.optJSONObject("homepage_content")?:JSONObject()
         val prelate=snapshot.optJSONObject("prelate")?:JSONObject()
         b.append("""<section class="item"><h2>Our Diocese</h2><p>${e(content.optString("vision","Worship · Witness · Service · Discipleship"))}</p><p>${e(content.optString("mission_1","Winning souls for Christ"))}</p><p>${e(content.optString("mission_2","Building spiritually fulfilled members"))}</p><p>${e(content.optString("mission_3","Serving humanity"))}</p><p><strong>${e(prelate.optString("name","Methodist Church Nigeria"))}</strong><br>${e(prelate.optString("title",""))}</p></section>""")
+        val leaders=snapshot.optJSONArray("leadership")?:JSONArray()
+        if(leaders.length()>0) {
+            b.append("<h2>Diocesan Leadership</h2><div class='grid'>")
+            for(i in 0 until leaders.length()) {
+                val leader=leaders.optJSONObject(i)?:continue
+                val photo=leader.optString("offline_file")
+                b.append("<article class='item'>")
+                if(photo.isNotBlank()) b.append("""<img data-mcn-lightbox="1" src="/__mcn_offline/file/${Uri.encode(photo)}" alt="${e(leader.optString("title","Leadership portrait"))}" style="width:100%;height:210px;object-fit:cover;border-radius:10px;cursor:zoom-in">""")
+                b.append("<h3>${e(leader.optString("full_name"))}</h3><p>${e(leader.optString("title"))}</p><p>${e(leader.optString("biography"))}</p></article>")
+            }
+            b.append("</div>")
+        }
         val events=snapshot.optJSONArray("events")?:JSONArray()
         if(events.length()>0) {
             b.append("<h2>Saved Announcements & Events</h2>")
@@ -138,7 +150,7 @@ object OfflineDevotionalPage {
         fun image(fileName:String,alt:String,style:String=""):String {
             if(fileName.isBlank())return ""
             val url="/__mcn_offline/file/${Uri.encode(fileName)}"
-            return """<img src="$url" alt="${e(alt)}" loading="lazy" style="display:block;max-width:100%;$style">"""
+            return """<img data-mcn-lightbox="1" src="$url" alt="${e(alt)}" loading="lazy" style="display:block;max-width:100%;cursor:zoom-in;$style">"""
         }
         val body=StringBuilder()
         val cover=f.optString("offline_cover_file")
