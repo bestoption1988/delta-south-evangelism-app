@@ -2048,16 +2048,22 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 val requestedPath = request.url.path.orEmpty()
                                 // Failed online navigation must never strand the user on Android's
                                 // generic "Webpage not available" screen. Restore the saved homepage.
-                                val isLiveDiocesanPage = request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host
-                                if (isLiveDiocesanPage) {
+                                val isLiveDiocesanHost = request.url.host == android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                                val isHomepageRequest = requestedPath.isBlank() || requestedPath == "/"
+                                if (isLiveDiocesanHost && isHomepageRequest) {
                                     pageError = false
                                     pageErrorDetails = ""
                                     view.post {
-                                        // If a live request fails, prefer the most recent complete
+                                        // If the live homepage fails, prefer the most recent complete
                                         // website snapshot; use the APK homepage only before the
                                         // first successful live snapshot has been saved.
                                         openSavedDiocesanHome(view)
                                     }
+                                    return
+                                }
+                                if (isLiveDiocesanHost) {
+                                    pageErrorDetails = "This page requires an internet connection. Reconnect and retry; the saved homepage remains available offline."
+                                    pageError = true
                                     return
                                 }
                                 if (requestedPath.startsWith("/devotional-centre") || requestedPath == "/media-library") {
