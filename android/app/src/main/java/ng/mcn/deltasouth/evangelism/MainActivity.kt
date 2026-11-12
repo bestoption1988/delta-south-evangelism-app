@@ -1744,11 +1744,41 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                         File(File(ctx.filesDir, "offline_storage/Church_Media"), "index.json").readText()
                                     )
                                 }.getOrDefault(org.json.JSONArray())
+                                val dailyContent = runCatching {
+                                    ctx.assets.open("offline-home/daily-content.json").bufferedReader().use {
+                                        org.json.JSONObject(it.readText())
+                                    }
+                                }.getOrNull()
+                                val dailyOrdinal = java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")).toEpochDay() + 719163L
+                                val dailyVerses = dailyContent?.optJSONArray("verses")
+                                val dailyHymns = dailyContent?.optJSONArray("hymns")
+                                val selectedVerse = dailyVerses?.takeIf { it.length() > 0 }
+                                    ?.optJSONObject(Math.floorMod(dailyOrdinal, dailyVerses.length().toLong()).toInt())
+                                val selectedDailyHymn = dailyHymns?.takeIf { it.length() > 0 }
+                                    ?.optJSONObject(Math.floorMod(dailyOrdinal * 7L, dailyHymns.length().toLong()).toInt())
+                                val dailyVerseLiteral = org.json.JSONObject.quote(selectedVerse?.toString() ?: "{}")
+                                val dailyHymnLiteral = org.json.JSONObject.quote(selectedDailyHymn?.toString() ?: "{}")
                                 val localMediaScript = """
                                     (function() {
                                       const hymns = $hymnRows;
                                       const media = $mediaRows;
+                                      const dailyVerse = JSON.parse($dailyVerseLiteral);
+                                      const dailyHymn = JSON.parse($dailyHymnLiteral);
                                       const key = value => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+                                      const scriptureCard = document.querySelector('.android-daily-card.scripture-preview');
+                                      if (scriptureCard && dailyVerse.reference) {
+                                        const heading = scriptureCard.querySelector('h3');
+                                        const fullText = scriptureCard.querySelector('.android-daily-full-text');
+                                        if (heading) heading.textContent = dailyVerse.reference;
+                                        if (fullText) fullText.textContent = dailyVerse.text || '';
+                                      }
+                                      const dailyHymnCard = document.querySelector('.android-daily-card.hymn-preview');
+                                      if (dailyHymnCard && dailyHymn.title) {
+                                        const heading = dailyHymnCard.querySelector('h3');
+                                        const fullText = dailyHymnCard.querySelector('.android-daily-full-text');
+                                        if (heading) heading.textContent = dailyHymn.title;
+                                        if (fullText) fullText.textContent = dailyHymn.lyrics || '';
+                                      }
                                       const card = document.querySelector('.android-daily-card.hymn-preview');
                                       if (card) {
                                         const heading = key(card.querySelector('h3')?.innerText);
