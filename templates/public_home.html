@@ -116,9 +116,21 @@
     </button><span class="daily-ticker-hint">↗</span>
   </div>
   <div class="daily-reading-accessible-content" aria-hidden="true">
-    <div id="dailyScriptureFull">{{ daily_reading.get("verse", {}).get("reference") or "Scripture for Today" }}&#10;&#10;{{ daily_reading.get("verse", {}).get("text") or "Open the Bible and spend time in God’s Word today." }}</div>
+    <div id="dailyScriptureFull">
+      <div class="daily-reading-scripture-reference">{{ daily_reading.get("verse", {}).get("reference") or "Scripture for Today" }}</div>
+      <div class="daily-reading-scripture-text">{{ daily_reading.get("verse", {}).get("text") or "The Scripture text is temporarily unavailable. Please open the Bible library for further reading." }}</div>
+      <a class="daily-reading-action" href="/devotional-centre/bible">Further Reading in the Holy Bible →</a>
+    </div>
     <div id="dailyHymnFull">
-      <div class="daily-reading-hymn-text">{{ daily_reading.get("hymn", {}).get("title") or "Methodist Hymn for Today" }}&#10;&#10;{{ daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection." }}</div>
+      <div class="daily-reading-hymn-text">
+        <strong>{{ daily_reading.get("hymn", {}).get("number") or daily_reading.get("hymn", {}).get("item_number") or "" }} {{ daily_reading.get("hymn", {}).get("title") or "Methodist Hymn for Today" }}</strong>
+        <div>{{ daily_reading.get("hymn", {}).get("lyrics") or "Visit the Devotional Centre to explore the Methodist hymn collection." }}</div>
+        {% if daily_reading.get("hymn", {}).get("devotional_url") %}
+        <a class="daily-reading-action" href="{{ daily_reading.get('hymn', {}).get('devotional_url') }}">View This Exact Hymn in the Hymn Book →</a>
+        {% else %}
+        <a class="daily-reading-action" href="/devotional-centre/english-hymns">Search the English Methodist Hymn Book →</a>
+        {% endif %}
+      </div>
       {% if daily_reading.get("hymn", {}).get("audio_url") %}
       <div class="daily-reading-audio">
         <p class="daily-reading-audio-title">♫ {{ daily_reading.get("hymn", {}).get("audio_tune_name") or "Main hymn tune" }}</p>
