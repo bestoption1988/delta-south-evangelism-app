@@ -2030,10 +2030,15 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   window.addEventListener('scroll',function(){if(panel.style.display!=='none')closeMenu();},{passive:true});
                                 })();
                             """.trimIndent()
-                            // The Android menu workaround is strictly for the bundled offline
-                            // homepage. Never alter the live website's dashboard/menu DOM: its own
-                            // JavaScript and CSS already work correctly in Chrome.
-                            if (url?.startsWith("file:///android_asset/offline-home/") == true) {
+                            // Apply the Android menu workaround only on the public homepage:
+                            // both the bundled offline page and the live diocesan root page.
+                            // Do not touch staff dashboards or other website pages.
+                            val finishedUri = runCatching { android.net.Uri.parse(url.orEmpty()) }.getOrNull()
+                            val isBundledOfflineHome = url?.startsWith("file:///android_asset/offline-home/") == true
+                            val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
+                            val isLivePublicHome = finishedUri?.host == configuredHost &&
+                                (finishedUri.path.isNullOrBlank() || finishedUri.path == "/")
+                            if (isBundledOfflineHome || isLivePublicHome) {
                                 view.evaluateJavascript(menuBridge, null)
                             }
                             // Daily Scripture and hymn use the same tested webpage implementation as Chrome.
