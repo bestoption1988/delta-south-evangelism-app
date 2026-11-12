@@ -1495,7 +1495,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 // redirect and menu navigation exactly as it does in Chrome.
                                 // Offline routing is only used when the device has no connection.
                                 if (onlineState) return false
-                                val route = localPath.ifBlank { "/" }                                if (route == "/" || route == "/index.html") {
+                                val route = localPath.ifBlank { "/" }
+                                if (route == "/" || route == "/index.html") {
                                     openSavedDiocesanHome(view)
                                     return true
                                 }
