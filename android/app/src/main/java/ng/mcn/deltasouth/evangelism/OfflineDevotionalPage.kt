@@ -41,20 +41,32 @@ object OfflineDevotionalPage {
     }
     private fun homepage(c:Context):String {
         val english=sortedRows(a(c,"english_hymns"))
-        val today=java.util.Calendar.getInstance(java.util.Locale("en","NG")).get(java.util.Calendar.DAY_OF_YEAR)
-        val hymn=english.getOrNull(if(english.isEmpty()) 0 else (today-1)%english.size)
+        val dailyCollection=runCatching {
+            JSONObject(c.assets.open("offline-home/daily-content.json").bufferedReader().use { it.readText() })
+        }.getOrDefault(JSONObject())
+        val todayOrdinal=java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")).toEpochDay()+719163L
+        val verses=dailyCollection.optJSONArray("verses")
+        val dailyHymns=dailyCollection.optJSONArray("hymns")
+        val dailyVerse=verses?.takeIf{it.length()>0}?.optJSONObject(Math.floorMod(todayOrdinal,verses.length().toLong()).toInt())?:JSONObject()
+        val dailyHymn=dailyHymns?.takeIf{it.length()>0}?.optJSONObject(Math.floorMod(todayOrdinal*7L,dailyHymns.length().toLong()).toInt())?:JSONObject()
+        val hymnTitle=dailyHymn.optString("title").ifBlank{"Methodist Hymn for Today"}
+        val hymnNumber=dailyHymn.optString("number",dailyHymn.optString("hymn_number",dailyHymn.optString("item_number")))
+        val dailyDigits=Regex("\\d+").find(hymnTitle)?.value.orEmpty()
+        val hymn=english.firstOrNull { row ->
+            val number=row.optString("item_number").ifBlank{row.optString("number")}
+            val title=row.optString("title")
+            (dailyDigits.isNotBlank() && Regex("\\d+").find(number)?.value==dailyDigits) ||
+                title.equals(hymnTitle,true) || title.contains(hymnTitle,true)
+        }
         val hymnPayload=hymn?.optJSONObject("payload")?:JSONObject()
-        val hymnTitle=hymn?.optString("title").orEmpty().ifBlank{"Methodist Hymn for Today"}
-        val hymnNumber=hymn?.optString("item_number").orEmpty()
-        val stanzas=hymnPayload.optJSONArray("stanzas")
-        val lyrics=if(stanzas!=null) {
-            (0 until stanzas.length()).joinToString("\n\n"){stanzas.optString(it)}
-        } else {
-            hymnPayload.optString("content",hymnPayload.optString("text",hymnPayload.optString("body","Open the Methodist Hymn Library to read the saved hymns.")))
+        val lyrics=dailyHymn.optString("lyrics").ifBlank {
+            val stanzas=hymnPayload.optJSONArray("stanzas")
+            if(stanzas!=null) (0 until stanzas.length()).joinToString("\n\n"){stanzas.optString(it)}
+            else hymnPayload.optString("content",hymnPayload.optString("text",hymnPayload.optString("body","Open the Methodist Hymn Library to read the saved hymns.")))
         }
         val audio=hymn?.optString("audio_file").orEmpty()
         val b=StringBuilder()
-        b.append("""<section class="item"><div class="muted">✝ SCRIPTURE FOR TODAY · OFFLINE</div><h2>Read your downloaded Bible</h2><p>The Scripture reader uses the Bible module saved on this phone.</p><a class="btn" href="/devotional-centre/holy-bible">Open Saved Bible →</a></section>""")
+        b.append("""<section class="item"><div class="muted">✝ SCRIPTURE FOR TODAY · OFFLINE</div><h2>${e(dailyVerse.optString("reference","Scripture for Today"))}</h2><p>${e(dailyVerse.optString("text","The daily Scripture collection has not yet been saved on this phone."))}</p><a class="btn" href="/devotional-centre/holy-bible">Open Saved Bible →</a></section>""")
         b.append("""<section class="item"><div class="muted">♫ METHODIST HYMN FOR TODAY · OFFLINE</div><h2>${e(hymnNumber)} ${e(hymnTitle)}</h2><div class="paper">${e(lyrics)}</div>""")
         if(audio.isNotBlank())b.append("""<p><strong>Hymn tune</strong><audio controls preload="none" playsinline src="/__mcn_offline/file/${Uri.encode(audio)}"></audio></p>""")
         val tunes=hymnPayload.optJSONArray("otherTunes")
