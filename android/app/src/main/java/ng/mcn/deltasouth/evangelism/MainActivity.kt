@@ -1651,7 +1651,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     val mime = when (safePath.substringAfterLast('.', "").lowercase()) {
                                         "css" -> "text/css"; "js" -> "application/javascript"; "mjs" -> "application/javascript"
                                         "png" -> "image/png"; "jpg", "jpeg" -> "image/jpeg"; "gif" -> "image/gif"
-                                        "webp" -> "image/webp"; "svg" -> "image/svg+xml"; "ico" -> "image/x-icon"
+                                        "webp" -> "image/webp"; "avif" -> "image/avif"; "svg" -> "image/svg+xml"; "ico" -> "image/x-icon"
                                         "woff" -> "font/woff"; "woff2" -> "font/woff2"; "ttf" -> "font/ttf"
                                         "json" -> "application/json"; "mp4" -> "video/mp4"; "webm" -> "video/webm"
                                         "mp3" -> "audio/mpeg"; "m4a" -> "audio/mp4"; "pdf" -> "application/pdf"
