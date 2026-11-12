@@ -284,7 +284,7 @@ fetch("/__mcn_offline/bible?kind=books&translation="+encodeURIComponent(translat
         val f=(mediaFolders.map{File(it,name)}.firstOrNull{it.isFile&&it.length()>0}
             ?: File(c.filesDir,"offline_devotional/$name").takeIf{it.isFile&&it.length()>0}
             ?: return null)
-        val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"svg"->"image/svg+xml";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
+        val mime=when(f.extension.lowercase(Locale.ROOT)){"mp3"->"audio/mpeg";"m4a"->"audio/mp4";"wav"->"audio/wav";"ogg"->"audio/ogg";"mp4"->"video/mp4";"webm"->"video/webm";"svg"->"image/svg+xml";"avif"->"image/avif";"jpg","jpeg"->"image/jpeg";"png"->"image/png";"gif"->"image/gif";"webp"->"image/webp";"pdf"->"application/pdf";else->"application/octet-stream"}
         val length=f.length()
         val headers=linkedMapOf("Accept-Ranges" to "bytes","Content-Type" to mime,"Content-Length" to length.toString())
         val range=Regex("^bytes=(\\d*)-(\\d*)$").matchEntire(rangeHeader.orEmpty().trim())
