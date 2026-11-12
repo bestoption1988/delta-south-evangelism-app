@@ -23,7 +23,7 @@ object OfflineDevotionalPage {
         }
         return out.sortedWith(compareBy<JSONObject>{number(it)}.thenBy{it.optString("title").lowercase(Locale.ROOT)})
     }
-    private fun page(t:String,b:String)= """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(t)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:16px/1.55 system-ui}header{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:white;padding:26px 18px}header small{color:#f4d36e;font-weight:800}h1{font:800 30px Georgia;margin:8px 0}main{max-width:1000px;margin:auto;padding:16px 13px 45px}nav{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}a{color:#12664b;text-decoration:none;font-weight:700}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.card,.item,.paper{background:white;border:1px solid #dfe6ee;border-radius:15px;padding:15px;margin-bottom:12px}.icon{font-size:32px}.card h2,.item h2{font-size:18px;margin:7px 0}.muted{color:#69768b}.pill{display:inline-block;background:#edf4f0;color:#176247;border-radius:24px;padding:6px 11px;font-weight:800;font-size:12px;margin-top:8px}.btn,button{display:inline-block;background:#123363;color:white;padding:10px 14px;border:0;border-radius:9px;font-weight:800}input{font:inherit;padding:11px;border:1px solid #cbd5e1;border-radius:8px;width:70%}.paper{font:17px/1.8 Georgia;white-space:pre-wrap}audio,video{width:100%;margin-top:10px}.mcn-offline-menu{position:relative;z-index:20;background:#071b50;color:#fff}.mcn-offline-menu details>summary{list-style:none;cursor:pointer;min-height:58px;display:flex;align-items:center;padding:12px 20px;font-size:20px;font-weight:800}.mcn-offline-menu details>summary::-webkit-details-marker{display:none}.mcn-offline-menu details>summary:before{content:'☰';font-size:25px;margin-right:12px}.mcn-offline-menu-items{display:grid;background:#08245b}.mcn-offline-menu-items a{display:block;padding:12px 20px;color:#fff;border-top:1px solid #ffffff20}.mcn-offline-menu details[open]>summary{background:#0b2866}@media(max-width:520px){.card{padding:12px}.card h2{font-size:16px}}</style></head><body><header><small>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE · OFFLINE</small><h1>${e(t)}</h1><div>Downloaded resources saved on this phone. No internet required.</div></header><aside class="mcn-offline-menu"><details><summary>Menu</summary><div class="mcn-offline-menu-items"><a href="mcn-app://home">Main Home</a><a href="/fellowships">All Fellowships</a><a href="/fellowship/methodist-mens-fellowship">Men's Fellowship</a><a href="/fellowship/methodist-womens-fellowship">Women's Fellowship</a><a href="/fellowship/methodist-youth-fellowship">Youth Fellowship</a><a href="/fellowship/methodist-campus-fellowship">Campus Fellowship</a><a href="/devotional-centre">Devotional Centre</a><a href="/media-library">Church Media</a></div></details></aside><main><nav><a href="mcn-app://home">← Main home</a><a href="/devotional-centre">All library cards</a></nav>$b</main></body></html>"""
+    private fun page(t:String,b:String)= """<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${e(t)}</title><style>*{box-sizing:border-box}body{margin:0;background:#f2f5f9;color:#172b4d;font:16px/1.55 system-ui}header{background:linear-gradient(125deg,#071b48,#153c78 62%,#0d684c);color:white;padding:26px 18px}header small{color:#f4d36e;font-weight:800}h1{font:800 30px Georgia;margin:8px 0}main{max-width:1000px;margin:auto;padding:16px 13px 45px}nav{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}a{color:#12664b;text-decoration:none;font-weight:700}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px}.card,.item,.paper{background:white;border:1px solid #dfe6ee;border-radius:15px;padding:15px;margin-bottom:12px}.icon{font-size:32px}.card h2,.item h2{font-size:18px;margin:7px 0}.muted{color:#69768b}.pill{display:inline-block;background:#edf4f0;color:#176247;border-radius:24px;padding:6px 11px;font-weight:800;font-size:12px;margin-top:8px}.btn,button{display:inline-block;background:#123363;color:white;padding:10px 14px;border:0;border-radius:9px;font-weight:800}input{font:inherit;padding:11px;border:1px solid #cbd5e1;border-radius:8px;width:70%}.paper{font:17px/1.8 Georgia;white-space:pre-wrap}audio,video{width:100%;margin-top:10px}.mcn-offline-menu{position:relative;z-index:20;background:#071b50;color:#fff}.mcn-offline-menu details>summary{list-style:none;cursor:pointer;min-height:58px;display:flex;align-items:center;padding:12px 20px;font-size:20px;font-weight:800}.mcn-offline-menu details>summary::-webkit-details-marker{display:none}.mcn-offline-menu details>summary:before{content:'☰';font-size:25px;margin-right:12px}.mcn-offline-menu-items{display:grid;background:#08245b}.mcn-offline-menu-items a{display:block;padding:12px 20px;color:#fff;border-top:1px solid #ffffff20}.mcn-offline-menu details[open]>summary{background:#0b2866}@media(max-width:520px){.card{padding:12px}.card h2{font-size:16px}}</style></head><body><header><small>METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE · OFFLINE</small><h1>${e(t)}</h1><div>Downloaded resources saved on this phone. No internet required.</div></header><aside class="mcn-offline-menu"><details><summary>Menu</summary><div class="mcn-offline-menu-items"><a href="mcn-app://home">Main Home</a><a href="/fellowships">All Fellowships</a><a href="/fellowship/methodist-mens-fellowship">Men's Fellowship</a><a href="/fellowship/methodist-womens-fellowship">Women's Fellowship</a><a href="/fellowship/methodist-youth-fellowship">Youth Fellowship</a><a href="/fellowship/methodist-campus-fellowship">Campus Fellowship</a><a href="/devotional-centre">Devotional Centre</a><a href="/media-library">Church Media</a></div></details></aside><main><nav><a href="mcn-app://home">← Main home</a><a href="/devotional-centre">All library cards</a></nav>$b</main><div id="mcn-lightbox" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.94);align-items:center;justify-content:center;padding:18px" role="dialog" aria-modal="true"><button id="mcn-lightbox-close" style="position:absolute;right:18px;top:18px;font-size:28px;padding:8px 16px">×</button><img id="mcn-lightbox-image" alt="" style="max-width:100%;max-height:86vh;object-fit:contain"></div><script>(function(){var box=document.getElementById('mcn-lightbox'),photo=document.getElementById('mcn-lightbox-image');document.addEventListener('click',function(ev){var img=ev.target.closest('img[data-mcn-lightbox]');if(img){photo.src=img.src;photo.alt=img.alt||'';box.style.display='flex';}});function close(){box.style.display='none';photo.removeAttribute('src');}document.getElementById('mcn-lightbox-close').addEventListener('click',close);box.addEventListener('click',function(ev){if(ev.target===box)close();});document.addEventListener('keydown',function(ev){if(ev.key==='Escape')close();});})();</script></body></html>"""
     fun render(c:Context,path:String,q:String="",translation:String=""):String {
         val p=if(path=="/") "/" else path.trimEnd('/').ifBlank{"/devotional-centre"}
         if(p=="/")return homepage(c)
@@ -40,33 +40,29 @@ object OfflineDevotionalPage {
         return home(c)
     }
     private fun homepage(c:Context):String {
-        val english=sortedRows(a(c,"english_hymns"))
-        val dailyCollection=runCatching {
-            JSONObject(c.assets.open("offline-home/daily-content.json").bufferedReader().use { it.readText() })
-        }.getOrDefault(JSONObject())
+        // Select each day's readings from the exact collections already saved by the Devotional Centre.
+        // No bundled placeholder JSON or network call is used here, so the date rolls over offline.
         val todayOrdinal=java.time.LocalDate.now(java.time.ZoneId.of("Africa/Lagos")).toEpochDay()+719163L
-        val verses=dailyCollection.optJSONArray("verses")
-        val dailyHymns=dailyCollection.optJSONArray("hymns")
-        val dailyVerse=verses?.takeIf{it.length()>0}?.optJSONObject(Math.floorMod(todayOrdinal,verses.length().toLong()).toInt())?:JSONObject()
-        val dailyHymn=dailyHymns?.takeIf{it.length()>0}?.optJSONObject(Math.floorMod(todayOrdinal*7L,dailyHymns.length().toLong()).toInt())?:JSONObject()
-        val hymnTitle=dailyHymn.optString("title").ifBlank{"Methodist Hymn for Today"}
-        val hymnNumber=dailyHymn.optString("number",dailyHymn.optString("hymn_number",dailyHymn.optString("item_number")))
-        val dailyDigits=Regex("\\d+").find(hymnTitle)?.value.orEmpty()
-        val hymn=english.firstOrNull { row ->
-            val number=row.optString("item_number").ifBlank{row.optString("number")}
-            val title=row.optString("title")
-            (dailyDigits.isNotBlank() && Regex("\\d+").find(number)?.value==dailyDigits) ||
-                title.equals(hymnTitle,true) || title.contains(hymnTitle,true)
+        val verseRows=sortedRows(a(c,"bible_verses"))
+        val dailyVerseRow=verseRows.getOrNull(Math.floorMod(todayOrdinal,verseRows.size.coerceAtLeast(1).toLong()).toInt())
+        val versePayload=dailyVerseRow?.optJSONObject("payload")?:JSONObject()
+        val dailyVerseRef=versePayload.optString("reference").ifBlank {
+            dailyVerseRow?.optString("title").orEmpty()
         }
+        val dailyVerseText=versePayload.optString("verse").ifBlank {
+            versePayload.optString("text",versePayload.optString("content",versePayload.optString("body")))
+        }
+        val english=sortedRows(a(c,"english_hymns"))
+        val hymn=english.getOrNull(Math.floorMod(todayOrdinal*7L,english.size.coerceAtLeast(1).toLong()).toInt())
         val hymnPayload=hymn?.optJSONObject("payload")?:JSONObject()
-        val lyrics=dailyHymn.optString("lyrics").ifBlank {
-            val stanzas=hymnPayload.optJSONArray("stanzas")
-            if(stanzas!=null) (0 until stanzas.length()).joinToString("\n\n"){stanzas.optString(it)}
-            else hymnPayload.optString("content",hymnPayload.optString("text",hymnPayload.optString("body","Open the Methodist Hymn Library to read the saved hymns.")))
-        }
+        val hymnTitle=hymn?.optString("title").orEmpty().ifBlank{"Methodist Hymn for Today"}
+        val hymnNumber=hymn?.optString("item_number").orEmpty()
+        val stanzas=hymnPayload.optJSONArray("stanzas")
+        val lyrics=if(stanzas!=null) (0 until stanzas.length()).joinToString("\n\n"){stanzas.optString(it)}
+            else hymnPayload.optString("content",hymnPayload.optString("text",hymnPayload.optString("body","Open the saved English Methodist Hymn collection to read the hymns.")))
         val audio=hymn?.optString("audio_file").orEmpty()
         val b=StringBuilder()
-        b.append("""<section class="item"><div class="muted">✝ SCRIPTURE FOR TODAY · OFFLINE</div><h2>${e(dailyVerse.optString("reference","Scripture for Today"))}</h2><p>${e(dailyVerse.optString("text","The daily Scripture collection has not yet been saved on this phone."))}</p><a class="btn" href="/devotional-centre/holy-bible">Open Saved Bible →</a></section>""")
+        b.append("""<section class="item"><div class="muted">✝ SCRIPTURE FOR TODAY · OFFLINE</div><h2>${e(dailyVerseRef.ifBlank{"Scripture for Today"})}</h2><p>${e(dailyVerseText.ifBlank{"Download the Bible Verses card in the Devotional Centre to enable daily offline Scripture."})}</p><a class="btn" href="/devotional-centre/holy-bible">Open Saved Bible →</a></section>""")
         b.append("""<section class="item"><div class="muted">♫ METHODIST HYMN FOR TODAY · OFFLINE</div><h2>${e(hymnNumber)} ${e(hymnTitle)}</h2><div class="paper">${e(lyrics)}</div>""")
         if(audio.isNotBlank())b.append("""<p><strong>Hymn tune</strong><audio controls preload="none" playsinline src="/__mcn_offline/file/${Uri.encode(audio)}"></audio></p>""")
         val tunes=hymnPayload.optJSONArray("otherTunes")
@@ -100,7 +96,7 @@ object OfflineDevotionalPage {
                 val file=item.optString("offline_file")
                 if(file.isBlank()) continue
                 val imageUrl="/__mcn_offline/file/${Uri.encode(file)}"
-                b.append("""<article class="item" style="padding:10px"><img src="$imageUrl" alt="${e(item.optString("title","Church gallery photo"))}" loading="lazy" style="display:block;width:100%;max-height:280px;object-fit:cover;border-radius:10px"><h3>${e(item.optString("title"))}</h3><p>${e(item.optString("description"))}</p></article>""")
+                b.append("""<article class="item" style="padding:10px"><img data-mcn-lightbox="1" src="$imageUrl" alt="${e(item.optString("title","Church gallery photo"))}" loading="lazy" style="display:block;width:100%;max-height:280px;object-fit:cover;border-radius:10px;cursor:zoom-in"><h3>${e(item.optString("title"))}</h3><p>${e(item.optString("description"))}</p></article>""")
             }
             b.append("</div>")
         }
