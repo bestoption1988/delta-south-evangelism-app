@@ -1736,7 +1736,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   };
                                 })();
                             """.trimIndent()
-                            view.evaluateJavascript(keepNavigationInsideApp, null)
+                            // Keep the live website completely in control of its own navigation.
+                            if (url?.startsWith("file:") == true) {
+                                view.evaluateJavascript(keepNavigationInsideApp, null)
+                            }
 
                             // Reconnect homepage media controls to the files already downloaded
                             // into the devotional/media libraries. The public page's signed
@@ -1915,132 +1918,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 })();
                             """.trimIndent()
                             view.evaluateJavascript(missionMapPlacement, null)
-                            // Android WebView fallback for the CSS-checkbox homepage menu.
-                            // Chrome uses the native label/checkbox behaviour; some embedded WebViews
-                            // fail to toggle visually clipped checkbox inputs when their labels are tapped.
-                            val menuBridge = """
-                                (function() {
-                                  if (window.__mcnAndroidMenuBridge) return;
-                                  var updateLink = document.getElementById('saveOfflineApp');
-                                  if (updateLink) updateLink.textContent = 'Update Offline Content';
-                                  var nav = document.querySelector('.ds-site-nav');
-                                  var menu = document.querySelector('.ds-menu');
-                                  var trigger = document.querySelector('.ds-menu-trigger');
-                                  var panel = document.querySelector('.ds-menu-panel');
-                                  var toggle = document.querySelector('#dsMenuToggle');
-                                  var subToggle = document.querySelector('#dsFellowshipsToggle');
-                                  if (!nav || !menu || !trigger || !panel) return;
-                                  window.__mcnAndroidMenuBridge = true;
-
-                                  // Detach the real navigation panel from the page's nested layout.
-                                  // This avoids WebView clipping/stacking bugs while preserving the
-                                  // original anchor nodes and their existing click handlers.
-                                  document.body.appendChild(panel);
-                                  panel.style.cssText += ';display:none!important;position:fixed!important;left:0!important;right:0!important;width:100vw!important;top:0!important;max-height:50vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;padding:8px 0!important;background:#08245b!important;border:1px solid rgba(255,255,255,.25)!important;z-index:2147483647!important;-webkit-overflow-scrolling:touch!important;';
-
-                                  panel.querySelectorAll('a,.ds-menu-group-trigger').forEach(function(item) {
-                                    item.style.cssText += ';display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;float:none!important;width:100%!important;min-height:48px!important;height:auto!important;box-sizing:border-box!important;padding:13px 20px!important;margin:0!important;color:#fff!important;background:#08245b!important;font:600 16px/1.4 Arial,sans-serif!important;text-align:left!important;text-decoration:none!important;border:0!important;border-bottom:1px solid rgba(255,255,255,.16)!important;';
-                                  });
-                                  panel.querySelectorAll('.ds-menu-submenu a').forEach(function(item) {
-                                    item.style.setProperty('padding-left','40px','important');
-                                    item.style.setProperty('background','#061943','important');
-                                  });
-
-                                  function closeMenu() {
-                                    if (toggle) toggle.checked = false;
-                                    menu.classList.remove('ds-menu-open');
-                                    panel.style.setProperty('display','none','important');
-                                    trigger.setAttribute('aria-expanded','false');
-                                  }
-                                  function openMenu() {
-                                    if (toggle) toggle.checked = true;
-                                    menu.classList.add('ds-menu-open');
-                                    var top = Math.max(0, nav.getBoundingClientRect().bottom);
-                                    panel.style.setProperty('top',top+'px','important');
-                                    panel.style.setProperty('max-height',Math.max(160,Math.min(window.innerHeight*0.5,window.innerHeight-top))+'px','important');
-                                    panel.style.setProperty('display','block','important');
-                                    panel.style.setProperty('visibility','visible','important');
-                                    panel.style.setProperty('opacity','1','important');
-                                    trigger.setAttribute('aria-expanded','true');
-                                  }
-                                  // Use document-level capture because Android WebView can fail to
-                                  // dispatch the label/checkbox activation reliably on touch.
-                                  // This handler receives taps even when the label contains icon/text spans.
-                                  document.addEventListener('click',function(event) {
-                                    var menuHit = event.target && event.target.closest ? event.target.closest('.ds-menu-trigger') : null;
-                                    if (!menuHit) return;
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    if (event.stopImmediatePropagation) event.stopImmediatePropagation();
-                                    if (panel.style.display === 'none' || getComputedStyle(panel).display === 'none') openMenu();
-                                    else closeMenu();
-                                  },true);
-                                  // Make the full visible Menu bar an explicit touch target.
-                                  trigger.style.setProperty('display','flex','important');
-                                  trigger.style.setProperty('position','relative','important');
-                                  trigger.style.setProperty('z-index','10','important');
-                                  trigger.style.setProperty('pointer-events','auto','important');
-                                  trigger.style.setProperty('touch-action','manipulation','important');
-                                  panel.addEventListener('click',function(event) {
-                                    var groupLabel = event.target.closest('.ds-menu-group-trigger');
-                                    if (groupLabel && subToggle) {
-                                      event.preventDefault();
-                                      subToggle.checked = !subToggle.checked;
-                                      var submenu = panel.querySelector('.ds-menu-submenu');
-                                      if (submenu) submenu.style.setProperty('display',subToggle.checked?'block':'none','important');
-                                      return;
-                                    }
-                                    var link = event.target.closest('a');
-                                    if (link) {
-                                      // The panel is detached from its original nav container.
-                                      // Handle navigation explicitly: hiding a fixed WebView overlay
-                                      // during the same click can cancel the anchor's default action.
-                                      event.preventDefault();                                      event.stopPropagation();
-                                      var href = link.getAttribute('href') || '';
-                                      closeMenu();
-                                      window.setTimeout(function() {
-                                        if (href === '#' || href === '') {
-                                          if (link.id === 'saveOfflineApp') {
-                                            Promise.resolve(window.mcnCacheEntireApp ? window.mcnCacheEntireApp() : null).finally(function() { window.location.href = 'mcn-app://offline'; });
-                                          }
-                                          return;
-                                        }
-                                        if (href.charAt(0) === '#') {
-                                          var target = document.getElementById(href.slice(1));
-                                          if (target) {
-                                            target.scrollIntoView({behavior:'smooth',block:'start'});
-                                            if (history && history.replaceState) history.replaceState(null,'',href);
-                                          }
-                                          return;
-                                        }
-                                        if (href.indexOf('mcn-app://') === 0) {
-                                          if (href === 'mcn-app://offline') {
-                                            Promise.resolve(window.mcnCacheEntireApp ? window.mcnCacheEntireApp() : null).finally(function() { window.location.href = href; });
-                                          } else {
-                                            window.location.href = href;
-                                          }
-                                          return;
-                                        }
-                                        window.location.assign(new URL(href, document.baseURI).href);
-                                      }, 80);
-                                    }
-                                  },true);
-                                  document.addEventListener('keydown',function(event){if(event.key==='Escape')closeMenu();});
-                                  window.addEventListener('resize',function(){if(panel.style.display!=='none')openMenu();});
-                                  window.addEventListener('scroll',function(){if(panel.style.display!=='none')closeMenu();},{passive:true});
-                                })();
-                            """.trimIndent()
-                            // Apply the Android menu workaround only on the public homepage:
-                            // both the bundled offline page and the live diocesan root page.
-                            // Do not touch staff dashboards or other website pages.
-                            val finishedUri = runCatching { android.net.Uri.parse(url.orEmpty()) }.getOrNull()
-                            val isBundledOfflineHome = url?.startsWith("file:///android_asset/offline-home/") == true
-                            val configuredHost = android.net.Uri.parse(BuildConfig.API_BASE_URL).host
-                            val isLivePublicHome = finishedUri?.host == configuredHost &&
-                                (finishedUri?.path.isNullOrBlank() == true || finishedUri?.path == "/")
-                            if (isBundledOfflineHome || isLivePublicHome) {
-                                view.evaluateJavascript(menuBridge, null)
-                            }
+                            // The official website menu JavaScript and CSS control the menu.
                             // Daily Scripture and hymn use the same tested webpage implementation as Chrome.
                             pageLoading = false
                         }
