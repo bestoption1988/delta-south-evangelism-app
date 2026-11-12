@@ -2,15 +2,32 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ item.title }} | MCN Delta South</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f1f4f8;color:#182c4c;font:16px/1.65 system-ui}.hero{background:linear-gradient(120deg,#081c48,#19477c);color:white;padding:26px 16px}.wrap,main{max-width:900px;margin:auto}.hero h1{font:800 clamp(25px,4vw,38px)/1.15 Georgia,serif;margin:8px 0}.hero p{color:#dce7f7;margin:0}main{padding:22px 16px 60px}.nav a{color:#12694c;text-decoration:none;font-weight:700}.sheet{background:white;border:1px solid #e1e6ef;border-radius:15px;padding:clamp(18px,4vw,34px);margin-top:18px;box-shadow:0 6px 22px #102b5509}.stanza{font:18px/1.8 Georgia,serif;white-space:pre-line;margin:0 0 22px}.content{white-space:pre-wrap;font:17px/1.8 Georgia,serif}.meta{color:#6b778a;font-size:13px}.author{display:flex;gap:15px;align-items:flex-start;border-top:1px solid #e5e9ef;margin-top:24px;padding-top:20px}.author img{width:100px;height:100px;object-fit:cover;border-radius:12px}.audio{width:100%;margin:16px 0}.tune{background:#f4f7fa;padding:13px;border-radius:10px;margin:12px 0}.back{display:inline-block;margin-top:20px;color:#12694c;font-weight:700;text-decoration:none}
+.hymn-navigation{display:flex;gap:9px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:0 0 16px}
+.hymn-navigation a,.hymn-navigation button{display:inline-block;padding:10px 13px;border:1px solid #d7e0eb;border-radius:9px;background:#f3f6fa;color:#123363;text-decoration:none;font:700 13px system-ui;cursor:pointer}
+.hymn-search{display:flex;gap:8px;flex:1;min-width:min(100%,260px)}
+.hymn-search input{flex:1;min-width:0;padding:10px;border:1px solid #cbd5e1;border-radius:8px;font:14px system-ui}
+.hymn-search button{background:#123363;color:white;border-color:#123363}
+.daily-reading-action{display:inline-block;margin-top:16px;padding:11px 15px;border-radius:9px;background:#123363;color:#fff!important;text-decoration:none;font:700 14px system-ui}
+.daily-reading-scripture-reference{font:700 18px system-ui;color:#9a741c;margin:0 0 12px}
+.daily-reading-scripture-text{white-space:pre-wrap;line-height:1.8}
+
 </style></head><body><header class="hero"><div class="wrap"><div style="font-size:10px;letter-spacing:2px;color:#f2d16b;font-weight:800">METHODIST CHURCH NIGERIA · DELTA SOUTH DIOCESE</div><h1>{{ item.title }}</h1><p>{{ item.collection|replace('_',' ')|title }}{% if item.item_number %} · No. {{ item.item_number }}{% endif %}</p></div></header>
-<main><nav class="nav"><a href="javascript:history.back()">← Back to collection</a> · <a href="/devotional-centre">All Collections</a></nav><article class="sheet">
+<main><nav class="nav"><a href="/devotional-centre/english-hymns">← English Methodist Hymns</a> · <a href="/devotional-centre">All Collections</a></nav>
+{% if item.collection == 'english_hymns' %}
+<div class="hymn-navigation">
+  {% if item.previous_resource %}<a href="{{ url_for('devotional_centre_item', resource_id=item.previous_resource.resource_id) }}">← Previous Hymn ({{ item.previous_resource.item_number }})</a>{% else %}<span></span>{% endif %}
+  <form class="hymn-search" method="get" action="/devotional-centre/english-hymns"><input name="q" placeholder="Search hymn number, title or lyrics…" aria-label="Search hymns"><button type="submit">Search</button></form>
+  {% if item.next_resource %}<a href="{{ url_for('devotional_centre_item', resource_id=item.next_resource.resource_id) }}">Next Hymn ({{ item.next_resource.item_number }}) →</a>{% endif %}
+</div>
+{% endif %}
+<article class="sheet">
 {% set p=item.payload %}
 {% if p.get('reference') %}<div class="meta">BIBLE SCRIPTURE</div><h2>{{ p.get('reference') }}</h2><div class="content">{{ p.get('verse','') }}</div>
 {% elif p.get('stanzas') %}<div class="meta">{% if p.get('firstline') %}{{ p.get('firstline') }}{% endif %}{% if p.get('meter') %} · Meter: {{ p.get('meter') }}{% endif %}</div>
 {% for stanza in p.get('stanzas',[]) %}<p class="stanza">{{ stanza }}</p>{% endfor %}
 {% if p.get('chorus') %}<h3>Chorus</h3><p class="stanza">{{ p.get('chorus') }}</p>{% endif %}
-{% if item.audio_url %}<div class="tune"><strong>{{ p.get('musicTitle') or p.get('tuneName') or p.get('musicName') or p.get('tune') or 'Main tune' }}</strong><audio class="audio" controls preload="none" playsinline src="{{ item.audio_url }}"></audio></div>{% endif %}
-{% for tune in p.get('otherTunes',[]) %}{% if tune.get('signed_url') %}<div class="tune"><strong>{{ tune.get('title') or tune.get('tuneName') or tune.get('name') or ('Additional tune ' ~ loop.index) }}</strong><audio class="audio" controls preload="none" playsinline src="{{ tune.signed_url }}"></audio></div>{% endif %}{% endfor %}
+{% if item.audio_url %}<div class="tune"><strong>{{ p.get('musicTitle') or p.get('tuneName') or p.get('musicName') or p.get('tune') or 'Main tune' }}</strong><audio class="audio" controls preload="metadata" playsinline src="{{ item.audio_url }}">Your browser does not support audio playback.</audio></div>{% endif %}
+{% for tune in p.get('otherTunes',[]) %}{% if tune.get('signed_url') %}<div class="tune"><strong>{{ tune.get('musicTitle') or tune.get('title') or tune.get('tuneName') or tune.get('musicName') or tune.get('tune') or tune.get('name') or ('Additional tune ' ~ loop.index) }}</strong><audio class="audio" controls preload="metadata" playsinline src="{{ tune.signed_url }}">Your browser does not support audio playback.</audio></div>{% endif %}{% endfor %}
 {% if p.get('author') %}<div class="author">{% if item.author_url %}<img src="{{ item.author_url }}" alt="{{ p.author.get('name','Hymn author') }}">{% endif %}<div><strong>{{ p.author.get('name','Hymn author') }}</strong><div class="meta">{{ p.author.get('years','') }}</div><p>{{ p.author.get('biography','') }}</p></div></div>{% endif %}
 {% elif p.get('content') %}<div class="content">{{ p.get('content') }}</div>
 {% elif p.get('heading') %}<h2>{{ p.get('heading') }}</h2><div class="content">{{ p.get('content','') }}</div>
