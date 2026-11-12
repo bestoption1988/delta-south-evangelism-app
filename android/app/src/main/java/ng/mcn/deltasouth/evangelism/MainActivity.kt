@@ -1473,7 +1473,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", OfflineDevotionalPage.render(view.context, localPath.ifBlank { "/" }, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty()), "text/html", "UTF-8", null)
                                 return true
                             }
-                            if (resolvedOfflinePath.isNotBlank()) {
+                            if (!onlineState && resolvedOfflinePath.isNotBlank()) {
                                 val html = OfflineDevotionalPage.render(view.context, resolvedOfflinePath, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
                                 return true
@@ -1572,8 +1572,8 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                 uri.path == "/hymns" || uri.path == "/hymn-library" -> "/devotional-centre/collection/english-hymns"
                                 else -> uri.path.orEmpty()
                             }
-                            if (legacyPath.startsWith("/devotional-centre") || legacyPath == "/media-library" ||
-                                legacyPath == "/fellowships" || legacyPath.startsWith("/fellowship/")) {
+                            if (!onlineState && (legacyPath.startsWith("/devotional-centre") || legacyPath == "/media-library" ||
+                                legacyPath == "/fellowships" || legacyPath.startsWith("/fellowship/"))) {
                                 val html = OfflineDevotionalPage.render(view.context, legacyPath, uri.getQueryParameter("q").orEmpty(), uri.getQueryParameter("translation").orEmpty())
                                 view.loadDataWithBaseURL("https://offline.mcn-app/", html, "text/html", "UTF-8", null)
                                 return true
