@@ -1917,7 +1917,10 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   map.style.setProperty('margin-bottom','0','important');
                                 })();
                             """.trimIndent()
-                            view.evaluateJavascript(missionMapPlacement, null)
+                            // Keep offline snapshot adjustments off the live website.
+                            if (url?.startsWith("file:") == true) {
+                                view.evaluateJavascript(missionMapPlacement, null)
+                            }
                             // The official website menu JavaScript and CSS control the menu.
                             // Daily Scripture and hymn use the same tested webpage implementation as Chrome.
                             pageLoading = false
