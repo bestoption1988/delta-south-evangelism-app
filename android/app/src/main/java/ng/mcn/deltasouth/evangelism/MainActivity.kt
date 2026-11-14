@@ -1388,6 +1388,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
     var pageErrorDetails by remember { mutableStateOf("The connection to the diocesan website failed.") }
     var pageLoading by remember { mutableStateOf(true) }
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var lastHomepageOnlineState by remember { mutableStateOf(online) }
     fun openSavedDiocesanHome(target: WebView?) {
         if (target == null) return
         target.post {
@@ -1923,12 +1924,9 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   var subToggle = document.querySelector('#dsFellowshipsToggle');
                                   if (!nav || !menu || !trigger || !panel) return;
                                   window.__mcnAndroidMenuBridge = true;
-
-                                  // Detach the real navigation panel from the page's nested layout.
-                                  // This avoids WebView clipping/stacking bugs while preserving the
-                                  // original anchor nodes and their existing click handlers.
-                                  document.body.appendChild(panel);
-                                  panel.style.cssText += ';display:none!important;position:fixed!important;left:0!important;right:0!important;width:100vw!important;top:0!important;max-height:50vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;padding:8px 0!important;background:#08245b!important;border:1px solid rgba(255,255,255,.25)!important;z-index:2147483647!important;-webkit-overflow-scrolling:touch!important;';
+                                  // Keep the panel inside its original navigation container.
+                                  // A detached fixed panel can be clipped in some Android WebViews.
+                                  panel.style.cssText += ';display:none!important;position:absolute!important;left:0!important;right:0!important;width:100%!important;top:100%!important;max-height:65vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;padding:8px 0!important;background:#08245b!important;border:1px solid rgba(255,255,255,.25)!important;z-index:2147483000!important;-webkit-overflow-scrolling:touch!important;';
 
                                   panel.querySelectorAll('a,.ds-menu-group-trigger').forEach(function(item) {
                                     item.style.cssText += ';display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;float:none!important;width:100%!important;min-height:48px!important;height:auto!important;box-sizing:border-box!important;padding:13px 20px!important;margin:0!important;color:#fff!important;background:#08245b!important;font:600 16px/1.4 Arial,sans-serif!important;text-align:left!important;text-decoration:none!important;border:0!important;border-bottom:1px solid rgba(255,255,255,.16)!important;';
@@ -1948,7 +1946,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                     if (toggle) toggle.checked = true;
                                     menu.classList.add('ds-menu-open');
                                     var top = Math.max(0, nav.getBoundingClientRect().bottom);
-                                    panel.style.setProperty('top',top+'px','important');
+                                    panel.style.setProperty('top','100%','important');
                                     panel.style.setProperty('max-height',Math.max(160,Math.min(window.innerHeight*0.5,window.innerHeight-top))+'px','important');
                                     panel.style.setProperty('display','block','important');
                                     panel.style.setProperty('visibility','visible','important');
@@ -2098,8 +2096,16 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                 }
             },
             update = { view ->
-                // Connectivity changes must not silently replace the saved homepage.
-                if (view.url.isNullOrBlank()) openSavedDiocesanHome(view)
+                // Switch the homepage source whenever connectivity changes.
+                if (lastHomepageOnlineState != online) {
+                    lastHomepageOnlineState = online
+                    view.settings.cacheMode = if (online) android.webkit.WebSettings.LOAD_DEFAULT
+                        else android.webkit.WebSettings.LOAD_CACHE_ELSE_NETWORK
+                    if (online) view.loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/")
+                    else view.loadUrl("file:///android_asset/offline-home/index.html")
+                } else if (view.url.isNullOrBlank()) {
+                    openSavedDiocesanHome(view)
+                }
             }
         )
         // Use the single menu rendered by the official diocesan website.
