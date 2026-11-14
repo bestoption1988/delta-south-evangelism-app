@@ -1926,7 +1926,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   window.__mcnAndroidMenuBridge = true;
                                   // Keep the panel inside its original navigation container.
                                   // A detached fixed panel can be clipped in some Android WebViews.
-                                  panel.style.cssText += ';display:none!important;position:absolute!important;left:0!important;right:0!important;width:100%!important;top:100%!important;max-height:65vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;padding:8px 0!important;background:#08245b!important;border:1px solid rgba(255,255,255,.25)!important;z-index:2147483000!important;-webkit-overflow-scrolling:touch!important;';
+                                  panel.style.cssText += ';position:absolute!important;left:0!important;right:0!important;width:100%!important;top:100%!important;max-height:65vh!important;overflow-y:auto!important;overflow-x:hidden!important;box-sizing:border-box!important;padding:8px 0!important;background:#08245b!important;border:1px solid rgba(255,255,255,.25)!important;z-index:2147483000!important;-webkit-overflow-scrolling:touch!important;';
 
                                   panel.querySelectorAll('a,.ds-menu-group-trigger').forEach(function(item) {
                                     item.style.cssText += ';display:block!important;visibility:visible!important;opacity:1!important;position:relative!important;float:none!important;width:100%!important;min-height:48px!important;height:auto!important;box-sizing:border-box!important;padding:13px 20px!important;margin:0!important;color:#fff!important;background:#08245b!important;font:600 16px/1.4 Arial,sans-serif!important;text-align:left!important;text-decoration:none!important;border:0!important;border-bottom:1px solid rgba(255,255,255,.16)!important;';
@@ -1939,7 +1939,7 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                                   function closeMenu() {
                                     if (toggle) toggle.checked = false;
                                     menu.classList.remove('ds-menu-open');
-                                    panel.style.setProperty('display','none','important');
+                                    panel.style.removeProperty('display');
                                     trigger.setAttribute('aria-expanded','false');
                                   }
                                   function openMenu() {
