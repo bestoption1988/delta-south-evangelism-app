@@ -2085,9 +2085,15 @@ private fun PublicDiocesanHomepage(online: Boolean, offlineDownloadBusy: Boolean
                     }
                     webChromeClient = WebChromeClient()
                     settings.cacheMode = android.webkit.WebSettings.LOAD_NO_CACHE
-                    // Always start with the current homepage bundled in this APK.
-                    // Do not prefer an MHTML archive from a previous app version.
-                    loadUrl("file:///android_asset/offline-home/index.html")
+                    // Online: load the complete live diocesan homepage and its current
+                    // navigation, content and server-backed features. Offline: load the
+                    // exact homepage bundle packaged in this APK.
+                    // onReceivedError above falls back to the bundled copy if live loading fails.
+                    if (online) {
+                        loadUrl(BuildConfig.API_BASE_URL.trimEnd('/') + "/")
+                    } else {
+                        loadUrl("file:///android_asset/offline-home/index.html")
+                    }
                     webView = this
                 }
             },
