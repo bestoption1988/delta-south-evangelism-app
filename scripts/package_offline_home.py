@@ -24,6 +24,15 @@ DEST.mkdir(parents=True, exist_ok=True)
 # Bundle the complete date-indexed Scripture and Methodist hymn collection.
 # The Android app selects today's entries locally using the Africa/Lagos date,
 # so daily cards continue changing even when the phone is offline.
+# Guarantee that the standalone Android homepage always contains the current
+# CSS-only navigation menu, even if wget skips a cache-busted stylesheet URL.
+MENU_CSS_SOURCE = Path(__file__).resolve().parents[1] / "static" / "home-menu.css"
+MENU_CSS_TARGET = DEST / "static" / "home-menu.css"
+if not MENU_CSS_SOURCE.is_file() or MENU_CSS_SOURCE.stat().st_size < 500:
+    raise SystemExit("The official homepage navigation stylesheet is missing or incomplete.")
+MENU_CSS_TARGET.parent.mkdir(parents=True, exist_ok=True)
+MENU_CSS_TARGET.write_bytes(MENU_CSS_SOURCE.read_bytes())
+
 DAILY_CONTENT_SOURCE = Path(__file__).resolve().parents[1] / "data" / "scripture_hymns.json"
 DAILY_CONTENT_TARGET = DEST / "daily-content.json"
 if not DAILY_CONTENT_SOURCE.is_file() or DAILY_CONTENT_SOURCE.stat().st_size < 1000:
@@ -72,6 +81,15 @@ if not index.is_file() or index.stat().st_size < 1000:
 html = index.read_text(encoding="utf-8", errors="replace")
 if "METHODIST CHURCH NIGERIA" not in html or "DELTA SOUTH DIOCESE" not in html:
     raise SystemExit("Downloaded page is not the official Delta South Diocese homepage.")
+if "home-menu.css" not in html:
+    html = html.replace("</head>", '<link rel="stylesheet" href="' + BASE_URL.rstrip("/") + '/static/home-menu.css?v=20261114-menu-recovery"></head>')
+else:
+    html = re.sub(
+        r"""(<link[^>]+href=["'][^"']*home-menu\.css)(?:\?[^"']*)?(["'])""",
+        r"\1?v=20261114-menu-recovery\2",
+        html,
+        flags=re.I,
+    )
 
 # A file:// page resolves leading-slash resources to file:///static.
 # Rewrite root-relative URLs to the live same-origin host so MainActivity's
